@@ -1,0 +1,198 @@
+"""Step 3 - Qualify against Sprinto's ICP, with an agent loop.
+
+The loop follows the L4 Evidence Map:
+
+| Question          | Sufficient when                                   | Where it lives            | Short-circuit            |
+|-------------------|---------------------------------------------------|---------------------------|--------------------------|
+| Already certified?| a cert string is found, or a trust page was read  | footer, /security, /trust | holds SOC 2 AND ISO -> stop |
+| B2B SaaS?         | is_b2b_saas set and buyer_type named              | hero, /product, /about    | not B2B SaaS -> stop     |
+| Right stage?      | funding stage, >=5 open roles, enterprise tier,   | /careers, /pricing,       | Public / huge -> stop    |
+|                   | or headcount                                      | /customers                |                          |
+
+The MODEL extracts facts into named fields. The CODE checks which fields are
+filled and decides what to fetch next. Hard cap: MAX_EXTRA_FETCHES.
+"""
+import re
+from urllib.parse import urlparse
+
+import config
+import scraper
+from extract import extract_profile
+from schemas import CompanyProfile
+
+# Which page answers which question, in priority order. Careers is rung one
+# for stage: it answers headcount, seniority and often funding in one request.
+PAGE_KEYWORDS = {
+    "stage": ["careers", "jobs", "join-us", "work-with-us", "pricing", "plans", "customers", "case-studies"],
+    "certs": ["trust", "security", "compliance"],
+    "saas":  ["about", "product", "platform", "company"],
+}
+GUESS_PATHS = {
+    "stage": ["/careers", "/pricing", "/customers"],
+    "certs": ["/security", "/trust"],
+    "saas":  ["/about", "/product"],
+}
+ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "keka.com",
+             "zohorecruit", "freshteam.com", "bamboohr.com", "recruitee.com")
+
+REGULATED = re.compile(r"fintech|financ|bank|payment|lending|insur|health|medic|clinic|hr\b|payroll|"
+                       r"legal|govern|education|edtech|security|identity", re.I)
+ENTERPRISE_FEATURES = re.compile(r"sso|saml|scim|audit log|sla|data residency|dpa|role-based|rbac", re.I)
+
+
+# ---------------------------------------------------------------- sufficiency
+def missing_facts(p: CompanyProfile, pages: list[dict]) -> list[str]:
+    """Return the evidence-map questions that are still unanswered. Pure code."""
+    missing = []
+    regex_certs = {c for pg in pages for c in pg["certs"]["mentioned"]}
+    trust_page_read = any(re.search(r"trust|security", urlparse(pg["url"]).path, re.I) for pg in pages[1:])
+    if not (p.certifications_claimed or regex_certs or trust_page_read):
+        missing.append("certs")
+    if p.is_b2b_saas is None or (p.is_b2b_saas and not p.buyer_type):
+        missing.append("saas")
+    stage_known = (p.funding_stage is not None
+                   or (p.open_roles_count or 0) >= 5
+                   or p.has_enterprise_tier is not None
+                   or p.employee_estimate is not None)
+    if not stage_known:
+        missing.append("stage")
+    return missing
+
+
+def holds_cert(p: CompanyProfile, name: str) -> bool:
+    return any(name.lower().replace(" ", "") in c.lower().replace(" ", "") for c in p.certifications_claimed)
+
+
+def short_circuit(p: CompanyProfile) -> str | None:
+    if p.is_b2b_saas is False:
+        return "Not a B2B SaaS company - outside Sprinto's ICP."
+    if holds_cert(p, "SOC 2") and holds_cert(p, "ISO 27001"):
+        return "Already holds both SOC 2 and ISO 27001 - no certification gap to sell into."
+    if p.funding_stage in ("Public",) or (p.employee_estimate or 0) > config.MAX_EMPLOYEES:
+        return "Too large/public - typically runs an in-house GRC team or enterprise GRC tool."
+    return None
+
+
+# ---------------------------------------------------------------- link choice
+def pick_next_url(question: str, homepage: dict, tried: set[str]) -> str | None:
+    home_host = urlparse(homepage["url"]).netloc.replace("www.", "")
+    for kw in PAGE_KEYWORDS[question]:
+        for link in homepage["links"]:
+            u = link["url"]
+            host = urlparse(u).netloc.replace("www.", "")
+            same_site = host.endswith(home_host) or (question == "stage" and any(a in host for a in ATS_HOSTS))
+            if not same_site or u in tried:
+                continue
+            if kw in urlparse(u).path.lower() or kw in link["text"].lower() or (kw == "careers" and any(a in host for a in ATS_HOSTS)):
+                return u
+    base = f"{urlparse(homepage['url']).scheme}://{urlparse(homepage['url']).netloc}"
+    for path in GUESS_PATHS[question]:
+        if base + path not in tried:
+            return base + path
+    return None
+
+
+# ---------------------------------------------------------------- scoring
+def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
+    """Deterministic 0-100 score. Every point has a stated reason."""
+    pts, why = 0, []
+
+    # Stage fit (max 30): Sprinto's sweet spot is Series A-C.
+    st = p.funding_stage
+    if st in ("Series A", "Series B", "Series C"):
+        pts += 30; why.append(f"+30 stage: {st} (core ICP)")
+    elif st == "Seed":
+        pts += 15; why.append("+15 stage: Seed (early, but often first enterprise deals)")
+    elif st == "Series D+":
+        pts += 10; why.append("+10 stage: Series D+ (may already have GRC tooling)")
+    elif p.employee_estimate:
+        e = p.employee_estimate
+        add = 20 if 20 <= e <= 500 else 10 if e >= config.MIN_EMPLOYEES else 0
+        pts += add; why.append(f"+{add} stage proxy: ~{e} employees")
+    elif (p.open_roles_count or 0) >= 5:
+        pts += 15; why.append(f"+15 stage proxy: {p.open_roles_count} open roles (scaling)")
+    else:
+        why.append("+0 stage: unknown after loop (flagged)")
+
+    # Compliance pressure (max 50)
+    cp = 0
+    if p.has_enterprise_tier:
+        cp += 15; why.append("+15 enterprise tier on pricing (security reviews come with it)")
+    if len(p.named_customers) >= 2:
+        cp += 10; why.append(f"+10 named customers: {', '.join(p.named_customers[:4])}")
+    feats = [f for f in p.enterprise_features if ENTERPRISE_FEATURES.search(f)]
+    if feats:
+        cp += 5; why.append(f"+5 enterprise features: {', '.join(feats[:4])}")
+    if p.handles_sensitive_data or REGULATED.search(" ".join(p.target_industries + [p.one_line_description or ""])):
+        cp += 10; why.append("+10 handles sensitive data / sells into regulated industries")
+    if p.security_compliance_roles_hiring:
+        cp += 10; why.append(f"+10 hiring security/compliance: {', '.join(p.security_compliance_roles_hiring[:3])}")
+    regex_in_progress = any(pg["certs"]["in_progress"] for pg in pages)
+    if p.certification_in_progress or regex_in_progress:
+        cp += 10; why.append("+10 certification explicitly in progress (actively preparing for audit)")
+    if p.recent_triggers:
+        cp += 5; why.append(f"+5 recent trigger: {p.recent_triggers[0]}")
+    cp = min(cp, 50); pts += cp
+
+    # Certification gap (max 20)
+    has_soc2, has_iso = holds_cert(p, "SOC 2"), holds_cert(p, "ISO 27001")
+    if not has_soc2 and not has_iso:
+        pts += 20; why.append("+20 no SOC 2 / ISO 27001 claimed (greenfield)")
+    else:
+        pts += 10; why.append(f"+10 holds {'SOC 2' if has_soc2 else 'ISO 27001'} only - expansion to "
+                              f"{'ISO 27001' if has_soc2 else 'SOC 2'} + continuous monitoring")
+    return pts, why
+
+
+# ---------------------------------------------------------------- the loop
+def qualify(domain: str, log) -> dict:
+    url = domain if domain.startswith("http") else f"https://{domain}"
+    home = scraper.fetch(url)
+    trace = [{"fetch": url, "ok": home["ok"], "method": home["method"], "error": home["error"]}]
+    if not home["ok"]:
+        return {"decision": "FAILED", "reason": f"homepage unusable: {home['error']}", "trace": trace,
+                "profile": None, "pages": []}
+
+    pages, tried = [home], {home["url"], url}
+    profile = extract_profile(domain, pages)
+    log(f"  extracted from homepage; missing: {missing_facts(profile, pages) or 'nothing'}")
+
+    extra = 0
+    while True:
+        stop = short_circuit(profile)
+        if stop:
+            return {"decision": "DISQUALIFIED", "reason": stop, "score": None, "score_reasons": [],
+                    "profile": profile, "pages": pages, "trace": trace}
+        missing = missing_facts(profile, pages)
+        if not missing or extra >= config.MAX_EXTRA_FETCHES:
+            break
+        # Fetch for the highest-value missing fact; stage first (most decisive).
+        order = [q for q in ("stage", "certs", "saas") if q in missing]
+        nxt = None
+        for q in order:
+            nxt = pick_next_url(q, home, tried)
+            if nxt:
+                break
+        if not nxt:
+            break
+        tried.add(nxt); extra += 1
+        pg = scraper.fetch(nxt)
+        trace.append({"fetch": nxt, "for": q, "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
+        log(f"  loop {extra}/{config.MAX_EXTRA_FETCHES}: need {q} -> {nxt} ({'ok' if pg['ok'] else pg['error']})")
+        if pg["ok"]:
+            pages.append(pg)
+            profile = extract_profile(domain, pages)
+
+    still_missing = missing_facts(profile, pages)
+    pts, reasons = score(profile, pages)
+    if pts >= config.QUALIFY_SCORE and "stage" not in still_missing:
+        decision = "QUALIFIED"
+    elif pts >= config.REVIEW_SCORE:
+        decision = "QUALIFIED_FLAGGED"   # qualify at lower rank, human double-checks
+    else:
+        decision = "DISQUALIFIED"
+    if profile.is_b2b_saas is None:
+        decision = "MANUAL_REVIEW"       # evidence map: unknown SaaS status -> human
+    return {"decision": decision, "score": pts, "score_reasons": reasons,
+            "still_missing": still_missing, "reason": f"score {pts}/100",
+            "profile": profile, "pages": pages, "trace": trace}

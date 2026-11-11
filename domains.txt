@@ -1,0 +1,6 @@
+# One domain per line. Mix of likely fits and likely non-fits to show the filter working.
+zenduty.com
+spotdraft.com
+atlan.com
+fylehq.com
+hubspot.com
