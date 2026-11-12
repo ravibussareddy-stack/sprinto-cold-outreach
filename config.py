@@ -40,6 +40,8 @@ PAGE_CACHE_HOURS = 24 * 7
 
 # --- Agent loop ------------------------------------------------------------
 MAX_EXTRA_FETCHES = 4
+# Per-question limits from the evidence map: certs 1, saas 1, stage 2 (worst case 4)
+FETCH_LIMITS = {"certs": 1, "saas": 1, "stage": 2}
 
 # --- ICP thresholds --------------------------------------------------------
 QUALIFY_SCORE = 50

@@ -50,7 +50,7 @@ def _generate(**kwargs):
                       transient=(genai_errors.APIError,))
 
 
-def ask(schema, system: str, user: str, max_output_tokens: int = 8000):
+def ask(schema, system: str, user: str, max_output_tokens: int = 8000, temperature: float = 0.3):
     """Ask Gemini for JSON matching `schema` and return a validated instance.
     Raises if the response is blocked or does not validate."""
     resp = _generate(
@@ -61,7 +61,7 @@ def ask(schema, system: str, user: str, max_output_tokens: int = 8000):
             response_mime_type="application/json",
             response_schema=schema,
             max_output_tokens=max_output_tokens,
-            temperature=0.3,
+            temperature=temperature,
         ),
     )
     usage_log["calls"] += 1

@@ -41,32 +41,44 @@ ENTERPRISE_FEATURES = re.compile(r"sso|saml|scim|audit log|sla|data residency|dp
 
 
 # ---------------------------------------------------------------- sufficiency
+def certs_held(p: CompanyProfile, pages: list[dict]) -> set[str]:
+    """Certifications the company claims: the model's list plus the regex scan of
+    raw HTML (footer badges, image alt text). Both count, so the score does not
+    depend on whether the model happened to copy a badge."""
+    names = set(p.certifications_claimed)
+    for pg in pages:
+        names |= set(pg["certs"]["mentioned"])
+    return names
+
+
+def holds_cert(p: CompanyProfile, pages: list[dict], name: str) -> bool:
+    key = name.lower().replace(" ", "")
+    return any(key in c.lower().replace(" ", "") for c in certs_held(p, pages))
+
+
 def missing_facts(p: CompanyProfile, pages: list[dict]) -> list[str]:
-    """Return the evidence-map questions that are still unanswered. Pure code."""
+    """Evidence-map questions still unanswered (L4 map, Sprinto table). Pure code.
+    certs:  a named certification string is present (regex or model)
+    saas:   is_b2b_saas set, and the buyer is named
+    stage:  funding stage named, >=5 open roles, or an enterprise tier on pricing.
+            Headcount is a score signal only, not evidence for stage."""
     missing = []
-    regex_certs = {c for pg in pages for c in pg["certs"]["mentioned"]}
-    trust_page_read = any(re.search(r"trust|security", urlparse(pg["url"]).path, re.I) for pg in pages[1:])
-    if not (p.certifications_claimed or regex_certs or trust_page_read):
+    if not certs_held(p, pages):
         missing.append("certs")
     if p.is_b2b_saas is None or (p.is_b2b_saas and not p.buyer_type):
         missing.append("saas")
     stage_known = (p.funding_stage is not None
                    or (p.open_roles_count or 0) >= 5
-                   or p.has_enterprise_tier is not None
-                   or p.employee_estimate is not None)
+                   or p.has_enterprise_tier is not None)
     if not stage_known:
         missing.append("stage")
     return missing
 
 
-def holds_cert(p: CompanyProfile, name: str) -> bool:
-    return any(name.lower().replace(" ", "") in c.lower().replace(" ", "") for c in p.certifications_claimed)
-
-
-def short_circuit(p: CompanyProfile) -> str | None:
+def short_circuit(p: CompanyProfile, pages: list[dict]) -> str | None:
     if p.is_b2b_saas is False:
         return "Not a B2B SaaS company - outside Sprinto's ICP."
-    if holds_cert(p, "SOC 2") and holds_cert(p, "ISO 27001"):
+    if holds_cert(p, pages, "SOC 2") and holds_cert(p, pages, "ISO 27001"):
         return "Already holds both SOC 2 and ISO 27001 - no certification gap to sell into."
     if p.funding_stage in ("Public",) or (p.employee_estimate or 0) > config.MAX_EMPLOYEES:
         return "Too large/public - typically runs an in-house GRC team or enterprise GRC tool."
@@ -135,7 +147,7 @@ def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
     cp = min(cp, 50); pts += cp
 
     # Certification gap (max 20)
-    has_soc2, has_iso = holds_cert(p, "SOC 2"), holds_cert(p, "ISO 27001")
+    has_soc2, has_iso = holds_cert(p, pages, "SOC 2"), holds_cert(p, pages, "ISO 27001")
     if not has_soc2 and not has_iso:
         pts += 20; why.append("+20 no SOC 2 / ISO 27001 claimed (greenfield)")
     else:
@@ -158,8 +170,9 @@ def qualify(domain: str, log) -> dict:
     log(f"  extracted from homepage; missing: {missing_facts(profile, pages) or 'nothing'}")
 
     extra = 0
+    per_question = {"stage": 0, "certs": 0, "saas": 0}
     while True:
-        stop = short_circuit(profile)
+        stop = short_circuit(profile, pages)
         if stop:
             return {"decision": "DISQUALIFIED", "reason": stop, "score": None, "score_reasons": [],
                     "profile": profile, "pages": pages, "trace": trace}
@@ -167,14 +180,18 @@ def qualify(domain: str, log) -> dict:
         if not missing or extra >= config.MAX_EXTRA_FETCHES:
             break
         # Fetch for the highest-value missing fact; stage first (most decisive).
-        order = [q for q in ("stage", "certs", "saas") if q in missing]
-        nxt = None
-        for q in order:
-            nxt = pick_next_url(q, home, tried)
+        # Each question has its own fetch limit from the evidence map.
+        nxt, q = None, None
+        for cand in ("stage", "certs", "saas"):
+            if cand not in missing or per_question[cand] >= config.FETCH_LIMITS[cand]:
+                continue
+            nxt = pick_next_url(cand, home, tried)
             if nxt:
+                q = cand
                 break
         if not nxt:
             break
+        per_question[q] += 1
         tried.add(nxt); extra += 1
         pg = scraper.fetch(nxt)
         trace.append({"fetch": nxt, "for": q, "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
@@ -185,14 +202,27 @@ def qualify(domain: str, log) -> dict:
 
     still_missing = missing_facts(profile, pages)
     pts, reasons = score(profile, pages)
-    if pts >= config.QUALIFY_SCORE and "stage" not in still_missing:
+    flags = []
+    if "certs" in still_missing:
+        flags.append("certification status unanswered: treated as not certified")
+    if "stage" in still_missing:
+        flags.append("stage unanswered after the loop")
+    # Evidence-map outcomes (Sprinto table, page 40):
+    #   SaaS unknown                      -> manual_review
+    #   stage unanswered                  -> qualify at lower rank, flagged
+    #   any other question unanswered     -> flagged
+    #   all answered and score >= QUALIFY -> qualified
+    #   score below REVIEW_SCORE          -> disqualified
+    if profile.is_b2b_saas is None:
+        decision = "MANUAL_REVIEW"
+    elif "stage" in still_missing or flags:
+        decision = "QUALIFIED_FLAGGED"
+    elif pts >= config.QUALIFY_SCORE:
         decision = "QUALIFIED"
     elif pts >= config.REVIEW_SCORE:
-        decision = "QUALIFIED_FLAGGED"   # qualify at lower rank, human double-checks
+        decision = "QUALIFIED_FLAGGED"
     else:
         decision = "DISQUALIFIED"
-    if profile.is_b2b_saas is None:
-        decision = "MANUAL_REVIEW"       # evidence map: unknown SaaS status -> human
     return {"decision": decision, "score": pts, "score_reasons": reasons,
-            "still_missing": still_missing, "reason": f"score {pts}/100",
+            "still_missing": still_missing, "flags": flags, "reason": f"score {pts}/100",
             "profile": profile, "pages": pages, "trace": trace}

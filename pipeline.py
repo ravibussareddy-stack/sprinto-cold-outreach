@@ -127,6 +127,8 @@ def write_report(run_dir: str, records: list[dict]):
         lines.append(f"\n## {r['domain']}\n")
         q = r.get("qualification", {})
         lines.append(f"**Decision:** {q.get('decision')} - {q.get('reason')}\n")
+        for fl in q.get("flags", []):
+            lines.append(f"- FLAG: {fl}")
         for s in q.get("score_reasons", []):
             lines.append(f"- {s}")
         if q.get("trace"):
