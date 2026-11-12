@@ -25,6 +25,16 @@ CREATE TABLE IF NOT EXISTS runs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS runs_domain_idx ON runs (domain, created_at DESC);
+CREATE TABLE IF NOT EXISTS reviews (
+    id BIGSERIAL PRIMARY KEY,
+    run_id BIGINT REFERENCES runs(id),
+    domain TEXT NOT NULL,
+    email_action TEXT NOT NULL,          -- kept | rewritten | not_drafted
+    poc_correct BOOLEAN,                 -- NULL when no PoC was found
+    minutes NUMERIC,                     -- human minutes spent on this company
+    note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS crm_outcomes (
     id BIGSERIAL PRIMARY KEY,
     domain TEXT NOT NULL,
@@ -119,3 +129,47 @@ def last_run(domain: str) -> dict | None:
         row = c.execute("SELECT record FROM runs WHERE domain=%s ORDER BY created_at DESC LIMIT 1",
                         (domain,)).fetchone()
     return row[0] if row else None
+
+
+# ---- review queue and measurement (review.py) -------------------------------
+QUEUE_SQL = """
+SELECT r.id, r.domain, r.decision, r.status, r.created_at
+FROM runs r
+WHERE (r.decision IN ('QUALIFIED_FLAGGED', 'MANUAL_REVIEW', 'REACTIVATED')
+       OR r.status ILIKE '%%escalated%%' OR r.status ILIKE '%%aborted%%'
+       OR r.status ILIKE '%%ERROR%%' OR r.status ILIKE '%%DRAFT_FAILED%%')
+  AND NOT EXISTS (SELECT 1 FROM reviews v WHERE v.run_id = r.id)
+ORDER BY r.created_at DESC
+LIMIT %s
+"""
+
+
+def review_queue(limit: int = 50) -> list[tuple]:
+    if not enabled():
+        return []
+    _init()
+    with _conn() as c:
+        return c.execute(QUEUE_SQL, (limit,)).fetchall()
+
+
+def add_review(domain: str, email_action: str, poc_correct: bool | None,
+               minutes: float | None, note: str) -> int:
+    _init()
+    with _conn() as c:
+        row = c.execute("SELECT id FROM runs WHERE domain=%s ORDER BY created_at DESC LIMIT 1",
+                        (domain,)).fetchone()
+        if not row:
+            raise ValueError(f"no run saved for {domain}; run the pipeline first")
+        c.execute(
+            "INSERT INTO reviews (run_id, domain, email_action, poc_correct, minutes, note) "
+            "VALUES (%s,%s,%s,%s,%s,%s)",
+            (row[0], domain, email_action, poc_correct, minutes, note))
+        return row[0]
+
+
+def review_rows() -> list[tuple]:
+    if not enabled():
+        return []
+    _init()
+    with _conn() as c:
+        return c.execute("SELECT email_action, poc_correct, minutes FROM reviews").fetchall()

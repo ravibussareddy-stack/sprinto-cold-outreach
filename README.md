@@ -100,6 +100,29 @@ Run the offline tests (no keys, no network):
 PYTHONPATH=. python3 tests/test_sequence2.py
 ```
 
+## Review queue and measurement
+
+Companies that need a human (flagged, manual review, reactivated, escalated, aborted, or errored) are listed by:
+
+```bash
+python review.py queue
+```
+
+After you review a draft, record it:
+
+```bash
+python review.py add acme.io --email kept --poc-correct yes --minutes 1.5
+python review.py add acme.io --email rewritten --poc-correct no --minutes 4 --note "wrong CTO"
+```
+
+Then check the lecture's targets and kill criteria:
+
+```bash
+python review.py metrics
+```
+
+Targets: under 2 min per company, fewer than 20% of emails rewritten. Kill: more than 50% rewritten, PoC accuracy under 60%.
+
 ## Who is the right person (step 4)
 
 The PoC is whoever **owns getting certified** at that company size:
