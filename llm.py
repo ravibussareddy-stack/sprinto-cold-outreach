@@ -6,6 +6,7 @@ from google.genai import errors as genai_errors
 from google.genai import types
 
 import config
+from retry import PermanentError, with_retry
 
 _clients = {}          # key index -> genai client
 _key_index = 0         # current key; advances when a key runs out of quota
@@ -27,16 +28,26 @@ def _is_quota_error(exc):
 
 
 def _generate(**kwargs):
-    """Call Gemini, rotating to the next API key when one hits its quota."""
+    """Call Gemini. Quota errors rotate to the next key; 5xx (e.g. 503 UNAVAILABLE)
+    is transient and retried with back-off."""
     global _key_index
-    while True:
-        try:
-            return _get_client().models.generate_content(**kwargs)
-        except genai_errors.APIError as exc:
-            if not _is_quota_error(exc) or _key_index + 1 >= len(config.GEMINI_API_KEYS):
-                raise
-            _key_index += 1
-            print(f"[llm] quota exhausted, switching to GEMINI_API_KEY #{_key_index + 1}")
+
+    def _once():
+        global _key_index
+        while True:
+            try:
+                return _get_client().models.generate_content(**kwargs)
+            except genai_errors.APIError as exc:
+                if _is_quota_error(exc) and _key_index + 1 < len(config.GEMINI_API_KEYS):
+                    _key_index += 1
+                    print(f"[llm] quota exhausted, switching to GEMINI_API_KEY #{_key_index + 1}")
+                    continue
+                if (getattr(exc, "code", 0) or 0) >= 500:
+                    raise                       # transient: retried by with_retry below
+                raise PermanentError(str(exc))  # bad request / bad key: do not retry
+
+    return with_retry(_once, attempts=4, base_delay=5.0,
+                      transient=(genai_errors.APIError,))
 
 
 def ask(schema, system: str, user: str, max_output_tokens: int = 8000):
