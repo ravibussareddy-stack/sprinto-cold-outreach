@@ -84,7 +84,7 @@ Sequence 1 runs for every prospect. Sequence 2 runs only when the prospect is in
 | Goes silent / unclear / no calendar: hand off to Growth Lead | `meeting.py` |
 | update_crm: outcome written to Neon `crm_outcomes` | `crm.py`, `db.py` |
 
-Replies come from `replies/<domain>.txt`, one reply per block, blocks separated by a line `---`. Each block is one turn, in order. Example:
+Sequence 2 is a LangGraph (`meeting.py`). The run pauses while it waits for the prospect's reply and the state is checkpointed in SQLite (`CHECKPOINT_DB`, git-ignored). Replies come from `replies/<domain>.txt`, one reply per block, blocks separated by a line `---`. Each block is one turn, in order. Example:
 
 ```
 Yes, interested. What does this look like?

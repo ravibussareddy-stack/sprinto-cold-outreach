@@ -63,3 +63,6 @@ CALENDAR_BUSY_FILE = os.getenv("CALENDAR_BUSY_FILE", "")
 REPLIES_DIR = os.getenv("REPLIES_DIR", "replies")
 FOLLOWUP_HOURS = 48                # no reply within this window -> hand off
 MAX_REPLY_ROUNDS = 2               # counter-proposals before escalating
+
+# LangGraph checkpoints for Sequence 2 (pause at await_reply, resume on the next reply)
+CHECKPOINT_DB = os.getenv("CHECKPOINT_DB", "checkpoints.sqlite")
