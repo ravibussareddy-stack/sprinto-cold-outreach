@@ -75,13 +75,26 @@ def missing_facts(p: CompanyProfile, pages: list[dict]) -> list[str]:
     return missing
 
 
-def short_circuit(p: CompanyProfile, pages: list[dict]) -> str | None:
+# GDPR is a regulation, not a certification, so it does not trigger the rule.
+NOT_CERTIFICATIONS = {"gdpr"}
+
+
+def named_certs(p: CompanyProfile, pages: list[dict]) -> set[str]:
+    return {c for c in certs_held(p, pages) if c.lower() not in NOT_CERTIFICATIONS}
+
+
+def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | None:
+    """Lecture rule (Sprinto evidence map): stop at the first answer that ends the
+    assessment. Returns (decision, reason) or None."""
     if p.is_b2b_saas is False:
-        return "Not a B2B SaaS company - outside Sprinto's ICP."
-    if holds_cert(p, pages, "SOC 2") and holds_cert(p, pages, "ISO 27001"):
-        return "Already holds both SOC 2 and ISO 27001 - no certification gap to sell into."
+        return "DISQUALIFIED", "Not a B2B SaaS company - outside Sprinto's ICP."
+    certs = named_certs(p, pages)
+    if certs:
+        return ("DORMANT",
+                f"Already certified ({', '.join(sorted(certs))}). Dormant: re-engage only if a new "
+                f"relevant certificate appears.")
     if p.funding_stage in ("Public",) or (p.employee_estimate or 0) > config.MAX_EMPLOYEES:
-        return "Too large/public - typically runs an in-house GRC team or enterprise GRC tool."
+        return "DISQUALIFIED", "Too large/public - typically runs an in-house GRC team or enterprise GRC tool."
     return None
 
 
@@ -174,7 +187,9 @@ def qualify(domain: str, log) -> dict:
     while True:
         stop = short_circuit(profile, pages)
         if stop:
-            return {"decision": "DISQUALIFIED", "reason": stop, "score": None, "score_reasons": [],
+            decision, reason = stop
+            return {"decision": decision, "reason": reason, "score": None, "score_reasons": [],
+                    "certs_held": sorted(named_certs(profile, pages)),
                     "profile": profile, "pages": pages, "trace": trace}
         missing = missing_facts(profile, pages)
         if not missing or extra >= config.MAX_EXTRA_FETCHES:
@@ -225,4 +240,5 @@ def qualify(domain: str, log) -> dict:
         decision = "DISQUALIFIED"
     return {"decision": decision, "score": pts, "score_reasons": reasons,
             "still_missing": still_missing, "flags": flags, "reason": f"score {pts}/100",
+            "certs_held": sorted(named_certs(profile, pages)),
             "profile": profile, "pages": pages, "trace": trace}

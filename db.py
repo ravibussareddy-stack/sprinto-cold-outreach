@@ -107,3 +107,15 @@ def save_crm_outcome(domain: str, contact: str, outcome: str, record: dict):
         c.execute(
             "INSERT INTO crm_outcomes (domain, contact, outcome, record) VALUES (%s,%s,%s,%s)",
             (domain, contact, outcome, Json(json.loads(json.dumps(record, default=str)))))
+
+
+def last_run(domain: str) -> dict | None:
+    """Most recent saved run record for a domain (used to spot a new certificate
+    for a dormant company). None when there is no database or no earlier run."""
+    if not enabled():
+        return None
+    _init()
+    with _conn() as c:
+        row = c.execute("SELECT record FROM runs WHERE domain=%s ORDER BY created_at DESC LIMIT 1",
+                        (domain,)).fetchone()
+    return row[0] if row else None

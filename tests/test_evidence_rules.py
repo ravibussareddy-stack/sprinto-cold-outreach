@@ -57,17 +57,38 @@ def test_unanswered_certs_flags_the_company():
 
 
 def test_unknown_stage_is_flagged_not_dropped():
-    stub_site(home_mentions=["ISO 27001"])
+    stub_site(home_mentions=())
     qualify.extract_profile = lambda d, pages: CompanyProfile(is_b2b_saas=True, buyer_type="CTOs")
     res = run_qualify("acme.io", lambda m: None)
     assert res["decision"] == "QUALIFIED_FLAGGED" and any("stage" in f for f in res["flags"]), res
 
 
-def test_both_certs_held_disqualifies():
-    stub_site(home_mentions=["SOC 2", "ISO 27001"])
+def test_any_named_certification_makes_company_dormant():
+    stub_site(home_mentions=["SOC 2"])
     qualify.extract_profile = lambda d, pages: CompanyProfile(is_b2b_saas=True, buyer_type="CTOs", funding_stage="Series A")
     res = run_qualify("acme.io", lambda m: None)
-    assert res["decision"] == "DISQUALIFIED" and "both SOC 2 and ISO 27001" in res["reason"], res["reason"]
+    assert res["decision"] == "DORMANT" and res["certs_held"] == ["SOC 2"], res
+
+
+def test_gdpr_alone_is_not_a_certification():
+    stub_site(home_mentions=["GDPR"])
+    qualify.extract_profile = lambda d, pages: CompanyProfile(is_b2b_saas=True, buyer_type="CTOs", funding_stage="Series A")
+    res = run_qualify("acme.io", lambda m: None)
+    assert res["decision"] in ("QUALIFIED", "QUALIFIED_FLAGGED"), res["decision"]
+
+
+def test_dormant_reactivates_when_new_certificate_appears():
+    import pipeline_rules
+    prev = {"qualification": {"decision": "DORMANT", "certs_held": ["SOC 2"]}}
+    assert pipeline_rules.reactivation(prev, ["SOC 2", "HIPAA"]) == "REACTIVATED"
+
+
+def test_dormant_stays_dormant_when_both_held_or_nothing_new():
+    import pipeline_rules
+    prev = {"qualification": {"decision": "DORMANT", "certs_held": ["SOC 2"]}}
+    assert pipeline_rules.reactivation(prev, ["SOC 2"]) == "DORMANT"
+    assert pipeline_rules.reactivation(prev, ["SOC 2", "ISO 27001"]) == "DORMANT"
+    assert pipeline_rules.reactivation(None, ["SOC 2", "HIPAA"]) == "DORMANT"
 
 
 def test_per_question_fetch_limits_are_respected():

@@ -25,6 +25,7 @@ import replies
 import sender
 import writer
 from qualify import qualify
+from pipeline_rules import reactivation_new_certs
 
 
 def log(msg):
@@ -60,7 +61,13 @@ def _process(domain, do_send, sender_name, rec, t0):
     log(f"  decision: {q['decision']} - {q.get('reason')}")
     for r in q.get("score_reasons", []):
         log(f"    {r}")
-    if q["decision"] not in ("QUALIFIED", "QUALIFIED_FLAGGED"):
+    if q["decision"] == "DORMANT":
+        new_certs = reactivation_new_certs(db.last_run(domain), q.get("certs_held", []))
+        if new_certs:
+            q["decision"] = "REACTIVATED"
+            q["reason"] = f"new certificate since last run: {', '.join(new_certs)}. Review before outreach."
+            q["flags"] = q.get("flags", []) + [q["reason"]]
+    if q["decision"] not in ("QUALIFIED", "QUALIFIED_FLAGGED", "REACTIVATED"):
         rec["status"] = q["decision"]
         return rec
 
