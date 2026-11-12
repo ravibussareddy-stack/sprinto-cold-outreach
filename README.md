@@ -3,14 +3,16 @@
 A repeatable 7-step pipeline. Give it a list of domains, and for each one it:
 
 1. **Scrapes** the site (single-fetch, robots.txt respected, cached, Jina Reader fallback for JS-only/blocked pages)
-2. **Extracts** a structured company profile with Claude (named fields + verbatim evidence quotes)
+2. **Extracts** a structured company profile with Gemini (named fields + verbatim evidence quotes)
 3. **Qualifies** against Sprinto's ICP with an **agent loop**: code checks which facts are missing and fetches the specific page that answers them (max 4 extra fetches)
 4. **Finds the PoC**: Hunter.io Domain Search (Option A) or a hard-coded Apollo lookup (Option B)
 5. **Identifies two pain points** for that person, each grounded in a researched fact
 6. **Drafts a personalised email** by first name with a specific hook, then checks it in code (length, name, CTA, no placeholders) and redrafts once if it fails
 7. **Sends via Gmail** to **your own inbox** (hard-coded `SEND_TO`). The intended recipient goes in the footer
 
-Every decision lands in `runs/<timestamp>/report.md` plus one JSON file per company.
+Every decision lands in `runs/<timestamp>/report.md` plus one JSON file per company, and in the Neon `runs` table. Scraped pages are cached in Neon for 7 days.
+
+**Stack:** Gemini API (LLM) · Neon Postgres (page cache + run history) · Hunter.io or Apollo (contacts) · Gmail SMTP (send)
 
 ## Setup
 
@@ -22,6 +24,8 @@ python pipeline.py domains.txt            # dry run: research + drafts, no send
 python pipeline.py domains.txt --send     # send drafts to your own inbox
 python pipeline.py --domain acme.io --send
 ```
+
+Set `GEMINI_API_KEY` and `NEON_DATABASE_URL` in `.env`. The tables are created on first run.
 
 Gmail needs an **App Password** (Google Account → Security → 2-Step Verification → App passwords).
 
@@ -87,4 +91,4 @@ The system researches and drafts. It never emails a prospect directly: `To:` is 
 
 ## Cost
 
-Pages are cleaned and capped at ~1,500 words before reaching the model. Each company costs roughly 3–6 Claude calls at `effort=low`. Cached pages cost nothing on re-runs. Set `CLAUDE_MODEL=claude-haiku-5-5` in `.env` to run it more cheaply.
+Pages are cleaned and capped at ~1,500 words before reaching the model. Each company costs roughly 3–6 Gemini calls. Cached pages (7 days in Neon) cost nothing on re-runs. Set `GEMINI_MODEL` in `.env` to switch models.

@@ -6,7 +6,8 @@
 
 For every domain: scrape -> extract -> qualify (agent loop) -> find PoC ->
 pain points -> draft email -> send. Failures are logged and the run moves on.
-Every decision is written to runs/<timestamp>/ so it can be defended later.
+Every decision is written to runs/<timestamp>/ and, if NEON_DATABASE_URL is set,
+to the Neon `runs` table so it can be defended later.
 """
 import argparse
 import datetime as dt
@@ -15,6 +16,7 @@ import os
 import time
 
 import config
+import db
 import llm
 import poc as poc_mod
 import sender
@@ -88,7 +90,7 @@ def process(domain: str, do_send: bool, sender_name: str) -> dict:
 
 def write_report(run_dir: str, records: list[dict]):
     lines = ["# Sprinto outreach run\n",
-             f"Model: `{config.MODEL}` | LLM calls: {llm.usage_log['calls']} | "
+             f"Model: `{config.GEMINI_MODEL}` | LLM calls: {llm.usage_log['calls']} | "
              f"tokens in/out: {llm.usage_log['input_tokens']}/{llm.usage_log['output_tokens']}\n",
              "| Domain | Decision | Score | PoC | Status |", "|---|---|---|---|---|"]
     for r in records:
@@ -140,6 +142,7 @@ def main():
     for d in domains:
         rec = process(d, args.send, args.sender_name)
         records.append(rec)
+        db.save_run(rec)
         with open(os.path.join(run_dir, d.replace("/", "_") + ".json"), "w") as f:
             json.dump(rec, f, indent=2, default=str)
     write_report(run_dir, records)

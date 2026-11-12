@@ -8,9 +8,6 @@ Order of attempts (L4 "order you try things in"):
      which runs a real browser and returns clean text.
   4. On any failure: record the reason and move on (degrade gracefully).
 """
-import hashlib
-import json
-import os
 import re
 import time
 import urllib.robotparser
@@ -20,6 +17,7 @@ import requests
 from bs4 import BeautifulSoup
 
 import config
+import db
 
 session = requests.Session()
 session.headers.update({"User-Agent": config.USER_AGENT,
@@ -42,11 +40,6 @@ IN_PROGRESS_PATTERN = r"(SOC[\s\-]?2|ISO[\s\-]?27001)[^.]{0,60}(in progress|unde
 NOISE_TAGS = ["script", "style", "noscript", "svg", "iframe", "form", "nav",
               "footer", "header", "aside", "button"]
 NOISE_HINTS = re.compile(r"cookie|consent|banner|navbar|menu|footer|modal|popup|newsletter", re.I)
-
-
-def _cache_path(url: str) -> str:
-    os.makedirs(config.CACHE_DIR, exist_ok=True)
-    return os.path.join(config.CACHE_DIR, hashlib.md5(url.encode()).hexdigest() + ".json")
 
 
 def robots_allows(url: str) -> bool:
@@ -121,10 +114,9 @@ def _jina(url: str) -> str | None:
 
 def fetch(url: str) -> dict:
     """Returns {url, ok, error, text, raw_text, certs, links, method}."""
-    cp = _cache_path(url)
-    if os.path.exists(cp):
-        with open(cp) as f:
-            return json.load(f)
+    cached = db.get_cached_page(url)
+    if cached:
+        return cached
 
     result = {"url": url, "ok": False, "error": None, "text": "", "raw_text": "",
               "certs": {"mentioned": [], "in_progress": False}, "links": [], "method": None}
@@ -177,6 +169,5 @@ def fetch(url: str) -> dict:
     result["raw_text"] = result["raw_text"][:20000]
 
     if result["ok"]:
-        with open(cp, "w") as f:
-            json.dump(result, f)
+        db.put_cached_page(url, result)
     return result

@@ -1,33 +1,48 @@
-"""Thin wrapper around the Claude API returning validated Pydantic objects."""
-import anthropic
+"""Thin wrapper around the Gemini API returning validated Pydantic objects."""
+import os
+
+from google import genai
+from google.genai import types
 
 import config
 
-client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
+_client = None
 usage_log = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
 
-# Server-side refusal fallback is supported on Opus/Sonnet/Fable tiers only.
-_SUPPORTS_FALLBACK = any(t in config.MODEL for t in ("opus-5", "sonnet-5-5", "fable-5"))
+
+def _get_client():
+    global _client
+    if _client is None:
+        if not config.GEMINI_API_KEY:
+            raise RuntimeError("Set GEMINI_API_KEY in .env")
+        _client = genai.Client(api_key=config.GEMINI_API_KEY)
+    return _client
 
 
-def ask(schema, system: str, user: str, max_tokens: int = 8000):
-    kwargs = dict(
-        model=config.MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": user}],
-        output_format=schema,
-        output_config={"effort": config.EFFORT},
+def ask(schema, system: str, user: str, max_output_tokens: int = 8000):
+    """Ask Gemini for JSON matching `schema` and return a validated instance.
+    Raises if the response is blocked or does not validate."""
+    resp = _get_client().models.generate_content(
+        model=config.GEMINI_MODEL,
+        contents=user,
+        config=types.GenerateContentConfig(
+            system_instruction=system,
+            response_mime_type="application/json",
+            response_schema=schema,
+            max_output_tokens=max_output_tokens,
+            temperature=0.3,
+        ),
     )
-    if _SUPPORTS_FALLBACK:
-        kwargs["betas"] = ["server-side-fallback-2026-07-01"]
-        kwargs["fallbacks"] = "default"
-    resp = client.beta.messages.parse(**kwargs)
     usage_log["calls"] += 1
-    usage_log["input_tokens"] += resp.usage.input_tokens
-    usage_log["output_tokens"] += resp.usage.output_tokens
-    if resp.stop_reason == "refusal":
-        raise RuntimeError("model declined the request")
-    if resp.parsed_output is None:
-        raise RuntimeError(f"no structured output (stop_reason={resp.stop_reason})")
-    return resp.parsed_output
+    meta = resp.usage_metadata
+    if meta:
+        usage_log["input_tokens"] += meta.prompt_token_count or 0
+        usage_log["output_tokens"] += meta.candidates_token_count or 0
+    if not resp.candidates:
+        raise RuntimeError(f"no candidates (prompt_feedback={resp.prompt_feedback})")
+    finish = str(resp.candidates[0].finish_reason)
+    if "SAFETY" in finish or "BLOCK" in finish or "PROHIBITED" in finish:
+        raise RuntimeError(f"model declined the request ({finish})")
+    if not resp.text:
+        raise RuntimeError(f"empty response (finish_reason={finish})")
+    return schema.model_validate_json(resp.text)
