@@ -69,6 +69,37 @@ Sprinto sells automated SOC 2 / ISO 27001 / GDPR compliance to SaaS companies. B
 
 The model fills named fields. Code decides whether it knows enough, so a model that is confident about an empty page can't fool the loop.
 
+## Outreach to meeting (the L5 workflow)
+
+Sequence 1 runs for every prospect. Sequence 2 runs only when the prospect is interested.
+
+| Node | Code |
+|---|---|
+| Send the cold email | `pipeline.py` step 7 (to your inbox only) |
+| Read the reply: interested / not interested / no reply / unclear | `replies.py` (model classifies into fixed intents) |
+| check_calendar | `calendar_tool.py` (needs `CALENDAR_BUSY_FILE`; otherwise escalates) |
+| send_email with 2-3 times | `meeting.py` |
+| Confirms a time: book_meeting (.ics invite) | `meeting.py` |
+| Counter-proposes: back to check_calendar, never re-offer a rejected slot | `meeting.py`, capped at `MAX_REPLY_ROUNDS` = 2 |
+| Goes silent / unclear / no calendar: hand off to Growth Lead | `meeting.py` |
+| update_crm: outcome written to Neon `crm_outcomes` | `crm.py`, `db.py` |
+
+Replies come from `replies/<domain>.txt`, one reply per block, blocks separated by a line `---`. Each block is one turn, in order. Example:
+
+```
+Yes, interested. What does this look like?
+---
+The 3pm one works.
+```
+
+Retry table (decided before the build): check_calendar, send_email and update_crm retry transient failures 3 times; book_meeting retries transient failures and aborts on permanent ones; anything that cannot proceed hands off to the Growth Lead. Dry runs (no `--send`) walk the whole flow and write nothing outbound.
+
+Run the offline tests (no keys, no network):
+
+```bash
+PYTHONPATH=. python3 tests/test_sequence2.py
+```
+
 ## Who is the right person (step 4)
 
 The PoC is whoever **owns getting certified** at that company size:

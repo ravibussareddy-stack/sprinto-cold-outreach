@@ -25,6 +25,14 @@ CREATE TABLE IF NOT EXISTS runs (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS runs_domain_idx ON runs (domain, created_at DESC);
+CREATE TABLE IF NOT EXISTS crm_outcomes (
+    id BIGSERIAL PRIMARY KEY,
+    domain TEXT NOT NULL,
+    contact TEXT,
+    outcome TEXT NOT NULL,
+    record JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 """
 
 _ready = False
@@ -88,3 +96,14 @@ def save_run(rec: dict):
                  Json(json.loads(json.dumps(rec, default=str)))))
     except psycopg.Error as e:
         print(f"  [db] run save skipped: {e}")
+
+
+def save_crm_outcome(domain: str, contact: str, outcome: str, record: dict):
+    """Write-back for the update_crm tool. Raises on DB errors so the caller can retry."""
+    if not enabled():
+        return
+    _init()
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO crm_outcomes (domain, contact, outcome, record) VALUES (%s,%s,%s,%s)",
+            (domain, contact, outcome, Json(json.loads(json.dumps(record, default=str)))))

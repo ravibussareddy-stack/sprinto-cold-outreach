@@ -14,11 +14,14 @@ import datetime as dt
 import json
 import os
 import time
+from dataclasses import asdict
 
 import config
 import db
 import llm
+import meeting
 import poc as poc_mod
+import replies
 import sender
 import writer
 from qualify import qualify
@@ -94,6 +97,16 @@ def _process(domain, do_send, sender_name, rec, t0):
         log(f"  sent to {to}")
     else:
         rec["status"] = "DRAFTED"
+    # Sequence 1 reply handling, then Sequence 2 scheduling if the prospect is interested.
+    # Only after a draft that passed its checks; dry runs walk the flow without sending.
+    if not problems:
+        ctx = meeting.Ctx(domain=domain, contact_name=f"{contact['first_name']} {contact['last_name']}",
+                          contact_email=contact["email"], company=profile.company_name or domain,
+                          sender_name=sender_name, do_send=do_send, log=log)
+        state = meeting.run(ctx, replies.load_replies(domain))
+        rec["meeting"] = asdict(state)
+        rec["outcome"] = state.outcome
+        rec["status"] += f" | {state.outcome}"
     if q["decision"] == "QUALIFIED_FLAGGED":
         rec["status"] += " (flagged: thin evidence, review before a real send)"
     rec["seconds"] = round(time.time() - t0, 1)
@@ -124,6 +137,12 @@ def write_report(run_dir: str, records: list[dict]):
             lines.append("\n**Pain points:**")
             for pp in r["pain_points"]["pain_points"]:
                 lines.append(f"- *{pp['title']}* - {pp['why_this_person_feels_it']} (evidence: {pp['evidence_from_research']})")
+        if r.get("meeting"):
+            m = r["meeting"]
+            lines.append(f"\n**Scheduling outcome:** {m['outcome']}"
+                         + (f" - escalated: {m['escalation']}" if m.get("escalation") else "")
+                         + (f" - booked: {m['booked_slot']}" if m.get("booked_slot") else ""))
+            lines.append("**Steps:** " + "; ".join(m.get("trace", [])))
         if r.get("email"):
             e = r["email"]
             lines.append(f"\n**Why this email:** {e['reasoning']} Hook: {e['hook_used']}")

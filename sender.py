@@ -11,7 +11,9 @@ import config
 from retry import with_retry
 
 
-def send(subject: str, body: str, intended_name: str, intended_email: str) -> str:
+def send(subject: str, body: str, intended_name: str, intended_email: str,
+         attachment: tuple[str, bytes, str, str] | None = None) -> str:
+    """attachment = (filename, data, maintype, subtype), e.g. an .ics invite."""
     if not (config.GMAIL_ADDRESS and config.GMAIL_APP_PASSWORD and config.SEND_TO):
         raise RuntimeError("Set GMAIL_ADDRESS, GMAIL_APP_PASSWORD and SEND_TO in .env")
     msg = EmailMessage()
@@ -21,6 +23,9 @@ def send(subject: str, body: str, intended_name: str, intended_email: str) -> st
     msg["X-Intended-Recipient"] = f"{intended_name} <{intended_email}>"
     msg.set_content(f"{body}\n\n---\n[Pipeline test send. Intended recipient: "
                     f"{intended_name} <{intended_email}>]")
+    if attachment:
+        fname, data, maintype, subtype = attachment
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
     def _send():
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
             s.login(config.GMAIL_ADDRESS, config.GMAIL_APP_PASSWORD)

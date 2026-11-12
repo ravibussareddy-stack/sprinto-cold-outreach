@@ -45,3 +45,19 @@ MAX_EXTRA_FETCHES = 4
 QUALIFY_SCORE = 50
 REVIEW_SCORE = 35
 MIN_EMPLOYEES, MAX_EMPLOYEES = 10, 1000
+
+# --- Sequence 2: scheduling (L5 workflow) ----------------------------------
+# Meeting slots are offered in this timezone (business hours only).
+SLOT_TIMEZONE = os.getenv("SLOT_TIMEZONE", "Asia/Kolkata")
+SLOT_HOURS = (10, 15)              # 10:00 and 15:00 local
+SLOTS_TO_OFFER = 3                 # "2-3 specific times"
+SLOT_LOOKAHEAD_DAYS = 7
+# Calendar source. Real calendar OAuth is not set up; point this at a JSON file
+# of busy intervals: [["2026-11-13T10:00:00+05:30", "2026-11-13T11:00:00+05:30"], ...]
+# Blank = no calendar access, which the agent treats as an escalation.
+CALENDAR_BUSY_FILE = os.getenv("CALENDAR_BUSY_FILE", "")
+# Prospect replies are read from REPLIES_DIR/<domain>.txt, one reply per block,
+# blocks separated by a line containing only ---.
+REPLIES_DIR = os.getenv("REPLIES_DIR", "replies")
+FOLLOWUP_HOURS = 48                # no reply within this window -> hand off
+MAX_REPLY_ROUNDS = 2               # counter-proposals before escalating
