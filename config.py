@@ -6,13 +6,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- LLM: Google Gemini ----------------------------------------------------
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# Keys are tried in order: GEMINI_API_KEY1..N, then GEMINI_API_KEY as a fallback.
+# On free-tier quota exhaustion llm.py rotates to the next key.
+GEMINI_API_KEYS = [
+    v for v in (
+        [os.getenv(f"GEMINI_API_KEY{i}", "") for i in range(1, 10)]
+        + [os.getenv("GEMINI_API_KEY", "")]
+    ) if v
+]
+GEMINI_API_KEY = GEMINI_API_KEYS[0] if GEMINI_API_KEYS else ""
 # Check the current model list at ai.google.dev before a real run.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 # --- Storage: Neon (serverless Postgres) -----------------------------------
 # Leave blank to run without a database (no page cache, no run history).
-NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL", "")
+NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL", "")
 
 # --- Credentials -----------------------------------------------------------
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "")

@@ -29,9 +29,21 @@ def log(msg):
 
 
 def process(domain: str, do_send: bool, sender_name: str) -> dict:
+    """Run one company. Any unexpected error is recorded on the company and the
+    batch carries on (degrade gracefully: log the reason, move on)."""
     t0 = time.time()
     rec = {"domain": domain, "status": None}
     log(f"\n=== {domain} ===")
+    try:
+        return _process(domain, do_send, sender_name, rec, t0)
+    except Exception as e:
+        log(f"  ERROR: {e}")
+        rec.update(status="ERROR", error=f"{type(e).__name__}: {e}",
+                   seconds=round(time.time() - t0, 1))
+        return rec
+
+
+def _process(domain, do_send, sender_name, rec, t0):
 
     # Steps 1-3: scrape, extract, qualify (with loop)
     try:

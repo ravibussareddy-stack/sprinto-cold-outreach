@@ -8,6 +8,7 @@ import smtplib
 from email.message import EmailMessage
 
 import config
+from retry import with_retry
 
 
 def send(subject: str, body: str, intended_name: str, intended_email: str) -> str:
@@ -20,7 +21,12 @@ def send(subject: str, body: str, intended_name: str, intended_email: str) -> st
     msg["X-Intended-Recipient"] = f"{intended_name} <{intended_email}>"
     msg.set_content(f"{body}\n\n---\n[Pipeline test send. Intended recipient: "
                     f"{intended_name} <{intended_email}>]")
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
-        s.login(config.GMAIL_ADDRESS, config.GMAIL_APP_PASSWORD)
-        s.send_message(msg)
+    def _send():
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as s:
+            s.login(config.GMAIL_ADDRESS, config.GMAIL_APP_PASSWORD)
+            s.send_message(msg)
+
+    # Timeouts and dropped connections are transient; a bad app password is not
+    # (SMTPAuthenticationError is not in the retry list, so it raises at once).
+    with_retry(_send, transient=(smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, TimeoutError, OSError))
     return config.SEND_TO

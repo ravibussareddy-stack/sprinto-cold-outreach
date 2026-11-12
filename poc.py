@@ -17,6 +17,7 @@ import re
 import requests
 
 import config
+from retry import PermanentError, with_retry
 
 OVERRIDES_FILE = os.path.join(os.path.dirname(__file__), "poc_overrides.json")
 
@@ -68,11 +69,23 @@ def find_poc(domain: str, employee_estimate: int | None) -> dict:
     if not config.HUNTER_API_KEY:
         return {"error": "no HUNTER_API_KEY and no entry in poc_overrides.json"}
 
-    r = requests.get("https://api.hunter.io/v2/domain-search",
-                     params={"domain": domain, "api_key": config.HUNTER_API_KEY, "limit": 10},
-                     timeout=20)
-    if r.status_code != 200:
-        return {"error": f"hunter http {r.status_code}: {r.text[:200]}"}
+    def _call():
+        r = requests.get("https://api.hunter.io/v2/domain-search",
+                         params={"domain": domain, "api_key": config.HUNTER_API_KEY, "limit": 10},
+                         timeout=20)
+        if r.status_code == 200:
+            return r
+        msg = f"hunter http {r.status_code}: {r.text[:200]}"
+        if r.status_code == 429 or r.status_code >= 500:
+            raise requests.RequestException(msg)        # transient: retried
+        raise PermanentError(msg)                       # bad key / plan limit: stop now
+
+    try:
+        r = with_retry(_call, transient=(requests.RequestException,))
+    except PermanentError as e:
+        return {"error": str(e)}
+    except requests.RequestException as e:
+        return {"error": f"hunter unreachable after retries: {e}"}
     people = r.json().get("data", {}).get("emails", [])
 
     ranked = []
