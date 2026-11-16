@@ -19,6 +19,7 @@ from dataclasses import asdict
 import config
 import db
 import llm
+import disagreement
 import meeting
 import poc as poc_mod
 import replies
@@ -93,6 +94,14 @@ def _process(domain, do_send, sender_name, rec, t0):
     rec["email_check_failures"] = problems
     log(f"  subject: {draft.subject}\n" + "\n".join("    " + l for l in draft.body.splitlines()))
 
+    # Disagreement score (build 1: reported only; build 2 holds drafts above a threshold)
+    try:
+        rec["disagreement"] = disagreement.assess(draft.body, profile.model_dump_json(), problems)
+        log(f"  disagreement: {rec['disagreement']['score']}/100 {rec['disagreement']['parts']}")
+    except Exception as e:
+        rec["disagreement"] = {"error": f"{type(e).__name__}: {e}"}
+        log(f"  disagreement: not computed ({e})")
+
     # Step 7: send (to your own inbox only)
     if problems:
         rec["status"] = "DRAFT_FAILED_CHECKS"
@@ -152,6 +161,14 @@ def write_report(run_dir: str, records: list[dict]):
                          + (f" - escalated: {m['escalation']}" if m.get("escalation") else "")
                          + (f" - booked: {m['booked_slot']}" if m.get("booked_slot") else ""))
             lines.append("**Steps:** " + "; ".join(m.get("trace", [])))
+        if r.get("disagreement") and "score" in r["disagreement"]:
+            d = r["disagreement"]
+            lines.append(f"\n**Disagreement score:** {d['score']}/100 (rules {d['parts']['rules']}, "
+                         f"claims {d['parts']['claims']}, judge {d['parts']['judge']})")
+            for c in d["claims_unsupported"]:
+                lines.append(f"- unsupported claim: {c}")
+            if d["judge_reason"] and not d["judge_faithful"]:
+                lines.append(f"- judge: {d['judge_reason']}")
         if r.get("email"):
             e = r["email"]
             lines.append(f"\n**Why this email:** {e['reasoning']} Hook: {e['hook_used']}")
