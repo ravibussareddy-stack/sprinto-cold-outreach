@@ -4,3 +4,9 @@ runs/
 __pycache__/
 poc_overrides.json
 checkpoints.sqlite
+
+# secrets: any env-style file (the token lives in one of these)
+.env.*
+!.env.example
+*.env.txt
+*.env
