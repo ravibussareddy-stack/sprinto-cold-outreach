@@ -11,6 +11,7 @@ import meeting
 import replies
 import retry
 import sender
+import calendar_tool
 from calendar_tool import check_calendar
 from retry import PermanentError
 from replies import ReplyRead
@@ -267,3 +268,35 @@ def test_time_we_cannot_pin_down_is_acknowledged():
     SENT.clear(); BODIES.clear(); CRM.clear()
     meeting.run(ctx(do_send=True), ["sometime after the offsite?"])
     assert 'pin down "sometime after the offsite"' in BODIES[0], BODIES[0]
+
+
+# ---- booking through Calendly (stubbed: no network) ----
+def _with_calendly(book):
+    """Run 'Can we do <time>?' with Calendly booking on, slot_free stubbed to free."""
+    when = _future_noon()
+    saved = (config.CALENDLY_BOOKING, config.CALENDLY_TOKEN, calendar_tool.slot_free, calendar_tool.book_calendly)
+    config.CALENDLY_BOOKING, config.CALENDLY_TOKEN = True, "stub"
+    calendar_tool.slot_free = lambda start, now, minutes=20: {"status": "free"}
+    calendar_tool.book_calendly = book
+    replies.classify = _scripted(_read(proposed_start=when.isoformat()))
+    SENT.clear(); BODIES.clear(); CRM.clear()
+    try:
+        return when, meeting.run(ctx(do_send=True), ["Can we do Tuesday 12pm?"])
+    finally:
+        (config.CALENDLY_BOOKING, config.CALENDLY_TOKEN, calendar_tool.slot_free, calendar_tool.book_calendly) = saved
+
+
+def test_calendly_booking_confirms_without_ics():
+    booked = []
+    when, s = _with_calendly(lambda slot, name, email: booked.append((slot, email)) or {"event": "uri"})
+    assert s.outcome == "booked" and booked == [(when.isoformat(), config.SEND_TO)], (s.trace, booked)
+    assert [a for _, a in SENT] == [False], SENT            # confirmation only; Calendly sends the invite
+    assert "from Calendly" in BODIES[0] and any("calendly_booking: ok" in t for t in s.trace)
+
+
+def test_calendly_refusal_falls_back_to_ics_invite():
+    def refuse(slot, name, email):
+        raise PermanentError("Calendly refused the booking (400)")
+    when, s = _with_calendly(refuse)
+    assert s.outcome == "booked" and [a for _, a in SENT] == [True], (s.trace, SENT)
+    assert any("calendly_booking: permanent failure" in t for t in s.trace), s.trace
