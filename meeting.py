@@ -115,6 +115,19 @@ def _attempt(name: str, fn, attempts: int = 3):
         return False, str(e), f"{name}: failed after {attempts} tries: {e}"
 
 
+def _attendees(ctx: Ctx) -> list[str]:
+    """Build 1: the inbox that receives the invite (SEND_TO) must be a guest, or Google Calendar
+    shows no Yes / No and never adds the event. The prospect is listed as the intended guest.
+    One line per address (SEND_TO may be the stand-in contact's own address)."""
+    people = [("You", config.SEND_TO), (ctx.contact_name, ctx.contact_email)]
+    seen, lines = set(), []
+    for name, addr in people:
+        if addr and addr.lower() not in seen:
+            seen.add(addr.lower())
+            lines.append(f"ATTENDEE;CN={name};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{addr}")
+    return lines
+
+
 def _ics(ctx: Ctx, iso: str) -> bytes:
     import uuid as _uuid
     start = dt.datetime.fromisoformat(iso).astimezone(dt.timezone.utc)
@@ -126,10 +139,7 @@ def _ics(ctx: Ctx, iso: str) -> bytes:
              f"DTSTART:{start.strftime(fmt)}", f"DTEND:{end.strftime(fmt)}",
              f"SUMMARY:Sprinto x {ctx.company}: 20-min call",
              f"ORGANIZER;CN={ctx.sender_name}:mailto:{config.GMAIL_ADDRESS}",
-             # Build 1: you (SEND_TO) are on the invite so Google Calendar offers Yes / No;
-             # the prospect is listed too, as the intended guest.
-             f"ATTENDEE;CN=You;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{config.SEND_TO}",
-             f"ATTENDEE;CN={ctx.contact_name};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{ctx.contact_email}",
+             *_attendees(ctx),
              "STATUS:CONFIRMED",
              "END:VEVENT", "END:VCALENDAR"]
     return ("\r\n".join(lines) + "\r\n").encode()
