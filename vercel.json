@@ -8,6 +8,15 @@
     },
     "api/redraft.py": {
       "maxDuration": 120
+    },
+    "api/cron_check_replies.py": {
+      "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron_check_replies",
+      "schedule": "0 4 * * *"
+    }
+  ]
 }

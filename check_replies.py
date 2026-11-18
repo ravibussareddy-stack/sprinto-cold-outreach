@@ -18,6 +18,8 @@ replies already handled are remembered by Message-ID.
 """
 import datetime as dt
 
+import psycopg
+
 import budget
 import config
 import db
@@ -96,25 +98,44 @@ def check_thread(t: dict, now: dt.datetime, window: dict) -> str:
     return f"{'waiting again' if waiting else 'done'}: {state.outcome or 'awaiting reply'} (contact: {status})"
 
 
-def main():
+LOCK_ID = 7_312_026          # Postgres advisory lock: one reply check at a time (GitHub Actions or Vercel cron)
+
+
+def main(trigger: str = "github") -> dict:
+    """Run one reply check. Returns a short summary (used by the Vercel cron endpoint)."""
     if not db.enabled():
         raise SystemExit("NEON_DATABASE_URL is needed: conversations are stored there")
-    llm.on_usage = db.record_usage           # token use per call -> llm_usage table
-    b = budget.status()
-    if b["paused"]:
-        log("PAUSED: " + budget.pause_message(b))
-        return
-    now = dt.datetime.now(dt.timezone.utc)
-    window = sendtime.best_window()
-    log(f"send window for follow-ups: {sendtime.describe(window)}")
-    threads = db.awaiting_threads()
-    log(f"{len(threads)} conversation(s) waiting for a reply")
-    for t in threads:
-        log(f"\n=== {t['domain']} ({t['thread_id']}) - {t['subject']!r}")
+    # Advisory locks need a real session: use Neon's direct host, not the connection pooler.
+    lock = psycopg.connect(config.NEON_DATABASE_URL.replace("-pooler.", "."), autocommit=True)
+    try:
+        if not lock.execute("SELECT pg_try_advisory_lock(%s)", (LOCK_ID,)).fetchone()[0]:
+            log("another reply check is already running - skipping this one")
+            return {"ran": False, "reason": "another check is running"}
+        llm.on_usage = db.record_usage           # token use per call -> llm_usage table
+        b = budget.status()
+        if b["paused"]:
+            log("PAUSED: " + budget.pause_message(b))
+            return {"ran": False, "reason": "budget", "budget": b}
+        now = dt.datetime.now(dt.timezone.utc)
+        window = sendtime.best_window()
+        log(f"reply check ({trigger}) - send window for follow-ups: {sendtime.describe(window)}")
+        threads = db.awaiting_threads()
+        log(f"{len(threads)} conversation(s) waiting for a reply")
+        results = []
+        for t in threads:
+            log(f"\n=== {t['domain']} ({t['thread_id']}) - {t['subject']!r}")
+            try:
+                r = check_thread(t, now, window)
+            except Exception as e:          # one bad thread must not stop the others
+                r = f"ERROR {type(e).__name__}: {e} (will retry next run)"
+            log(f"  -> {r}")
+            results.append({"domain": t["domain"], "thread_id": t["thread_id"], "result": r})
+        return {"ran": True, "trigger": trigger, "window": sendtime.describe(window), "threads": results}
+    finally:
         try:
-            log(f"  -> {check_thread(t, now, window)}")
-        except Exception as e:          # one bad thread must not stop the others
-            log(f"  ERROR {type(e).__name__}: {e} (will retry next run)")
+            lock.execute("SELECT pg_advisory_unlock(%s)", (LOCK_ID,))
+        finally:
+            lock.close()
 
 
 if __name__ == "__main__":
