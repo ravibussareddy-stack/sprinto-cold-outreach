@@ -1,0 +1,80 @@
+name: Sprinto outreach run
+
+# Manual only. Each run researches the domains you list and emails the drafts
+# to YOUR OWN inbox (SEND_TO). Nothing is sent to prospects.
+on:
+  workflow_dispatch:
+    inputs:
+      domains:
+        description: "Domains, one per line (leave blank to use domains.txt)"
+        required: false
+        type: string
+        default: ""
+      send:
+        description: "Send the draft emails to SEND_TO (your inbox)"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: outreach-run
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GEMINI_API_KEY1: ${{ secrets.GEMINI_API_KEY1 }}
+      GEMINI_API_KEY2: ${{ secrets.GEMINI_API_KEY2 }}
+      GEMINI_API_KEY3: ${{ secrets.GEMINI_API_KEY3 }}
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      SEND_TO: ${{ secrets.SEND_TO }}
+      USE_JINA_FALLBACK: "1"
+      SLOT_TIMEZONE: Asia/Kolkata
+      INPUT_DOMAINS: ${{ inputs.domains }}
+      INPUT_SEND: ${{ inputs.send }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pick domains
+        run: |
+          if [ -n "$INPUT_DOMAINS" ]; then
+            printf '%s\n' "$INPUT_DOMAINS" | tr -d '\r' | grep -v '^\s*$' > run_domains.txt
+          else
+            cp domains.txt run_domains.txt
+          fi
+          echo "Domains to process:"
+          cat run_domains.txt
+
+      - name: Run pipeline
+        run: |
+          if [ "$INPUT_SEND" = "true" ]; then
+            python pipeline.py run_domains.txt --send
+          else
+            python pipeline.py run_domains.txt
+          fi
+
+      - name: Upload run report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: outreach-run-${{ github.run_number }}
+          path: runs/
+          if-no-files-found: ignore
+          retention-days: 30
