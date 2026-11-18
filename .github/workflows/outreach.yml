@@ -62,6 +62,17 @@ jobs:
           echo "Domains to process:"
           cat run_domains.txt
 
+      - name: Write PoC overrides (from the POC_OVERRIDES secret, if set)
+        env:
+          POC_OVERRIDES: ${{ secrets.POC_OVERRIDES }}
+        run: |
+          if [ -n "$POC_OVERRIDES" ]; then
+            printf '%s' "$POC_OVERRIDES" > poc_overrides.json
+            echo "poc_overrides.json written"
+          else
+            echo "POC_OVERRIDES secret not set; companies without Hunter need a contact"
+          fi
+
       - name: Run pipeline
         run: |
           if [ "$INPUT_SEND" = "true" ]; then
