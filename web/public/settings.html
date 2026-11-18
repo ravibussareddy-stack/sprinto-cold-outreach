@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filters and rubric</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .field { padding: 12px 14px; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--glass-border);
+           transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease; }
+  .field:hover { border-color: var(--blue-500); box-shadow: 0 6px 18px rgba(59,130,246,.18); transform: translateY(-1px); }
+  .field.changed { border-color: var(--blue-700); box-shadow: 0 0 0 3px rgba(29,78,216,.12); }
+  .field label { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 2px; }
+  .field .help { font-size: 12px; color: var(--muted); margin-bottom: 8px; min-height: 16px; }
+  .field input, .field select { width: 100%; padding: 8px 10px; border-radius: 10px; font: inherit; font-size: 14px;
+           border: 1px solid var(--glass-border); background: rgba(255,255,255,.75); color: var(--ink); outline: none; }
+  @media (prefers-color-scheme: dark) { .field input, .field select { background: rgba(10,26,64,.6); } }
+  .field input:focus, .field select:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
+  .field .def { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+  .bar-actions { position: sticky; bottom: 14px; display: flex; gap: 10px; justify-content: flex-end; align-items: center;
+                 flex-wrap: wrap; padding: 12px 16px; margin-top: 18px; }
+  .btn.primary { background: var(--blue-700); color: #fff; border-color: var(--blue-700); }
+  .btn.primary:hover { background: var(--blue-900); }
+  .note { font-size: 13px; }
+  .note.ok { color: var(--blue-700); }
+  .note.bad { color: var(--warn); }
+  .preview b { color: var(--blue-900); font-size: 22px; }
+</style>
+</head>
+<body>
+<main>
+  <header class="glass top">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div><h1>Filters and rubric</h1>
+        <div class="muted small">How companies are qualified and when a draft goes to review. Changes apply from the next run.
+          <span id="status"></span></div></div>
+    </div>
+    <div class="actions"><a class="btn" href="index.html">&larr; Dashboard</a></div>
+  </header>
+  <div id="error" class="error"></div>
+
+  <section class="glass card section preview" id="preview"></section>
+  <div id="sections"></div>
+
+  <div class="glass bar-actions">
+    <span class="note" id="note"></span>
+    <button class="btn" id="discard">Discard changes</button>
+    <button class="btn" id="reset">Reset to defaults</button>
+    <button class="btn primary" id="save">Save rubric</button>
+  </div>
+</main>
+<script src="app.js"></script>
+<script>
+(function () {
+  var E = dash.esc;
+  // Section and field labels. Order here is the order on the page.
+  var LAYOUT = [
+    ["decision", "Decision thresholds", "A company's score decides what happens to it.", {
+      qualify_score: ["Qualify at or above", "Qualified: researched, drafted and sent."],
+      review_score: ["Qualify and flag at or above", "Qualified but flagged for a closer look; below this it is disqualified."] }],
+    ["certifications", "Certifications", "Companies that are already certified need Sprinto less.", {
+      dormant_rule: ["When is a company dormant?", "Dormant companies are skipped until a new certificate appears."],
+      not_certifications: ["Not counted as certifications", "Comma separated, e.g. gdpr (a regulation, not a certification)."] }],
+    ["size", "Company size", "Very large or public companies usually run their own compliance team.", {
+      min_employees: ["Smallest company (employees)", "Below this, headcount adds no stage points."],
+      max_employees: ["Largest company (employees)", "Above this, or public: disqualified."] }],
+    ["stage_points", "Stage points", "Sprinto's sweet spot is Series A to C.", {
+      series_a_c: ["Series A to C", ""], seed: ["Seed", ""], series_d_plus: ["Series D and later", ""],
+      headcount_20_500: ["Stage unknown: 20-500 employees", "Used when no funding stage is found."],
+      headcount_other: ["Stage unknown: other headcount", ""],
+      open_roles_5_plus: ["Stage unknown: 5+ open roles", "Used when neither stage nor headcount is found."] }],
+    ["compliance_points", "Compliance pressure points", "Signals that a company is being asked for SOC 2 / ISO 27001.", {
+      enterprise_tier: ["Enterprise tier on pricing", ""], named_customers: ["Two or more named customers", ""],
+      enterprise_features: ["Enterprise features (SSO, audit logs...)", ""],
+      sensitive_data: ["Sensitive data or regulated industries", ""],
+      security_hiring: ["Hiring for security or compliance", ""],
+      certification_in_progress: ["Certification in progress", ""], recent_trigger: ["Recent trigger (funding, launch...)", ""],
+      cap: ["Cap on compliance points", "Compliance pressure never adds more than this."] }],
+    ["certification_gap", "Certification gap points", "", {
+      no_soc2_or_iso: ["No SOC 2 or ISO 27001", "Greenfield: the strongest fit."],
+      holds_one: ["Holds only one of the two", "Expansion: only reachable if the dormant rule lets it through."] }],
+    ["evidence_loop", "Evidence loop", "Extra pages the agent may fetch when facts are missing.", {
+      certs: ["Fetches for certifications", ""], saas: ["Fetches for 'is it B2B SaaS?'", ""],
+      stage: ["Fetches for stage", ""], max_extra_fetches: ["Most extra fetches per company", "Hard cap on the loop."] }],
+    ["review", "Review", "", {
+      disagreement_threshold: ["Send to review above (disagreement)", "Drafts scoring above this appear in Needs review."] }],
+  ];
+  var RULE_LABELS = { any_named_cert: "Any named certification (lecturer's rule)",
+    soc2_and_iso: "Only if it holds both SOC 2 and ISO 27001",
+    off: "Never - certifications only change the score" };
+  var state = { saved: null, defaults: null, ranges: {}, rules: [] };
+
+  function val(section, key) {
+    var el = document.getElementById(section + "." + key);
+    if (!el) return state.saved[section][key];
+    if (Array.isArray(state.defaults[section][key])) return el.value.split(",").map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    if (typeof state.defaults[section][key] === "number") return el.value === "" ? NaN : Number(el.value);
+    return el.value;
+  }
+  function current() {
+    var r = {};
+    Object.keys(state.defaults).forEach(function (s) {
+      r[s] = {};
+      Object.keys(state.defaults[s]).forEach(function (k) { r[s][k] = val(s, k); });
+    });
+    return r;
+  }
+  function same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+  function render() {
+    var html = LAYOUT.map(function (sec) {
+      var name = sec[0], fields = sec[3];
+      var range = state.ranges[name] || [0, 1000];
+      return '<section class="glass card section"><h2>' + E(sec[1]) + "</h2>" + (sec[2] ? '<p class="muted small" style="margin:-8px 0 12px">' + E(sec[2]) + "</p>" : "") +
+        '<div class="fields">' + Object.keys(fields).map(function (key) {
+          var id = name + "." + key, v = state.saved[name][key], d = state.defaults[name][key], input;
+          if (key === "dormant_rule") {
+            input = '<select id="' + id + '">' + state.rules.map(function (r) {
+              return '<option value="' + r + '"' + (r === v ? " selected" : "") + ">" + E(RULE_LABELS[r] || r) + "</option>"; }).join("") + "</select>";
+          } else if (Array.isArray(d)) {
+            input = '<input id="' + id + '" type="text" value="' + E(v.join(", ")) + '">';
+          } else {
+            input = '<input id="' + id + '" type="number" min="' + range[0] + '" max="' + range[1] + '" step="1" value="' + E(v) + '">';
+          }
+          var dshow = Array.isArray(d) ? d.join(", ") : (key === "dormant_rule" ? RULE_LABELS[d] : d);
+          return '<div class="field" data-id="' + id + '"><label for="' + id + '">' + E(fields[key][0]) + '</label><div class="help">' +
+            E(fields[key][1]) + "</div>" + input + '<div class="def">Default: ' + E(dshow) + "</div></div>";
+        }).join("") + "</div></section>";
+    }).join("");
+    document.getElementById("sections").innerHTML = html;
+    refresh();
+  }
+
+  function refresh() {
+    var r = current();
+    document.querySelectorAll("#sections .field").forEach(function (f) {
+      var p = f.dataset.id.split(".");
+      f.classList.toggle("changed", !same(r[p[0]][p[1]], state.saved[p[0]][p[1]]));
+    });
+    var sp = r.stage_points, cp = r.compliance_points, g = r.certification_gap;
+    var stageMax = Math.max(sp.series_a_c, sp.seed, sp.series_d_plus, sp.headcount_20_500, sp.headcount_other, sp.open_roles_5_plus) || 0;
+    var compSum = cp.enterprise_tier + cp.named_customers + cp.enterprise_features + cp.sensitive_data + cp.security_hiring +
+                  cp.certification_in_progress + cp.recent_trigger;
+    var max = stageMax + Math.min(compSum, cp.cap) + Math.max(g.no_soc2_or_iso, g.holds_one);
+    document.getElementById("preview").innerHTML =
+      '<div class="row-head"><h2>What this rubric means</h2></div><div class="fields">' +
+      '<div class="field"><label>Highest possible score</label><b>' + (isNaN(max) ? "-" : max) + "</b></div>" +
+      '<div class="field"><label>Qualifies at</label><b>' + E(r.decision.qualify_score) + '</b><div class="help">' +
+        (isNaN(max) || !max ? "" : Math.round(r.decision.qualify_score / max * 100) + "% of the maximum") + "</div></div>" +
+      '<div class="field"><label>Flagged from</label><b>' + E(r.decision.review_score) + "</b></div>" +
+      '<div class="field"><label>Dormant when</label><div class="small">' + E(RULE_LABELS[r.certifications.dormant_rule]) + "</div></div>" +
+      '<div class="field"><label>Review above</label><b>' + E(r.review.disagreement_threshold) + '</b><div class="help">disagreement score</div></div></div>';
+    var changed = !same(r, state.saved);
+    document.getElementById("save").disabled = !changed;
+    document.getElementById("discard").disabled = !changed;
+    if (changed) note("Unsaved changes", "");
+  }
+
+  function note(text, kind) { var n = document.getElementById("note"); n.textContent = text; n.className = "note " + (kind || ""); }
+
+  function editKeyHeaders() {
+    var k = null;
+    try { k = sessionStorage.getItem("editKey"); } catch (e) {}
+    return k ? { "x-edit-key": k } : {};
+  }
+
+  function post(body) {
+    return fetch("/api/settings", { method: "POST", headers: Object.assign({ "content-type": "application/json" }, editKeyHeaders()),
+                                    body: JSON.stringify(body) })
+      .then(function (res) { return res.json().then(function (j) { return { status: res.status, body: j }; }); })
+      .then(function (r) {
+        if (r.status === 403) {
+          var k = window.prompt("Edit key (set as SETTINGS_EDIT_KEY in Vercel):");
+          if (!k) throw new Error("Not saved: an edit key is needed.");
+          try { sessionStorage.setItem("editKey", k); } catch (e) {}
+          return post(body);
+        }
+        if (r.status !== 200) throw new Error((r.body.errors || [r.body.error]).join("; "));
+        return r.body;
+      });
+  }
+
+  function load() {
+    dash.api("/api/settings").then(function (s) {
+      state.saved = s.rubric; state.defaults = s.defaults; state.ranges = s.ranges; state.rules = s.dormant_rules;
+      document.getElementById("status").textContent = s.custom ? "Custom rubric, saved " + dash.when(s.updated_at) + "." : "Using the defaults.";
+      render();
+      note("", "");
+    }).catch(function (e) { document.getElementById("error").textContent = e.message; });
+  }
+
+  document.getElementById("sections").addEventListener("input", refresh);
+  document.getElementById("discard").addEventListener("click", render);
+  document.getElementById("save").addEventListener("click", function () {
+    note("Saving...", "");
+    post({ rubric: current() }).then(function () { load(); setTimeout(function () { note("Saved. Applies from the next run.", "ok"); }, 300); })
+      .catch(function (e) { note(e.message, "bad"); });
+  });
+  document.getElementById("reset").addEventListener("click", function () {
+    if (!window.confirm("Reset every filter to its default?")) return;
+    post({ reset: true }).then(function () { load(); setTimeout(function () { note("Reset to defaults.", "ok"); }, 300); })
+      .catch(function (e) { note(e.message, "bad"); });
+  });
+  load();
+})();
+</script>
+</body>
+</html>

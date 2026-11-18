@@ -15,7 +15,7 @@ filled and decides what to fetch next. Hard cap: MAX_EXTRA_FETCHES.
 import re
 from urllib.parse import urlparse
 
-import config
+import rubric
 import scraper
 from extract import extract_profile
 from schemas import CompanyProfile
@@ -75,12 +75,11 @@ def missing_facts(p: CompanyProfile, pages: list[dict]) -> list[str]:
     return missing
 
 
-# GDPR is a regulation, not a certification, so it does not trigger the rule.
-NOT_CERTIFICATIONS = {"gdpr"}
-
-
 def named_certs(p: CompanyProfile, pages: list[dict]) -> set[str]:
-    return {c for c in certs_held(p, pages) if c.lower() not in NOT_CERTIFICATIONS}
+    """Certifications that count for the dormant rule. Rubric: certifications.not_certifications
+    (default: GDPR - a regulation, not a certification)."""
+    excluded = {x.lower() for x in rubric.get("certifications", "not_certifications")}
+    return {c for c in certs_held(p, pages) if c.lower() not in excluded}
 
 
 def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | None:
@@ -89,11 +88,14 @@ def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | Non
     if p.is_b2b_saas is False:
         return "DISQUALIFIED", "Not a B2B SaaS company - outside Sprinto's ICP."
     certs = named_certs(p, pages)
-    if certs:
+    rule = rubric.get("certifications", "dormant_rule")
+    dormant = (rule == "any_named_cert" and certs) or \
+              (rule == "soc2_and_iso" and holds_cert(p, pages, "SOC 2") and holds_cert(p, pages, "ISO 27001"))
+    if dormant:
         return ("DORMANT",
                 f"Already certified ({', '.join(sorted(certs))}). Dormant: re-engage only if a new "
                 f"relevant certificate appears.")
-    if p.funding_stage in ("Public",) or (p.employee_estimate or 0) > config.MAX_EMPLOYEES:
+    if p.funding_stage in ("Public",) or (p.employee_estimate or 0) > rubric.get("size", "max_employees"):
         return "DISQUALIFIED", "Too large/public - typically runs an in-house GRC team or enterprise GRC tool."
     return None
 
@@ -119,53 +121,56 @@ def pick_next_url(question: str, homepage: dict, tried: set[str]) -> str | None:
 
 # ---------------------------------------------------------------- scoring
 def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
-    """Deterministic 0-100 score. Every point has a stated reason."""
+    """Deterministic score. Every point has a stated reason; every value comes from the rubric."""
+    sp, cpv, gap = rubric.load()["stage_points"], rubric.load()["compliance_points"], rubric.load()["certification_gap"]
     pts, why = 0, []
 
-    # Stage fit (max 30): Sprinto's sweet spot is Series A-C.
+    # Stage fit: Sprinto's sweet spot is Series A-C.
     st = p.funding_stage
     if st in ("Series A", "Series B", "Series C"):
-        pts += 30; why.append(f"+30 stage: {st} (core ICP)")
+        pts += sp["series_a_c"]; why.append(f"+{sp['series_a_c']} stage: {st} (core ICP)")
     elif st == "Seed":
-        pts += 15; why.append("+15 stage: Seed (early, but often first enterprise deals)")
+        pts += sp["seed"]; why.append(f"+{sp['seed']} stage: Seed (early, but often first enterprise deals)")
     elif st == "Series D+":
-        pts += 10; why.append("+10 stage: Series D+ (may already have GRC tooling)")
+        pts += sp["series_d_plus"]; why.append(f"+{sp['series_d_plus']} stage: Series D+ (may already have GRC tooling)")
     elif p.employee_estimate:
         e = p.employee_estimate
-        add = 20 if 20 <= e <= 500 else 10 if e >= config.MIN_EMPLOYEES else 0
+        add = sp["headcount_20_500"] if 20 <= e <= 500 else \
+            sp["headcount_other"] if e >= rubric.get("size", "min_employees") else 0
         pts += add; why.append(f"+{add} stage proxy: ~{e} employees")
     elif (p.open_roles_count or 0) >= 5:
-        pts += 15; why.append(f"+15 stage proxy: {p.open_roles_count} open roles (scaling)")
+        pts += sp["open_roles_5_plus"]; why.append(f"+{sp['open_roles_5_plus']} stage proxy: {p.open_roles_count} open roles (scaling)")
     else:
         why.append("+0 stage: unknown after loop (flagged)")
 
-    # Compliance pressure (max 50)
+    # Compliance pressure (capped)
     cp = 0
     if p.has_enterprise_tier:
-        cp += 15; why.append("+15 enterprise tier on pricing (security reviews come with it)")
+        cp += cpv["enterprise_tier"]; why.append(f"+{cpv['enterprise_tier']} enterprise tier on pricing (security reviews come with it)")
     if len(p.named_customers) >= 2:
-        cp += 10; why.append(f"+10 named customers: {', '.join(p.named_customers[:4])}")
+        cp += cpv["named_customers"]; why.append(f"+{cpv['named_customers']} named customers: {', '.join(p.named_customers[:4])}")
     feats = [f for f in p.enterprise_features if ENTERPRISE_FEATURES.search(f)]
     if feats:
-        cp += 5; why.append(f"+5 enterprise features: {', '.join(feats[:4])}")
+        cp += cpv["enterprise_features"]; why.append(f"+{cpv['enterprise_features']} enterprise features: {', '.join(feats[:4])}")
     if p.handles_sensitive_data or REGULATED.search(" ".join(p.target_industries + [p.one_line_description or ""])):
-        cp += 10; why.append("+10 handles sensitive data / sells into regulated industries")
+        cp += cpv["sensitive_data"]; why.append(f"+{cpv['sensitive_data']} handles sensitive data / sells into regulated industries")
     if p.security_compliance_roles_hiring:
-        cp += 10; why.append(f"+10 hiring security/compliance: {', '.join(p.security_compliance_roles_hiring[:3])}")
+        cp += cpv["security_hiring"]; why.append(f"+{cpv['security_hiring']} hiring security/compliance: "
+                                                 f"{', '.join(p.security_compliance_roles_hiring[:3])}")
     regex_in_progress = any(pg["certs"]["in_progress"] for pg in pages)
     if p.certification_in_progress or regex_in_progress:
-        cp += 10; why.append("+10 certification explicitly in progress (actively preparing for audit)")
+        cp += cpv["certification_in_progress"]; why.append(f"+{cpv['certification_in_progress']} certification explicitly in progress (actively preparing for audit)")
     if p.recent_triggers:
-        cp += 5; why.append(f"+5 recent trigger: {p.recent_triggers[0]}")
-    cp = min(cp, 50); pts += cp
+        cp += cpv["recent_trigger"]; why.append(f"+{cpv['recent_trigger']} recent trigger: {p.recent_triggers[0]}")
+    cp = min(cp, cpv["cap"]); pts += cp
 
-    # Certification gap (max 20)
+    # Certification gap
     has_soc2, has_iso = holds_cert(p, pages, "SOC 2"), holds_cert(p, pages, "ISO 27001")
     if not has_soc2 and not has_iso:
-        pts += 20; why.append("+20 no SOC 2 / ISO 27001 claimed (greenfield)")
-    else:
-        pts += 10; why.append(f"+10 holds {'SOC 2' if has_soc2 else 'ISO 27001'} only - expansion to "
-                              f"{'ISO 27001' if has_soc2 else 'SOC 2'} + continuous monitoring")
+        pts += gap["no_soc2_or_iso"]; why.append(f"+{gap['no_soc2_or_iso']} no SOC 2 / ISO 27001 claimed (greenfield)")
+    elif not (has_soc2 and has_iso):
+        pts += gap["holds_one"]; why.append(f"+{gap['holds_one']} holds {'SOC 2' if has_soc2 else 'ISO 27001'} only - expansion to "
+                                            f"{'ISO 27001' if has_soc2 else 'SOC 2'} + continuous monitoring")
     return pts, why
 
 
@@ -192,13 +197,13 @@ def qualify(domain: str, log) -> dict:
                     "certs_held": sorted(named_certs(profile, pages)),
                     "profile": profile, "pages": pages, "trace": trace}
         missing = missing_facts(profile, pages)
-        if not missing or extra >= config.MAX_EXTRA_FETCHES:
+        if not missing or extra >= rubric.get("evidence_loop", "max_extra_fetches"):
             break
         # Fetch for the highest-value missing fact; stage first (most decisive).
         # Each question has its own fetch limit from the evidence map.
         nxt, q = None, None
         for cand in ("stage", "certs", "saas"):
-            if cand not in missing or per_question[cand] >= config.FETCH_LIMITS[cand]:
+            if cand not in missing or per_question[cand] >= rubric.get("evidence_loop", cand):
                 continue
             nxt = pick_next_url(cand, home, tried)
             if nxt:
@@ -210,7 +215,7 @@ def qualify(domain: str, log) -> dict:
         tried.add(nxt); extra += 1
         pg = scraper.fetch(nxt)
         trace.append({"fetch": nxt, "for": q, "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
-        log(f"  loop {extra}/{config.MAX_EXTRA_FETCHES}: need {q} -> {nxt} ({'ok' if pg['ok'] else pg['error']})")
+        log(f"  loop {extra}/{rubric.get("evidence_loop", "max_extra_fetches")}: need {q} -> {nxt} ({'ok' if pg['ok'] else pg['error']})")
         if pg["ok"]:
             pages.append(pg)
             profile = extract_profile(domain, pages)
@@ -232,9 +237,9 @@ def qualify(domain: str, log) -> dict:
         decision = "MANUAL_REVIEW"
     elif "stage" in still_missing or flags:
         decision = "QUALIFIED_FLAGGED"
-    elif pts >= config.QUALIFY_SCORE:
+    elif pts >= rubric.get("decision", "qualify_score"):
         decision = "QUALIFIED"
-    elif pts >= config.REVIEW_SCORE:
+    elif pts >= rubric.get("decision", "review_score"):
         decision = "QUALIFIED_FLAGGED"
     else:
         decision = "DISQUALIFIED"

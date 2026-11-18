@@ -1,4 +1,5 @@
 const { getPool } = require("../lib/db");
+const rubric = require("../lib/rubric");
 
 // Everything the dashboard tiles need, in one call.
 // Engagement rate = conversations with any reply (yes or no) / conversations started.
@@ -15,7 +16,6 @@ const STAGE_BY_DECISION = {
   DORMANT: "Dormant", DISQUALIFIED: "Disqualified", MANUAL_REVIEW: "Manual review",
 };
 
-const REVIEW_THRESHOLD = parseFloat(process.env.REVIEW_THRESHOLD || "20");
 
 async function safe(pool, sql, fallback, params) {
   try { return (await pool.query(sql, params || [])).rows; } catch (e) { return fallback; }
@@ -24,6 +24,7 @@ async function safe(pool, sql, fallback, params) {
 module.exports = async (req, res) => {
   const pool = getPool();
   try {
+    const REVIEW_THRESHOLD = (await rubric.load(pool)).rubric.review.disagreement_threshold;
     const [conv] = await safe(pool, `
       SELECT count(*)::int AS started,
              count(*) FILTER (WHERE replied)::int AS replied,

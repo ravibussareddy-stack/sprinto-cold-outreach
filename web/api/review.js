@@ -1,11 +1,11 @@
 const { getPool } = require("../lib/db");
+const rubric = require("../lib/rubric");
 
-// Review queue: drafts whose disagreement score is above REVIEW_THRESHOLD (default 20)
+// Review queue: drafts whose disagreement score is above the rubric's review threshold (default 20)
 // and that nobody has reviewed yet.
 //   GET  /api/review                      -> the queue
 //   POST /api/review {run_id, action}     -> action: "kept" | "rewritten"; leaves the queue
 // A review is stored in the reviews table, which also feeds the rewrite rate (review.py metrics).
-const THRESHOLD = parseFloat(process.env.REVIEW_THRESHOLD || "20");
 
 async function readBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -18,6 +18,7 @@ async function readBody(req) {
 module.exports = async (req, res) => {
   const pool = getPool();
   try {
+    const THRESHOLD = (await rubric.load(pool)).rubric.review.disagreement_threshold;
     if (req.method === "POST") {
       const body = await readBody(req);
       const runId = parseInt(body.run_id, 10);

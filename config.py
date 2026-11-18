@@ -48,9 +48,7 @@ MAX_EXTRA_FETCHES = 4
 FETCH_LIMITS = {"certs": 1, "saas": 1, "stage": 2}
 
 # --- ICP thresholds --------------------------------------------------------
-# Drafts with a disagreement score above this go to the dashboard's review queue.
-REVIEW_THRESHOLD = float(os.getenv("REVIEW_THRESHOLD", "20"))
-
+# Thresholds and points now live in the rubric (rubric.py, editable on the dashboard).
 QUALIFY_SCORE = 50
 REVIEW_SCORE = 35
 MIN_EMPLOYEES, MAX_EMPLOYEES = 10, 1000

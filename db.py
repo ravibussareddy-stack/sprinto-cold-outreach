@@ -107,6 +107,12 @@ CREATE TABLE IF NOT EXISTS exemplars (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (domain, subject)
 );
+-- Editable settings (the rubric from the dashboard's Filters & rubric page).
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 -- Token use per model call.
 CREATE TABLE IF NOT EXISTS llm_usage (
     id BIGSERIAL PRIMARY KEY,
@@ -383,3 +389,10 @@ def review_rows() -> list[tuple]:
     _init()
     with _conn() as c:
         return c.execute("SELECT email_action, poc_correct, minutes FROM reviews").fetchall()
+
+
+@_safe
+def get_setting(key: str):
+    with _conn() as c:
+        row = c.execute("SELECT value FROM settings WHERE key=%s", (key,)).fetchone()
+    return row[0] if row else None

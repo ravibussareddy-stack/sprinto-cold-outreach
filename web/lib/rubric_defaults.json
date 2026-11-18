@@ -1,0 +1,45 @@
+{
+  "decision": {
+    "qualify_score": 50,
+    "review_score": 35
+  },
+  "size": {
+    "min_employees": 10,
+    "max_employees": 1000
+  },
+  "certifications": {
+    "dormant_rule": "any_named_cert",
+    "not_certifications": ["gdpr"]
+  },
+  "stage_points": {
+    "series_a_c": 30,
+    "seed": 15,
+    "series_d_plus": 10,
+    "headcount_20_500": 20,
+    "headcount_other": 10,
+    "open_roles_5_plus": 15
+  },
+  "compliance_points": {
+    "enterprise_tier": 15,
+    "named_customers": 10,
+    "enterprise_features": 5,
+    "sensitive_data": 10,
+    "security_hiring": 10,
+    "certification_in_progress": 10,
+    "recent_trigger": 5,
+    "cap": 50
+  },
+  "certification_gap": {
+    "no_soc2_or_iso": 20,
+    "holds_one": 10
+  },
+  "evidence_loop": {
+    "certs": 1,
+    "saas": 1,
+    "stage": 2,
+    "max_extra_fetches": 4
+  },
+  "review": {
+    "disagreement_threshold": 20
+  }
+}
