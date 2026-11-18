@@ -124,7 +124,7 @@ def _attendees(ctx: Ctx) -> list[str]:
     for name, addr in people:
         if addr and addr.lower() not in seen:
             seen.add(addr.lower())
-            lines.append(f"ATTENDEE;CN={name};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{addr}")
+            lines.append(f'ATTENDEE;CN="{name}";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{addr}')
     return lines
 
 
@@ -138,7 +138,7 @@ def _ics(ctx: Ctx, iso: str) -> bytes:
              f"DTSTAMP:{dt.datetime.now(dt.timezone.utc).strftime(fmt)}",
              f"DTSTART:{start.strftime(fmt)}", f"DTEND:{end.strftime(fmt)}",
              f"SUMMARY:Sprinto x {ctx.company}: 20-min call",
-             f"ORGANIZER;CN={ctx.sender_name}:mailto:{config.GMAIL_ADDRESS}",
+             f'ORGANIZER;CN="{ctx.sender_name}":mailto:{config.GMAIL_ADDRESS}',
              *_attendees(ctx),
              "STATUS:CONFIRMED",
              "END:VEVENT", "END:VCALENDAR"]
