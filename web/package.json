@@ -1,0 +1,8 @@
+{
+  "name": "sprinto-outreach-dashboard",
+  "private": true,
+  "description": "Read-only dashboard of outreach runs: qualification, disagreement score and draft emails",
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}

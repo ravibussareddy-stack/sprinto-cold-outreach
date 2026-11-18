@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Outreach runs</title>
+<style>
+  :root { --bg:#f7f7f5; --fg:#1c1c1a; --muted:#6b6b66; --line:#e2e2dd; --card:#fff; --ok:#1f7a4d; --warn:#9a6700; --bad:#b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg:#161615; --fg:#ededea; --muted:#9a9a94; --line:#33332f; --card:#1f1f1d; --ok:#5fcf8f; --warn:#e6b450; --bad:#ff8a80; }
+  }
+  :root[data-theme="dark"] { --bg:#161615; --fg:#ededea; --muted:#9a9a94; --line:#33332f; --card:#1f1f1d; --ok:#5fcf8f; --warn:#e6b450; --bad:#ff8a80; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui,-apple-system,sans-serif; }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 18px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; min-width:640px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  tr:last-child td { border-bottom:none; }
+  a { color:inherit; }
+  a.draft { font-weight:600; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid var(--line); }
+  .d-low { color:var(--ok); } .d-mid { color:var(--warn); } .d-high { color:var(--bad); }
+  .muted { color:var(--muted); }
+  .error { color:var(--bad); margin:12px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Outreach runs</h1>
+  <p class="sub">Build 1: every draft goes to your inbox for review. Nothing is held or sent automatically.</p>
+  <div id="error" class="error"></div>
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>When (UTC)</th><th>Company</th><th>Decision</th><th>Fit score</th><th>Disagreement</th><th>Draft subject</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+<script src="app.js"></script>
+<script>
+  function band(s) {
+    if (s == null || s === "") return "";
+    var n = Number(s);
+    return n <= 30 ? "d-low" : n <= 60 ? "d-mid" : "d-high";
+  }
+  dash.api("/api/runs").then(function (rows) {
+    var body = document.getElementById("rows");
+    if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="muted">No runs saved yet.</td></tr>'; return; }
+    body.innerHTML = rows.map(function (r) {
+      var dis = r.disagreement_score == null
+        ? '<span class="muted">not computed</span>'
+        : '<span class="' + band(r.disagreement_score) + '">' + dash.esc(r.disagreement_score) + '/100</span>';
+      return '<tr>' +
+        '<td class="muted">' + dash.esc(new Date(r.created_at).toISOString().replace("T", " ").slice(0, 16)) + '</td>' +
+        '<td><a class="draft" href="draft.html?id=' + dash.esc(r.id) + '">' + dash.esc(r.domain) + '</a></td>' +
+        '<td><span class="pill">' + dash.esc(r.decision || "-") + '</span></td>' +
+        '<td>' + dash.esc(r.score == null ? "-" : r.score) + '</td>' +
+        '<td>' + dis + '</td>' +
+        '<td>' + dash.esc(r.subject || "-") + '</td>' +
+        '<td class="muted">' + dash.esc(r.status || "-") + '</td>' +
+        '</tr>';
+    }).join("");
+  }).catch(function (e) {
+    document.getElementById("error").textContent = e.message;
+    document.getElementById("rows").innerHTML = '<tr><td colspan="7" class="muted">Could not load runs.</td></tr>';
+  });
+</script>
+</body>
+</html>
