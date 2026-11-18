@@ -170,3 +170,51 @@ if __name__ == "__main__":
             print("FAIL", t.__name__, "-", repr(e))
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     raise SystemExit(1 if failed else 0)
+
+
+# ---- the prospect names their own time ("Yes, can we do Tuesday at 12pm?") ----
+def _proposing(intent, when_iso):
+    def _classify(reply, slots):
+        return ReplyRead(intent=intent, chosen_slot_index=None, proposed_times=["their time"],
+                         proposed_start=when_iso)
+    return _classify
+
+
+def _future_noon(days=3):
+    tz = dt.timezone(dt.timedelta(hours=5, minutes=30))
+    d = (dt.datetime.now(tz) + dt.timedelta(days=days)).replace(hour=12, minute=0, second=0, microsecond=0)
+    return d
+
+
+def test_first_reply_with_free_time_books_it_directly():
+    when = _future_noon()
+    config.CALENDAR_BUSY_FILE = make_busy([])
+    replies.classify = _proposing("counter_proposes", when.isoformat())
+    SENT.clear(); CRM.clear()
+    s = meeting.run(ctx(do_send=True), ["Yes. Can we do Tuesday 12pm"])
+    assert s.outcome == "booked" and s.booked_slot == when.isoformat(), (s.outcome, s.booked_slot, s.trace)
+    assert [a for _, a in SENT] == [True], SENT          # only the invite, no list of slots
+    assert CRM == ["booked"]
+
+
+def test_first_reply_with_busy_time_offers_alternatives():
+    when = _future_noon()
+    busy = make_busy([[when.isoformat(), (when + dt.timedelta(hours=1)).isoformat()]])
+    config.CALENDAR_BUSY_FILE = busy
+    calls = iter([_proposing("counter_proposes", when.isoformat()),
+                  classifier([("confirms_time", 0)])])
+    current = {"fn": next(calls)}
+
+    def _classify(reply, slots):
+        fn = current["fn"]
+        try:
+            current["fn"] = next(calls)
+        except StopIteration:
+            pass
+        return fn(reply, slots)
+    replies.classify = _classify
+    SENT.clear(); CRM.clear()
+    s = meeting.run(ctx(do_send=True), ["Can we do Tuesday 12pm?", "the first one works"])
+    assert when.isoformat() in s.rejected_slots, s.rejected_slots
+    assert s.outcome == "booked" and s.booked_slot != when.isoformat(), (s.outcome, s.trace)
+    assert [a for _, a in SENT] == [False, True], SENT   # proposal of alternatives, then the invite

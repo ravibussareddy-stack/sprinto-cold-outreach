@@ -35,6 +35,7 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from typing import Annotated, TypedDict
+from zoneinfo import ZoneInfo
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
@@ -94,6 +95,7 @@ class Sched(TypedDict):
     last_reply: str | None
     intent: str
     chosen_index: int | None
+    proposed_start: str | None            # a specific time the prospect named (ISO), if any
     trace: Annotated[list, operator.add]
 
 
@@ -123,7 +125,12 @@ def _ics(ctx: Ctx, iso: str) -> bytes:
              f"DTSTAMP:{dt.datetime.now(dt.timezone.utc).strftime(fmt)}",
              f"DTSTART:{start.strftime(fmt)}", f"DTEND:{end.strftime(fmt)}",
              f"SUMMARY:Sprinto x {ctx.company}: 20-min call",
-             f"ATTENDEE;CN={ctx.contact_name}:mailto:{ctx.contact_email}",
+             f"ORGANIZER;CN={ctx.sender_name}:mailto:{config.GMAIL_ADDRESS}",
+             # Build 1: you (SEND_TO) are on the invite so Google Calendar offers Yes / No;
+             # the prospect is listed too, as the intended guest.
+             f"ATTENDEE;CN=You;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{config.SEND_TO}",
+             f"ATTENDEE;CN={ctx.contact_name};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:{ctx.contact_email}",
+             "STATUS:CONFIRMED",
              "END:VEVENT", "END:VCALENDAR"]
     return ("\r\n".join(lines) + "\r\n").encode()
 
@@ -161,9 +168,33 @@ def build_graph(ctx: Ctx) -> StateGraph:
 
     def read(s):
         if s["last_reply"] is None:
-            return {"intent": "silence", "chosen_index": None}
+            return {"intent": "silence", "chosen_index": None, "proposed_start": None}
         r = replies.classify(s["last_reply"], s["times_proposed"])
-        return {"intent": r.intent, "chosen_index": r.chosen_slot_index}
+        proposed = None
+        if r.proposed_start:
+            try:
+                d = dt.datetime.fromisoformat(r.proposed_start)
+                proposed = (d if d.tzinfo else d.replace(tzinfo=ZoneInfo(config.SLOT_TIMEZONE))).isoformat()
+            except ValueError:
+                proposed = None          # unreadable time: fall back to offering slots
+        return {"intent": r.intent, "chosen_index": r.chosen_slot_index, "proposed_start": proposed}
+
+    def try_proposed(s):
+        """The prospect named a time: book it if the calendar is free, else offer alternatives."""
+        iso = s["proposed_start"]
+        now = dt.datetime.now(dt.timezone.utc)
+        ok, res, line = _attempt("check_calendar",
+                                 lambda: calendar_tool.slot_free(dt.datetime.fromisoformat(iso), now))
+        base = {"scheduling": True, "reply_status": "interested"}
+        if ok and res["status"] == "free":
+            ctx.log(f"  their time {_fmt(iso)} is free -> booking it")
+            return base | {"calendar_checked": True, "times_proposed": [iso], "chosen_index": 0,
+                           "trace": [f"{line}; their proposed time {iso} is free"]}
+        why = res["status"] if ok else f"calendar error: {res}"
+        ctx.log(f"  their time {_fmt(iso)} not possible ({why}) -> offering alternatives")
+        return base | {"calendar_checked": False, "chosen_index": None,
+                       "rejected_slots": s["rejected_slots"] + [iso],
+                       "trace": [f"{line}; their proposed time {iso}: {why}"]}
 
     def start_scheduling(s):
         return {"scheduling": True, "reply_status": "interested"}
@@ -258,6 +289,10 @@ def build_graph(ctx: Ctx) -> StateGraph:
         if s["last_reply"] is None:
             return "silent" if s["scheduling"] else "no_reply"
         intent, idx = s["intent"], s["chosen_index"]
+        picked_offered = intent == "confirms_time" and idx is not None and 0 <= idx < len(s["times_proposed"])
+        if s.get("proposed_start") and not picked_offered and \
+                intent in ("interested", "counter_proposes", "confirms_time"):
+            return "try_proposed"
         if not s["scheduling"]:
             if intent == "not_interested":
                 return "not_interested"
@@ -276,7 +311,8 @@ def build_graph(ctx: Ctx) -> StateGraph:
         return lambda s: "finish" if s["outcome"] else next_node
 
     g = StateGraph(Sched)
-    for name, fn in [("await_reply", await_reply), ("read", read), ("start_scheduling", start_scheduling),
+    for name, fn in [("await_reply", await_reply), ("read", read), ("try_proposed", try_proposed),
+                     ("start_scheduling", start_scheduling),
                      ("not_interested", not_interested), ("no_reply", no_reply), ("silent", silent),
                      ("unclear", unclear), ("counter", counter), ("check_calendar", check_calendar),
                      ("propose", propose), ("book", book), ("finish", finish)]:
@@ -286,7 +322,11 @@ def build_graph(ctx: Ctx) -> StateGraph:
     g.add_edge("await_reply", "read")
     g.add_conditional_edges("read", route_read, {
         "silent": "silent", "no_reply": "no_reply", "not_interested": "not_interested",
-        "unclear": "unclear", "start_scheduling": "start_scheduling", "book": "book", "counter": "counter"})
+        "unclear": "unclear", "start_scheduling": "start_scheduling", "book": "book", "counter": "counter",
+        "try_proposed": "try_proposed"})
+    # Their time is free -> book it; otherwise offer alternatives (counts as a counter round).
+    g.add_conditional_edges("try_proposed", lambda s: "book" if s["chosen_index"] == 0 else "counter",
+                            {"book": "book", "counter": "counter"})
     g.add_edge("start_scheduling", "check_calendar")
     g.add_conditional_edges("check_calendar", done_or("propose"), {"finish": "finish", "propose": "propose"})
     g.add_conditional_edges("propose", done_or("await_reply"), {"finish": "finish", "await_reply": "await_reply"})
@@ -309,7 +349,7 @@ def _initial() -> dict:
     return {"reply_status": "no_reply", "calendar_checked": False, "times_proposed": [],
             "rejected_slots": [], "reply_round": 0, "meeting_status": "unscheduled", "crm_logged": False,
             "outcome": "", "escalation": "", "booked_slot": None, "scheduling": False,
-            "last_reply": None, "intent": "", "chosen_index": None, "trace": []}
+            "last_reply": None, "intent": "", "chosen_index": None, "proposed_start": None, "trace": []}
 
 
 @contextmanager
