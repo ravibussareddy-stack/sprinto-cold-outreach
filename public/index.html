@@ -413,7 +413,7 @@
   function load() {
     document.getElementById("error").textContent = "";
     Promise.all([dash.api("/api/metrics"), dash.api("/api/contacts"), dash.api("/api/feedback"), dash.api("/api/runs"),
-                 dash.api("/api/review"), dash.api("/api/insights"), dash.api("/api/sendtime")])
+                 dash.api("/api/review"), dash.api("/api/insights")])
       .then(function (r) {
         last = { m: r[0], runs: r[3] };
         renderOverview(r[0], r[5]);
@@ -426,7 +426,7 @@
         renderFeedback(r[2]);
         renderCosts(r[0].tokens);
         renderBudget(r[0].budget);
-        renderSendTime(r[6]);
+        if (r[5].sendtime) renderSendTime(r[5].sendtime);
         document.getElementById("updated").textContent = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
       })
       .catch(function (e) { document.getElementById("error").textContent = e.message; });

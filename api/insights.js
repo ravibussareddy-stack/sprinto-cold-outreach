@@ -1,5 +1,6 @@
 const { getPool } = require("../lib/db");
 const rubric = require("../lib/rubric");
+const sendtime = require("../lib/sendtime");
 
 // The Overview page: what needs doing now, and how this week compares with last week.
 const PRICE_IN = parseFloat(process.env.GEMINI_PRICE_INPUT_PER_M || "0.30");
@@ -154,7 +155,9 @@ module.exports = async (req, res) => {
     if (failedChecks.length) highlights.push(`Most-failed quality check: ${failedChecks[0].check_name} (${failedChecks[0].n} draft(s)).`);
     if (cur.tokens) highlights.push(`Model cost about ₹${cur.est_cost_inr.toFixed(2)} (${cur.tokens.toLocaleString("en-IN")} tokens).`);
 
-    res.status(200).json({ todo, trends, highlights, dormant_certs: certTop.map(([cert, n]) => ({ cert, n })),
+    let sendtimeInfo = null;
+    try { sendtimeInfo = await sendtime.compute(pool); } catch (e) { sendtimeInfo = null; }
+    res.status(200).json({ sendtime: sendtimeInfo, todo, trends, highlights, dormant_certs: certTop.map(([cert, n]) => ({ cert, n })),
                            failed_checks: failedChecks, top_lessons: topLessons, this_week: cur, last_week: prev });
   } catch (e) {
     res.status(500).json({ error: "database read failed" });
