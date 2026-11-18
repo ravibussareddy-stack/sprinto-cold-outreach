@@ -3,74 +3,251 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Outreach runs</title>
-<style>
-  :root { --bg:#f7f7f5; --fg:#1c1c1a; --muted:#6b6b66; --line:#e2e2dd; --card:#fff; --ok:#1f7a4d; --warn:#9a6700; --bad:#b42318; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg:#161615; --fg:#ededea; --muted:#9a9a94; --line:#33332f; --card:#1f1f1d; --ok:#5fcf8f; --warn:#e6b450; --bad:#ff8a80; }
-  }
-  :root[data-theme="dark"] { --bg:#161615; --fg:#ededea; --muted:#9a9a94; --line:#33332f; --card:#1f1f1d; --ok:#5fcf8f; --warn:#e6b450; --bad:#ff8a80; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 system-ui,-apple-system,sans-serif; }
-  main { max-width:1100px; margin:0 auto; padding:24px 16px; }
-  h1 { font-size:22px; margin:0 0 4px; }
-  .sub { color:var(--muted); margin:0 0 18px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow-x:auto; }
-  table { width:100%; border-collapse:collapse; min-width:640px; }
-  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
-  tr:last-child td { border-bottom:none; }
-  a { color:inherit; }
-  a.draft { font-weight:600; }
-  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid var(--line); }
-  .d-low { color:var(--ok); } .d-mid { color:var(--warn); } .d-high { color:var(--bad); }
-  .muted { color:var(--muted); }
-  .error { color:var(--bad); margin:12px 0; }
-</style>
+<title>Outreach dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <main>
-  <h1>Outreach runs</h1>
-  <p class="sub">Build 1: every draft goes to your inbox for review. Nothing is held or sent automatically.</p>
+  <header class="glass top">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div>
+        <h1>Sprinto outreach</h1>
+        <div class="muted small">Build 1: every email goes to your inbox. Updated <span id="updated">-</span></div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="refresh">Refresh</button>
+    </div>
+  </header>
   <div id="error" class="error"></div>
-  <div class="card">
-    <table>
-      <thead>
-        <tr>
-          <th>When (UTC)</th><th>Company</th><th>Decision</th><th>Fit score</th><th>Disagreement</th><th>Draft subject</th><th>Status</th>
-        </tr>
-      </thead>
-      <tbody id="rows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
-    </table>
+
+  <!-- KPI tiles -->
+  <section class="tiles" id="tiles"></section>
+
+  <!-- Pipeline -->
+  <section class="glass card section">
+    <div class="row-head"><h2>Companies in the pipeline</h2><span class="muted small" id="pipe-count"></span></div>
+    <div class="chips" id="stage-chips"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Company</th><th>Stage</th><th>Decision</th><th>Fit score</th><th>Last activity</th></tr></thead>
+        <tbody id="pipe-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Contacts -->
+  <section class="glass card section">
+    <div class="row-head"><h2>Contacts</h2><input type="search" id="contact-search" placeholder="Search name, company, status"></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Contact</th><th>Company</th><th>Role</th><th>Status</th><th>Follow-ups</th><th>Last outcome</th><th>Updated</th></tr></thead>
+        <tbody id="contact-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="grid-2">
+    <!-- Emails by type -->
+    <section class="glass card">
+      <h2>Emails sent, by type</h2>
+      <div class="hbars" id="email-kinds"></div>
+    </section>
+    <!-- Tokens -->
+    <section class="glass card">
+      <div class="row-head"><h2>Token use and cost</h2><span class="muted small" id="price-note"></span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Step</th><th>Calls</th><th>Tokens in</th><th>Tokens out</th><th>Est. cost</th></tr></thead>
+          <tbody id="token-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
   </div>
+
+  <!-- Feedback repo -->
+  <section class="glass card section">
+    <div class="row-head"><h2>Feedback repo</h2>
+      <span class="muted small">Ranked as the writer sees it: higher outcome score wins when two conflict</span></div>
+    <div class="lessons" id="lessons"></div>
+    <h2 style="margin-top:18px">Winning emails used as examples</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Company</th><th>Role</th><th>Subject</th><th>Outcome</th><th>Score</th></tr></thead>
+        <tbody id="exemplar-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Recent runs -->
+  <section class="glass card section">
+    <h2>Recent drafts and runs</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>When</th><th>Company</th><th>Decision</th><th>Fit</th><th>Disagreement</th><th>Subject</th><th>Status</th></tr></thead>
+        <tbody id="run-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
 </main>
+
 <script src="app.js"></script>
 <script>
-  function band(s) {
-    if (s == null || s === "") return "";
-    var n = Number(s);
-    return n <= 30 ? "d-low" : n <= 60 ? "d-mid" : "d-high";
+(function () {
+  var E = dash.esc;
+  var STEP_NAMES = { CompanyProfile: "Extract company profile", PainPoints: "Pain points", EmailDraft: "Write cold email",
+    ClaimCheck: "Disagreement: claims", JudgeVerdict: "Disagreement: judge", ReplyRead: "Read reply",
+    FollowUp: "Write follow-up", Lessons: "Learn from outcome" };
+  var KIND_NAMES = { cold: "Cold email", followup_1: "Follow-up 1", followup_2: "Follow-up 2", followup_3: "Follow-up 3",
+    proposal: "Times proposed", clarify: "Time check", confirm: "Confirmation", invite: "Calendar invite",
+    thanks: "Thank-you (declined)", reply: "Replies received" };
+  var STAGE_PILL = { "Meeting booked": "strong", "Engaged": "mid", "Contacted": "", "Qualified": "",
+    "Qualified - no contact": "soft", "Cold lead": "soft", "Non-respondent": "soft", "Needs you": "warn",
+    "Dormant": "soft", "Disqualified": "soft", "Manual review": "warn", "Error": "warn" };
+  var STATUS_LABEL = { meeting_booked: "Meeting booked", engaged: "Engaged", contacted: "Contacted",
+    cold_lead: "Cold lead", non_respondent: "Non-respondent", escalated: "Needs you" };
+  var pipelineRows = [], stageFilter = "All", contacts = [];
+
+  function pill(text, cls) { return '<span class="pill ' + (cls || "") + '">' + E(text) + "</span>"; }
+
+  function tile(label, value, fmt, sub, ratio) {
+    var el = document.createElement("div");
+    el.className = "glass lift tile";
+    el.innerHTML = '<div class="label">' + E(label) + '</div><div class="value">-</div><div class="sub">' + E(sub || "") +
+      "</div>" + (ratio != null ? '<div class="bar"><span></span></div>' : "");
+    dash.countUp(el.querySelector(".value"), value, fmt);
+    if (ratio != null) setTimeout(function () { el.querySelector(".bar span").style.width = Math.round(ratio * 100) + "%"; }, 30);
+    return el;
   }
-  dash.api("/api/runs").then(function (rows) {
-    var body = document.getElementById("rows");
-    if (!rows.length) { body.innerHTML = '<tr><td colspan="7" class="muted">No runs saved yet.</td></tr>'; return; }
-    body.innerHTML = rows.map(function (r) {
-      var dis = r.disagreement_score == null
-        ? '<span class="muted">not computed</span>'
-        : '<span class="' + band(r.disagreement_score) + '">' + dash.esc(r.disagreement_score) + '/100</span>';
-      return '<tr>' +
-        '<td class="muted">' + dash.esc(new Date(r.created_at).toISOString().replace("T", " ").slice(0, 16)) + '</td>' +
-        '<td><a class="draft" href="draft.html?id=' + dash.esc(r.id) + '">' + dash.esc(r.domain) + '</a></td>' +
-        '<td><span class="pill">' + dash.esc(r.decision || "-") + '</span></td>' +
-        '<td>' + dash.esc(r.score == null ? "-" : r.score) + '</td>' +
-        '<td>' + dis + '</td>' +
-        '<td>' + dash.esc(r.subject || "-") + '</td>' +
-        '<td class="muted">' + dash.esc(r.status || "-") + '</td>' +
-        '</tr>';
+
+  function renderTiles(m) {
+    var c = m.conversations || {}, q = m.quality || {}, t = m.tokens || {};
+    var box = document.getElementById("tiles");
+    box.innerHTML = "";
+    var pctFmt = function (x) { return x == null ? "-" : Math.round(x * 100) + "%"; };
+    var intFmt = function (x) { return x == null ? "-" : Math.round(x).toLocaleString("en-GB"); };
+    box.appendChild(tile("Engagement rate", m.engagement_rate, pctFmt, (c.replied || 0) + " of " + (c.started || 0) + " conversations replied (yes or no)", m.engagement_rate || 0));
+    box.appendChild(tile("Booking rate", m.booking_rate, pctFmt, (c.booked || 0) + " booked of " + (c.positive || 0) + " positive replies", m.booking_rate || 0));
+    box.appendChild(tile("Meetings booked", c.booked || 0, intFmt, (c.awaiting || 0) + " conversation(s) still open"));
+    box.appendChild(tile("Replies", (c.positive || 0) + (c.negative || 0), intFmt, (c.positive || 0) + " positive, " + (c.negative || 0) + " negative"));
+    box.appendChild(tile("No reply", c.non_respondent || 0, intFmt, (c.followups || 0) + " follow-ups sent in total"));
+    box.appendChild(tile("Email quality", q.avg_quality, pctFmt, "average structure checks passed", q.avg_quality || 0));
+    box.appendChild(tile("Disagreement", q.avg_disagreement, function (x) { return x == null ? "-" : Math.round(x) + "/100"; },
+      "average over " + (q.drafts || 0) + " drafts (lower is better)", q.avg_disagreement == null ? null : q.avg_disagreement / 100));
+    box.appendChild(tile("Tokens used", (t.input || 0) + (t.output || 0), intFmt,
+      "est. $" + (t.est_cost_usd || 0).toFixed(4) + " (" + intFmt(t.input) + " in / " + intFmt(t.output) + " out)"));
+    box.appendChild(tile("Pipeline", (m.pipeline || {}).companies || 0, intFmt, (m.contacts || 0) + " contact(s), " + ((m.feedback || {}).lessons || 0) + " lessons learnt"));
+  }
+
+  function renderPipeline() {
+    var counts = {}, all = pipelineRows.length;
+    pipelineRows.forEach(function (r) { counts[r.stage] = (counts[r.stage] || 0) + 1; });
+    var chips = ['<button class="chip ' + (stageFilter === "All" ? "on" : "") + '" data-stage="All">All<b>' + all + "</b></button>"];
+    Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).forEach(function (s) {
+      chips.push('<button class="chip ' + (stageFilter === s ? "on" : "") + '" data-stage="' + E(s) + '">' + E(s) + "<b>" + counts[s] + "</b></button>");
+    });
+    document.getElementById("stage-chips").innerHTML = chips.join("");
+    document.getElementById("pipe-count").textContent = all + " companies researched";
+    var rows = pipelineRows.filter(function (r) { return stageFilter === "All" || r.stage === stageFilter; });
+    document.getElementById("pipe-rows").innerHTML = rows.length ? rows.map(function (r) {
+      return "<tr><td><b>" + E(r.company) + '</b><div class="muted small">' + E(r.domain) + "</div></td><td>" +
+        pill(r.stage, STAGE_PILL[r.stage]) + "</td><td>" + E(r.decision || "-") + "</td><td>" + E(r.fit_score == null ? "-" : r.fit_score) +
+        "</td><td class='muted'>" + E(dash.when(r.last_activity)) + "</td></tr>";
+    }).join("") : '<tr><td colspan="5" class="empty">No companies at this stage.</td></tr>';
+  }
+
+  function renderContacts() {
+    var q = (document.getElementById("contact-search").value || "").toLowerCase();
+    var rows = contacts.filter(function (c) {
+      return !q || [c.contact_name, c.company, c.domain, c.status, c.title].join(" ").toLowerCase().indexOf(q) >= 0;
+    });
+    document.getElementById("contact-rows").innerHTML = rows.length ? rows.map(function (c) {
+      var label = STATUS_LABEL[c.status] || c.status;
+      return "<tr><td><b>" + E(c.contact_name || "-") + '</b><div class="muted small">' + E(c.contact_email) + "</div></td><td>" +
+        E(c.company || c.domain) + "</td><td>" + E(c.title || "-") + "</td><td>" + pill(label, STAGE_PILL[label]) + "</td><td>" +
+        E(c.followups_sent) + " / 3</td><td>" + E(c.last_outcome || "-") + "</td><td class='muted'>" + E(dash.when(c.updated_at)) + "</td></tr>";
+    }).join("") : '<tr><td colspan="7" class="empty">' + (contacts.length ? "No match." : "No contacts yet.") + "</td></tr>";
+  }
+
+  function renderKinds(kinds) {
+    var box = document.getElementById("email-kinds");
+    if (!kinds.length) { box.innerHTML = '<div class="empty">No emails logged yet - tracking starts with the next conversation.</div>'; return; }
+    var max = Math.max.apply(null, kinds.map(function (k) { return k.n; }));
+    box.innerHTML = kinds.map(function (k) {
+      return '<div class="hbar"><span>' + E(KIND_NAMES[k.kind] || k.kind) + '</span><div class="track"><span data-w="' +
+        Math.round(k.n / max * 100) + '"></span></div><b>' + E(k.n) + "</b></div>";
     }).join("");
-  }).catch(function (e) {
-    document.getElementById("error").textContent = e.message;
-    document.getElementById("rows").innerHTML = '<tr><td colspan="7" class="muted">Could not load runs.</td></tr>';
+    setTimeout(function () { box.querySelectorAll(".track span").forEach(function (s) { s.style.width = s.dataset.w + "%"; }); }, 30);
+  }
+
+  function renderTokens(t) {
+    document.getElementById("price-note").textContent = "est. at $" + t.price_per_m.input + " / $" + t.price_per_m.output + " per 1M tokens in / out";
+    var rows = t.by_purpose || [];
+    document.getElementById("token-rows").innerHTML = rows.length ? rows.map(function (u) {
+      return "<tr><td>" + E(STEP_NAMES[u.purpose] || u.purpose) + "</td><td>" + dash.num(u.calls) + "</td><td>" + dash.num(u.input_tokens) +
+        "</td><td>" + dash.num(u.output_tokens) + "</td><td>$" + u.est_cost_usd.toFixed(4) + "</td></tr>";
+    }).join("") + "<tr><td><b>Total</b></td><td></td><td><b>" + dash.num(t.input) + "</b></td><td><b>" + dash.num(t.output) +
+      "</b></td><td><b>$" + t.est_cost_usd.toFixed(4) + "</b></td></tr>"
+      : '<tr><td colspan="5" class="empty">No usage recorded yet - tracking starts with the next run.</td></tr>';
+  }
+
+  function renderFeedback(f) {
+    var box = document.getElementById("lessons");
+    box.innerHTML = f.lessons.length ? f.lessons.map(function (l, i) {
+      var w = Math.round(l.outcome_score * 100);
+      return '<div class="lesson"><div class="meta"><b>#' + (i + 1) + "</b>" + pill(l.scope) + pill(l.source, "soft") +
+        (l.outcome ? pill(l.outcome, "soft") : "") + (l.active ? "" : pill("inactive", "warn")) +
+        '<span class="score"><span class="track"><span style="width:' + w + '%"></span></span>' + l.outcome_score.toFixed(2) + "</span></div>" +
+        E(l.guidance) + "</div>";
+    }).join("") : '<div class="empty">No lessons yet. They are added automatically when conversations end, or with <code>python feedback.py add "..."</code>.</div>';
+    document.getElementById("exemplar-rows").innerHTML = f.exemplars.length ? f.exemplars.map(function (e) {
+      return "<tr><td>" + E(e.domain) + "</td><td>" + E(e.role || "-") + "</td><td>" + E(e.subject) + "</td><td>" + pill(e.outcome) +
+        "</td><td>" + Number(e.outcome_score).toFixed(2) + "</td></tr>";
+    }).join("") : '<tr><td colspan="5" class="empty">None yet - emails that earn a positive reply are saved here.</td></tr>';
+  }
+
+  function renderRuns(rows) {
+    document.getElementById("run-rows").innerHTML = rows.length ? rows.slice(0, 40).map(function (r) {
+      var d = r.disagreement_score == null ? '<span class="muted">-</span>' : E(r.disagreement_score) + "/100";
+      return "<tr><td class='muted'>" + E(dash.when(r.created_at)) + '</td><td><a href="draft.html?id=' + E(r.id) + '">' + E(r.domain) +
+        "</a></td><td>" + pill(r.decision || "-", "soft") + "</td><td>" + E(r.score == null ? "-" : r.score) + "</td><td>" + d +
+        "</td><td>" + E(r.subject || "-") + "</td><td class='muted small'>" + E(r.status || "-") + "</td></tr>";
+    }).join("") : '<tr><td colspan="7" class="empty">No runs yet.</td></tr>';
+  }
+
+  function load() {
+    document.getElementById("error").textContent = "";
+    Promise.all([dash.api("/api/metrics"), dash.api("/api/contacts"), dash.api("/api/feedback"), dash.api("/api/runs")])
+      .then(function (r) {
+        var m = r[0];
+        renderTiles(m);
+        pipelineRows = (m.pipeline || {}).rows || [];
+        renderPipeline();
+        contacts = r[1];
+        renderContacts();
+        renderKinds(m.emails_by_kind || []);
+        renderTokens(m.tokens);
+        renderFeedback(r[2]);
+        renderRuns(r[3]);
+        document.getElementById("updated").textContent = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+      })
+      .catch(function (e) { document.getElementById("error").textContent = e.message; });
+  }
+
+  document.getElementById("stage-chips").addEventListener("click", function (ev) {
+    var b = ev.target.closest(".chip");
+    if (!b) return;
+    stageFilter = b.dataset.stage;
+    renderPipeline();
   });
+  document.getElementById("contact-search").addEventListener("input", renderContacts);
+  document.getElementById("refresh").addEventListener("click", load);
+  load();
+  setInterval(load, 60000);
+})();
 </script>
 </body>
 </html>

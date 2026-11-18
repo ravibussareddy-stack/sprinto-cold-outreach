@@ -17,6 +17,10 @@ GEMINI_API_KEYS = [
 GEMINI_API_KEY = GEMINI_API_KEYS[0] if GEMINI_API_KEYS else ""
 # Check the current model list at ai.google.dev before a real run.
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+# Cost estimate on the dashboard, USD per 1M tokens. Assumed rates: check the current Gemini
+# price list and set these (the dashboard reads the same names from Vercel env).
+GEMINI_PRICE_INPUT_PER_M = float(os.getenv("GEMINI_PRICE_INPUT_PER_M", "0.30"))
+GEMINI_PRICE_OUTPUT_PER_M = float(os.getenv("GEMINI_PRICE_OUTPUT_PER_M", "2.50"))
 
 # --- Storage: Neon (serverless Postgres) -----------------------------------
 # Leave blank to run without a database (no page cache, no run history).
@@ -77,7 +81,8 @@ REPLIES_DIR = os.getenv("REPLIES_DIR", "replies")
 #   gmail - real replies in your inbox over IMAP; the conversation is saved in Neon
 #           and check_replies.py continues it whenever a reply arrives
 REPLY_MODE = os.getenv("REPLY_MODE", "file")
-FOLLOWUP_HOURS = 48                # no reply within this window -> hand off
+FOLLOWUP_HOURS = 48                # no reply within this window -> next follow-up (Gmail mode)
+MAX_FOLLOWUPS = 3                  # then the contact becomes non_respondent; no more emails
 MAX_REPLY_ROUNDS = 2               # counter-proposals before escalating
 
 # LangGraph checkpoints for Sequence 2 (pause at await_reply, resume on the next reply)

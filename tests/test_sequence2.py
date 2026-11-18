@@ -300,3 +300,67 @@ def test_calendly_refusal_falls_back_to_ics_invite():
     when, s = _with_calendly(refuse)
     assert s.outcome == "booked" and [a for _, a in SENT] == [True], (s.trace, SENT)
     assert any("calendly_booking: permanent failure" in t for t in s.trace), s.trace
+
+
+# ---- no reply -> 3 follow-ups -> non-respondent; negative -> thank them ----
+import writer as _writer
+
+
+def _gmail_ctx():
+    c = ctx(do_send=True)
+    c.followups = True
+    c.subject = "security reviews at Acme"
+    return c
+
+
+def _stub_followups():
+    angles = []
+
+    def fake(n, first, title, company, research, previous, sender_name, max_attempts=2):
+        angles.append(n)
+        return _writer.FollowUp(body=f"Good morning Asha,\n\nHope you're doing well.\n\nFollow-up {n}?\n\n"
+                                     "Kind regards,\nGrowth", value_angle=f"angle {n}", engagement_ask=f"ask {n}")
+    _writer.follow_up = fake
+    return angles
+
+
+def test_no_reply_sends_three_follow_ups_then_non_respondent():
+    real = _writer.follow_up
+    angles = _stub_followups()
+    config.CALENDAR_BUSY_FILE = make_busy([])
+    SENT.clear(); BODIES.clear(); CRM.clear()
+    try:
+        s = meeting.run(_gmail_ctx(), [])          # silence every time the window passes
+    finally:
+        _writer.follow_up = real
+    assert angles == [1, 2, 3], angles
+    assert s.followups_sent == 3 and s.outcome == "non_respondent", (s.followups_sent, s.outcome)
+    assert [a for _, a in SENT] == [False, False, False] and all(x.startswith("Re: ") for x, _ in SENT)
+    assert CRM == ["non_respondent"]
+
+
+def test_reply_after_a_follow_up_goes_on_to_schedule():
+    real = _writer.follow_up
+    _stub_followups()
+    config.CALENDAR_BUSY_FILE = make_busy([])
+    replies.classify = classifier([("interested", None)])
+    SENT.clear(); BODIES.clear(); CRM.clear()
+    c = _gmail_ctx()
+    try:
+        tid, s, waiting = meeting.start(c, persistent=False)
+        s, waiting = meeting.resume(c, tid, None, persistent=False)            # window passed: follow-up 1
+        s, waiting = meeting.resume(c, tid, "yes, keen to talk", persistent=False)
+    finally:
+        _writer.follow_up = real
+    assert waiting and s.followups_sent == 1 and s.replied and s.sentiment == "positive", (s.trace,)
+    assert s.meeting_status == "pending_confirmation" and len(s.times_proposed) == 3
+
+
+def test_negative_reply_is_thanked_and_ends():
+    replies.classify = classifier([("not_interested", None)])
+    config.CALENDAR_BUSY_FILE = make_busy([])
+    SENT.clear(); BODIES.clear(); CRM.clear()
+    s = meeting.run(_gmail_ctx(), ["no thanks, not a priority"])
+    assert s.outcome == "not_interested" and s.sentiment == "negative" and s.replied
+    assert len(SENT) == 1 and "Thank you for letting me know" in BODIES[0], BODIES
+    assert CRM == ["not_interested"]

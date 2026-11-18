@@ -44,6 +44,7 @@ from langgraph.types import Command, interrupt
 import calendar_tool
 import config
 import crm
+import db
 import replies
 import sender
 import writer
@@ -63,6 +64,9 @@ class MeetingState:
     outcome: str = ""
     escalation: str = ""
     booked_slot: str | None = None
+    followups_sent: int = 0
+    replied: bool = False
+    sentiment: str | None = None          # positive | negative | unclear
     trace: list = field(default_factory=list)
 
 
@@ -77,6 +81,11 @@ class Ctx:
     log: callable = print
     subject: str = ""                     # cold email subject; follow-ups reply in that thread
     in_reply_to: str | None = None        # Message-ID of the reply being answered (Gmail mode)
+    thread_id: str | None = None          # Gmail mode: emails sent are logged against it
+    followups: bool = False               # Gmail mode: no reply -> up to MAX_FOLLOWUPS follow-ups
+    title: str | None = None              # contact's role, for follow-ups and learning
+    industries: list = field(default_factory=list)
+    research: dict = field(default_factory=dict)   # short company summary for follow-ups
 
 
 class Sched(TypedDict):
@@ -99,6 +108,9 @@ class Sched(TypedDict):
     guess_start: str | None               # their time was contradictory: our best guess, to confirm
     ambiguity_note: str | None            # why it was contradictory, e.g. "the 21st is a Saturday"
     ack_note: str | None                  # one sentence answering their time, used in the next email
+    followups_sent: int
+    replied: bool
+    sentiment: str | None
     trace: Annotated[list, operator.add]
 
 
@@ -183,6 +195,12 @@ def _confirm_body(first: str, slot: str, sender_name: str) -> str:
             f"Looking forward to speaking with you.\n\n{_sign_off(sender_name)}")
 
 
+def _thanks_body(first: str, company: str, sender_name: str) -> str:
+    return (f"{writer.greeting(first)}\n\nThank you for letting me know, and for taking the time to reply - "
+            f"I really appreciate it.\n\nIf security compliance moves up the agenda later on, I'd be glad to help. "
+            f"Wishing you and the {company} team all the best.\n\n{_sign_off(sender_name)}")
+
+
 def _clarify_body(first: str, iso: str, note: str, sender_name: str) -> str:
     return (f"{writer.greeting(first)}\n\nThank you for coming back to me. Just to check: "
             f"{note.rstrip('.')}. Did you mean {_fmt(iso)}? That time is free on my side.\n\n"
@@ -198,6 +216,14 @@ def _invite_body(first: str, slot: str, sender_name: str) -> str:
 
 def build_graph(ctx: Ctx) -> StateGraph:
     first = ctx.contact_name.split()[0]
+
+    def _send(kind: str, subject: str, body: str, attachment=None):
+        """Send (always to SEND_TO) and, in Gmail mode, log it against the thread."""
+        res = sender.send(subject, body, ctx.contact_name, ctx.contact_email,
+                          attachment=attachment, in_reply_to=ctx.in_reply_to)
+        if ctx.thread_id:
+            db.log_email(ctx.thread_id, ctx.domain, kind, subject, body)
+        return res
 
     def await_reply(s):
         # Pause here until the prospect replies (or the follow-up window passes: None).
@@ -220,8 +246,13 @@ def build_graph(ctx: Ctx) -> StateGraph:
             why = f" ({r.ambiguity_note.rstrip('.')})" if r.ambiguity_note else ""
             ack = (f'I wasn\'t quite able to pin down "{r.proposed_times[0]}"{why}, '
                    f"so here are a few times that work on my side.")
+        sentiment = {"interested": "positive", "confirms_time": "positive", "counter_proposes": "positive",
+                     "not_interested": "negative"}.get(r.intent, "unclear")
+        if sentiment == "unclear" and s.get("sentiment") == "positive":
+            sentiment = "positive"          # an unclear later reply does not undo earlier interest
         return {"intent": r.intent, "chosen_index": r.chosen_slot_index, "proposed_start": proposed,
-                "guess_start": guess, "ambiguity_note": r.ambiguity_note, "ack_note": ack}
+                "guess_start": guess, "ambiguity_note": r.ambiguity_note, "ack_note": ack,
+                "replied": True, "sentiment": sentiment}
 
     def clarify(s):
         """Their time was contradictory ('Tuesday the 21st'): ask them to confirm our best guess."""
@@ -244,9 +275,8 @@ def build_graph(ctx: Ctx) -> StateGraph:
         if not ctx.do_send:
             return upd | {"trace": [line, "send_email: dry run, not sent"]}
         subject = f"Re: {ctx.subject}" if ctx.subject else "Re: call times"
-        sent, err, sline = _attempt("send_email", lambda: sender.send(
-            subject, _clarify_body(first, iso, note, ctx.sender_name), ctx.contact_name,
-            ctx.contact_email, in_reply_to=ctx.in_reply_to))
+        sent, err, sline = _attempt("send_email", lambda: _send(
+            "clarify", subject, _clarify_body(first, iso, note, ctx.sender_name)))
         if not sent:
             return {"outcome": "escalated_to_growth_lead", "escalation": f"send_email failed: {err}",
                     "trace": [line, sline]}
@@ -276,10 +306,42 @@ def build_graph(ctx: Ctx) -> StateGraph:
         return {"scheduling": True, "reply_status": "interested"}
 
     def not_interested(s):
-        return {"reply_status": "not_interested", "meeting_status": "unscheduled", "outcome": "not_interested"}
+        """They declined: thank them for their time (they become a cold lead in contacts)."""
+        upd = {"reply_status": "not_interested", "meeting_status": "unscheduled", "outcome": "not_interested"}
+        if not ctx.do_send:
+            return upd | {"trace": ["thanks: dry run, not sent"]}
+        subject = f"Re: {ctx.subject}" if ctx.subject else "Thank you"
+        ok, err, line = _attempt("send_email", lambda: _send(
+            "thanks", subject, _thanks_body(first, ctx.company, ctx.sender_name)))
+        ctx.log("  not interested -> thanked them; now a cold lead")
+        return upd | {"trace": [line.replace("send_email", "thanks")]}
 
     def no_reply(s):
+        # Gmail mode: reached only after MAX_FOLLOWUPS follow-ups went unanswered.
+        if ctx.followups:
+            ctx.log(f"  no reply after {s.get('followups_sent') or 0} follow-ups -> non-respondent, no more emails")
+            return {"outcome": "non_respondent"}
         return {"outcome": "no_reply"}
+
+    def follow_up(s):
+        """No reply in the window: send the next follow-up, each with a new angle and ask."""
+        n = (s.get("followups_sent") or 0) + 1
+        prev = [e["body"] for e in (db.thread_emails(ctx.thread_id) or []) if e["kind"] != "reply"] \
+            if ctx.thread_id else []
+        ok, fu, line = _attempt("write_followup", lambda: writer.follow_up(
+            n, first, ctx.title, ctx.company, ctx.research, prev, ctx.sender_name), attempts=2)
+        if not ok:
+            return {"outcome": "escalated_to_growth_lead", "escalation": f"follow-up {n} not written: {fu}",
+                    "trace": [line]}
+        ctx.log(f"  no reply -> follow-up {n}/{config.MAX_FOLLOWUPS}: {fu.value_angle} (asks: {fu.engagement_ask})")
+        if not ctx.do_send:
+            return {"followups_sent": n, "trace": [f"followup_{n}: dry run, not sent"]}
+        subject = f"Re: {ctx.subject}" if ctx.subject else "Following up"
+        sent, err, sline = _attempt("send_email", lambda: _send(f"followup_{n}", subject, fu.body))
+        if not sent:
+            return {"outcome": "escalated_to_growth_lead", "escalation": f"send_email failed: {err}",
+                    "trace": [line, sline]}
+        return {"followups_sent": n, "trace": [f"followup_{n}: {fu.value_angle}", sline]}
 
     def silent(s):
         return {"outcome": "escalated_to_growth_lead",
@@ -320,9 +382,8 @@ def build_graph(ctx: Ctx) -> StateGraph:
             return {"meeting_status": "pending_confirmation", "ack_note": None,
                     "trace": ["send_email: dry run, not sent"]}
         subject = f"Re: {ctx.subject}" if ctx.subject else "Re: call times"
-        ok, err, line = _attempt("send_email", lambda: sender.send(
-            subject, _propose_body(first, slots, ctx.sender_name, s.get("ack_note")), ctx.contact_name, ctx.contact_email,
-            in_reply_to=ctx.in_reply_to))
+        ok, err, line = _attempt("send_email", lambda: _send(
+            "proposal", subject, _propose_body(first, slots, ctx.sender_name, s.get("ack_note"))))
         if not ok:
             return {"outcome": "escalated_to_growth_lead",
                     "escalation": f"send_email failed: {err}", "trace": [line]}
@@ -341,22 +402,18 @@ def build_graph(ctx: Ctx) -> StateGraph:
                 slot, ctx.contact_name, config.SEND_TO))
             trace.append(line)
             if ok:
-                ok2, err, line2 = _attempt("send_email", lambda: sender.send(
-                    f"Confirmed: call on {_fmt(slot)}", _confirm_body(first, slot, ctx.sender_name),
-                    ctx.contact_name, ctx.contact_email, in_reply_to=ctx.in_reply_to))
+                ok2, err, line2 = _attempt("send_email", lambda: _send(
+                    "confirm", f"Confirmed: call on {_fmt(slot)}", _confirm_body(first, slot, ctx.sender_name)))
                 trace.append(line2)
                 ctx.log(f"  booked in Calendly: {_fmt(slot)}")
                 return {"booked_slot": slot, "meeting_status": "confirmed", "outcome": "booked",
                         "trace": trace}
             ctx.log(f"  Calendly booking failed ({res}) -> sending the invite by email instead")
 
-        def _send():
-            sender.send(f"Invite: call, {_fmt(slot)}",
-                        _invite_body(first, slot, ctx.sender_name),
-                        ctx.contact_name, ctx.contact_email,
-                        attachment=("invite.ics", _ics(ctx, slot), "text", "calendar"),
-                        in_reply_to=ctx.in_reply_to)
-        ok, err, line = _attempt("book_meeting", _send)
+        def _send_invite():
+            _send("invite", f"Invite: call, {_fmt(slot)}", _invite_body(first, slot, ctx.sender_name),
+                  attachment=("invite.ics", _ics(ctx, slot), "text", "calendar"))
+        ok, err, line = _attempt("book_meeting", _send_invite)
         trace.append(line)
         if not ok:
             return {"outcome": "aborted", "escalation": "book_meeting failed; invite not sent", "trace": trace}
@@ -380,7 +437,11 @@ def build_graph(ctx: Ctx) -> StateGraph:
 
     def route_read(s):
         if s["last_reply"] is None:
-            return "silent" if s["scheduling"] else "no_reply"
+            if s["scheduling"]:
+                return "silent"
+            if ctx.followups and (s.get("followups_sent") or 0) < config.MAX_FOLLOWUPS:
+                return "follow_up"
+            return "no_reply"
         intent, idx = s["intent"], s["chosen_index"]
         picked_offered = intent == "confirms_time" and idx is not None and 0 <= idx < len(s["times_proposed"])
         if s.get("proposed_start") and not picked_offered and \
@@ -410,6 +471,7 @@ def build_graph(ctx: Ctx) -> StateGraph:
     for name, fn in [("await_reply", await_reply), ("read", read), ("try_proposed", try_proposed), ("clarify", clarify),
                      ("start_scheduling", start_scheduling),
                      ("not_interested", not_interested), ("no_reply", no_reply), ("silent", silent),
+                     ("follow_up", follow_up),
                      ("unclear", unclear), ("counter", counter), ("check_calendar", check_calendar),
                      ("propose", propose), ("book", book), ("finish", finish)]:
         g.add_node(name, fn)
@@ -419,7 +481,8 @@ def build_graph(ctx: Ctx) -> StateGraph:
     g.add_conditional_edges("read", route_read, {
         "silent": "silent", "no_reply": "no_reply", "not_interested": "not_interested",
         "unclear": "unclear", "start_scheduling": "start_scheduling", "book": "book", "counter": "counter",
-        "try_proposed": "try_proposed", "clarify": "clarify"})
+        "try_proposed": "try_proposed", "clarify": "clarify", "follow_up": "follow_up"})
+    g.add_conditional_edges("follow_up", done_or("await_reply"), {"finish": "finish", "await_reply": "await_reply"})
     # Best guess is free -> we asked them to confirm, wait for the answer; otherwise offer alternatives.
     g.add_conditional_edges("clarify", lambda s: "finish" if s["outcome"] else
                             ("await_reply" if s["calendar_checked"] else "counter"),
@@ -450,7 +513,8 @@ def _initial() -> dict:
             "rejected_slots": [], "reply_round": 0, "meeting_status": "unscheduled", "crm_logged": False,
             "outcome": "", "escalation": "", "booked_slot": None, "scheduling": False,
             "last_reply": None, "intent": "", "chosen_index": None, "proposed_start": None,
-            "guess_start": None, "ambiguity_note": None, "ack_note": None, "trace": []}
+            "guess_start": None, "ambiguity_note": None, "ack_note": None,
+            "followups_sent": 0, "replied": False, "sentiment": None, "trace": []}
 
 
 @contextmanager

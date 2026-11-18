@@ -4,81 +4,82 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Draft email</title>
-<style>
-  :root { --bg:#f7f7f5; --fg:#1c1c1a; --muted:#6b6b66; --line:#e2e2dd; --card:#fff; --ok:#1f7a4d; --warn:#9a6700; --bad:#b42318; }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) { --bg:#161615; --fg:#ededea; --muted:#9a9a94; --line:#33332f; --card:#1f1f1d; --ok:#5fcf8f; --warn:#e6b450; --bad:#ff8a80; }
-  }
-  :root[data-theme="dark"] { --bg:#161615; --fg:#ededea; --muted:#9a9a94; --line:#33332f; --card:#1f1f1d; --ok:#5fcf8f; --warn:#e6b450; --bad:#ff8a80; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui,-apple-system,sans-serif; }
-  main { max-width:760px; margin:0 auto; padding:24px 16px; }
-  a { color:inherit; }
-  .back { color:var(--muted); font-size:14px; }
-  h1 { font-size:22px; margin:8px 0 4px; }
-  .meta { color:var(--muted); margin:0 0 18px; font-size:14px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
-  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 10px; }
-  .subject { font-weight:600; margin:0 0 10px; }
-  .body { white-space:pre-wrap; margin:0; font-family:inherit; }
-  .score { font-size:28px; font-weight:700; }
-  .d-low { color:var(--ok); } .d-mid { color:var(--warn); } .d-high { color:var(--bad); }
-  ul { margin:6px 0 0; padding-left:20px; }
-  details { margin-top:10px; }
-  pre { white-space:pre-wrap; word-break:break-word; font-size:13px; color:var(--muted); margin:6px 0 0; }
-  .muted { color:var(--muted); }
-  .error { color:var(--bad); }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<main>
-  <a class="back" href="index.html">&larr; All runs</a>
+<main style="max-width:900px">
+  <a href="index.html" class="small">&larr; Dashboard</a>
   <div id="error" class="error"></div>
   <div id="content"></div>
 </main>
 <script src="app.js"></script>
 <script>
-  function band(n) { return n <= 30 ? "d-low" : n <= 60 ? "d-mid" : "d-high"; }
+(function () {
+  var E = dash.esc;
+  var CHECK_NAMES = { greeting: "Time-of-day greeting", wellbeing_line: "“Hope you're doing well”",
+    hook_names_company: "Hook names the company", one_question: "Exactly one question",
+    question_before_sign_off: "Question just before sign-off", sign_off: "Sign-off with sender name",
+    length: "Length 75-125 words", uk_spelling: "UK spelling", no_placeholders_or_banned: "No placeholders or banned phrases" };
+
   function list(items) {
-    if (!items || !items.length) return '<p class="muted">None</p>';
-    return "<ul>" + items.map(function (i) { return "<li>" + dash.esc(i) + "</li>"; }).join("") + "</ul>";
+    if (!items || !items.length) return '<p class="muted small">None</p>';
+    return "<ul>" + items.map(function (i) { return "<li>" + E(i) + "</li>"; }).join("") + "</ul>";
   }
+  function part(label, value, max) {
+    var v = value == null ? 0 : value;
+    return '<div style="margin-top:10px"><div class="small" style="display:flex;justify-content:space-between"><span>' + E(label) +
+      "</span><b>" + E(v) + " / " + max + '</b></div><div class="bar"><span style="width:' + Math.round(v / max * 100) + '%"></span></div></div>';
+  }
+
   var id = new URLSearchParams(location.search).get("id");
   dash.api("/api/run?id=" + encodeURIComponent(id)).then(function (r) {
-    var rec = r.record || {};
-    var q = rec.qualification || {};
-    var email = rec.email || {};
-    var d = rec.disagreement || {};
+    var rec = r.record || {}, q = rec.qualification || {}, email = rec.email || {}, d = rec.disagreement || {}, qual = rec.quality;
+    var parts = d.parts || {};
     var hasScore = typeof d.score === "number";
-    var scoreHtml = hasScore
-      ? '<div class="score ' + band(d.score) + '">' + d.score + '/100</div>' +
-        '<p class="muted">Rules ' + dash.esc((d.parts || {}).rules) + ' · Claims ' + dash.esc((d.parts || {}).claims) +
-        ' · Judge ' + dash.esc((d.parts || {}).judge) + ' (out of 30/40/30)</p>'
-      : '<p class="muted">Not computed' + (d.error ? ": " + dash.esc(d.error) : "") + '</p>';
-    var pains = rec.pain_points ? JSON.stringify(rec.pain_points, null, 2) : "";
+    var structure = parts.structure != null ? parts.structure : parts.rules;      // older drafts used "rules"
+    var wrong = parts.wrong_info != null ? parts.wrong_info : parts.claims;
+    document.title = (r.domain || "Draft") + " - draft";
 
-    document.title = (r.domain || "Draft") + " · draft";
+    var checksHtml = qual && qual.checks ? '<div class="checks">' + qual.checks.map(function (c) {
+      return '<div class="check ' + (c.ok ? "ok" : "bad") + '"><span class="dot">' + (c.ok ? "&#10003;" : "!") + "</span><div><b>" +
+        E(CHECK_NAMES[c.check] || c.check) + "</b>" + (c.detail ? '<div class="muted small">' + E(c.detail) + "</div>" : "") + "</div></div>";
+    }).join("") + "</div>" : '<p class="muted small">Not recorded for this draft (quality checks were added later).</p>';
+
     document.getElementById("content").innerHTML =
-      '<h1>' + dash.esc(r.domain) + '</h1>' +
-      '<p class="meta">' + dash.esc(new Date(r.created_at).toISOString().replace("T", " ").slice(0, 16)) + ' UTC · ' +
-      dash.esc(r.decision || "-") + ' · fit ' + dash.esc(q.score == null ? "-" : q.score) +
-      ' · contact ' + dash.esc(rec.poc && rec.poc.email ? rec.poc.email : "none") + '</p>' +
-      '<div class="card"><h2>Disagreement score</h2>' + scoreHtml +
-        '<p class="muted">Build 1: report only. Nothing is held automatically.</p>' +
-        '<details><summary>Unsupported claims (' + ((d.claims_unsupported || []).length) + ')</summary>' + list(d.claims_unsupported) + '</details>' +
-        '<details><summary>Rule failures</summary>' + list(d.rule_failures) + '</details>' +
-        '<details><summary>Judge reason</summary><p>' + dash.esc(d.judge_reason || "-") + '</p></details>' +
-      '</div>' +
-      '<div class="card"><h2>Draft email</h2>' +
-        '<p class="subject">' + dash.esc(email.subject || "(no draft)") + '</p>' +
-        '<pre class="body">' + dash.esc(email.body || "") + '</pre>' +
-      '</div>' +
-      '<div class="card"><h2>Status</h2><p>' + dash.esc(rec.status || "-") + '</p>' +
-        (rec.outcome ? '<p>Outcome: ' + dash.esc(rec.outcome) + '</p>' : '') +
-        (pains ? '<details><summary>Pain points used</summary><pre>' + dash.esc(pains) + '</pre></details>' : '') +
-      '</div>';
-  }).catch(function (e) {
-    document.getElementById("error").textContent = e.message;
-  });
+      '<header class="glass top section"><div><h1>' + E(r.domain) + '</h1><div class="muted small">' +
+        E(dash.when(r.created_at)) + " &middot; " + E(r.decision || "-") + " &middot; fit " + E(q.score == null ? "-" : q.score) +
+        " &middot; contact " + E(rec.poc && rec.poc.email ? rec.poc.email : "none") + "</div></div>" +
+        '<span class="pill strong">' + E((rec.status || "-").split(" (")[0]) + "</span></header>" +
+
+      '<div class="grid-2">' +
+        '<section class="glass lift card"><h2>Disagreement score</h2>' +
+          (hasScore ? '<div class="big">' + d.score + '<span class="muted small"> / 100</span></div>' +
+            part("Structure", structure, 25) + part("Wrong info", wrong, 45) + part("Sceptical judge", parts.judge, 30)
+            : '<p class="muted">Not computed' + (d.error ? ": " + E(d.error) : "") + "</p>") +
+          '<p class="muted small">Build 1: reported only. Nothing is held back.</p></section>' +
+        '<section class="glass lift card"><h2>Quality checks' + (qual ? " &middot; " + qual.passed + "/" + qual.total + " passed" : "") + "</h2>" +
+          checksHtml + "</section>" +
+      "</div>" +
+
+      '<section class="glass card section"><h2>Draft email</h2><p><b>' + E(email.subject || "(no draft)") + "</b></p>" +
+        '<pre class="body">' + E(email.body || "") + "</pre></section>" +
+
+      '<div class="grid-2">' +
+        '<section class="glass card"><h2>Wrong or unsupported info</h2>' +
+          '<div class="small"><b>About the company</b></div>' + list(d.wrong_about_company || d.claims_unsupported) +
+          '<div class="small"><b>About Sprinto</b></div>' + list(d.wrong_about_sprinto) +
+          '<div class="small"><b>Judge</b></div><p class="small">' + E(d.judge_reason || "-") + "</p></section>" +
+        '<section class="glass card"><h2>Why this email</h2>' +
+          '<div class="small"><b>Hook</b></div><p class="small">' + E(email.hook_used || "-") + "</p>" +
+          '<div class="small"><b>Reasoning</b></div><p class="small">' + E(email.reasoning || "-") + "</p>" +
+          '<div class="small"><b>Lessons used from the feedback repo</b></div><p class="small">' +
+            E((rec.guidance_used || []).length ? rec.guidance_used.map(function (g) { return "#" + g.id + " (" + g.scope + ", " + g.score + ")"; }).join(", ") : "none") +
+          "</p></section>" +
+      "</div>";
+  }).catch(function (e) { document.getElementById("error").textContent = e.message; });
+})();
 </script>
 </body>
 </html>

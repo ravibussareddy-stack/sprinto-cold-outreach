@@ -11,6 +11,10 @@ from retry import PermanentError, with_retry
 _clients = {}          # key index -> genai client
 _key_index = 0         # current key; advances when a key runs out of quota
 usage_log = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
+# Per-call token reporting: set on_usage (e.g. db.record_usage) and context["domain"];
+# each call reports (domain, purpose = the output schema's name, model, tokens in, tokens out).
+context = {"domain": None}
+on_usage = None
 
 
 def _get_client():
@@ -67,8 +71,11 @@ def ask(schema, system: str, user: str, max_output_tokens: int = 8000, temperatu
     usage_log["calls"] += 1
     meta = resp.usage_metadata
     if meta:
-        usage_log["input_tokens"] += meta.prompt_token_count or 0
-        usage_log["output_tokens"] += meta.candidates_token_count or 0
+        tin, tout = meta.prompt_token_count or 0, meta.candidates_token_count or 0
+        usage_log["input_tokens"] += tin
+        usage_log["output_tokens"] += tout
+        if on_usage:
+            on_usage(context.get("domain"), schema.__name__, config.GEMINI_MODEL, tin, tout)
     if not resp.candidates:
         raise RuntimeError(f"no candidates (prompt_feedback={resp.prompt_feedback})")
     finish = str(resp.candidates[0].finish_reason)

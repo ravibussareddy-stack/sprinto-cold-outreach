@@ -20,6 +20,7 @@ import config
 import db
 import llm
 import disagreement
+import feedback
 import meeting
 import poc as poc_mod
 import replies
@@ -49,6 +50,16 @@ def process(domain: str, do_send: bool, sender_name: str) -> dict:
 
 
 def _process(domain, do_send, sender_name, rec, t0):
+    llm.context["domain"] = domain               # token use is recorded per company
+    tokens_before = (llm.usage_log["input_tokens"], llm.usage_log["output_tokens"])
+    try:
+        return _process_inner(domain, do_send, sender_name, rec, t0)
+    finally:
+        rec["usage"] = {"input_tokens": llm.usage_log["input_tokens"] - tokens_before[0],
+                        "output_tokens": llm.usage_log["output_tokens"] - tokens_before[1]}
+
+
+def _process_inner(domain, do_send, sender_name, rec, t0):
 
     # Steps 1-3: scrape, extract, qualify (with loop)
     try:
@@ -88,15 +99,29 @@ def _process(domain, do_send, sender_name, rec, t0):
     for p in pains.pain_points:
         log(f"  pain: {p.title}")
 
-    # Step 6: email
-    draft, problems = writer.draft_email(profile, contact, pains, sender_name)
+    # Step 6: email - with the ranked lessons and winning emails from the feedback repo
+    guidance = feedback.relevant(contact.get("title"), profile.target_industries)
+    examples = feedback.exemplars(contact.get("title"))
+    if guidance or examples:
+        log(f"  using {len(guidance)} lesson(s) and {len(examples)} winning email(s) from the feedback repo")
+    draft, problems = writer.draft_email(profile, contact, pains, sender_name,
+                                         guidance=guidance, exemplars=examples)
     rec["email"] = draft.model_dump()
     rec["email_check_failures"] = problems
+    rec["guidance_used"] = [{"id": g["id"], "scope": g["scope"], "score": g["outcome_score"]} for g in guidance]
     log(f"  subject: {draft.subject}\n" + "\n".join("    " + l for l in draft.body.splitlines()))
+
+    # Quality checks: the structure of the email, check by check
+    quality = writer.quality_summary(writer.quality_checks(
+        draft, contact["first_name"], writer.greeting(contact["first_name"]), sender_name, profile.company_name))
+    rec["quality"] = quality
+    log(f"  quality: {quality['passed']}/{quality['total']} checks passed"
+        + (f" (failed: {', '.join(quality['failed'])})" if quality["failed"] else ""))
 
     # Disagreement score (build 1: reported only; build 2 holds drafts above a threshold)
     try:
-        rec["disagreement"] = disagreement.assess(draft.body, profile.model_dump_json(), problems)
+        structure_failures = quality["failed"] + [p for p in problems if p not in quality["failed"]]
+        rec["disagreement"] = disagreement.assess(draft.body, profile.model_dump_json(), structure_failures)
         log(f"  disagreement: {rec['disagreement']['score']}/100 {rec['disagreement']['parts']}")
     except Exception as e:
         rec["disagreement"] = {"error": f"{type(e).__name__}: {e}"}
@@ -116,16 +141,25 @@ def _process(domain, do_send, sender_name, rec, t0):
     # Sequence 1 reply handling, then Sequence 2 scheduling if the prospect is interested.
     # Only after a draft that passed its checks; dry runs walk the flow without sending.
     if not problems:
+        research = {"company": profile.company_name, "what_they_do": profile.one_line_description,
+                    "named_customers": profile.named_customers[:5], "recent_triggers": profile.recent_triggers[:3],
+                    "industries": profile.target_industries[:3],
+                    "pain_points": [p.title for p in pains.pain_points]}
         ctx = meeting.Ctx(domain=domain, contact_name=f"{contact['first_name']} {contact['last_name']}",
                           contact_email=contact["email"], company=profile.company_name or domain,
-                          sender_name=sender_name, do_send=do_send, log=log, subject=draft.subject)
+                          sender_name=sender_name, do_send=do_send, log=log, subject=draft.subject,
+                          title=contact.get("title"), industries=profile.target_industries[:3],
+                          research=research)
         if config.REPLY_MODE == "gmail" and do_send and db.enabled():
             # Real replies: save the conversation and let check_replies.py continue it.
             thread_id, state, _ = meeting.start(ctx)
             db.save_thread(thread_id, domain, draft.subject,
                            {"domain": domain, "contact_name": ctx.contact_name,
                             "contact_email": ctx.contact_email, "company": ctx.company,
-                            "sender_name": sender_name})
+                            "sender_name": sender_name, "title": ctx.title,
+                            "industries": ctx.industries, "research": research})
+            db.log_email(thread_id, domain, "cold", draft.subject, draft.body, quality)
+            db.upsert_contact(domain, ctx.company, ctx.contact_name, ctx.contact_email, ctx.title, "contacted")
             rec["thread_id"] = thread_id
             rec["meeting"] = asdict(state)
             rec["outcome"] = "awaiting_reply"
@@ -197,6 +231,8 @@ def main():
     ap.add_argument("--send", action="store_true", help="actually send (to your own inbox)")
     ap.add_argument("--sender-name", default=os.getenv("SENDER_NAME", "Growth Team, Sprinto"))
     args = ap.parse_args()
+    if db.enabled():
+        llm.on_usage = db.record_usage           # token use per call -> llm_usage table
 
     if args.domain:
         domains = [args.domain]

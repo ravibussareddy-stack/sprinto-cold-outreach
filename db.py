@@ -47,12 +47,74 @@ CREATE TABLE IF NOT EXISTS threads (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE threads ADD COLUMN IF NOT EXISTS replied BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE threads ADD COLUMN IF NOT EXISTS sentiment TEXT;          -- positive | negative | unclear
+ALTER TABLE threads ADD COLUMN IF NOT EXISTS followups_sent INT NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS crm_outcomes (
     id BIGSERIAL PRIMARY KEY,
     domain TEXT NOT NULL,
     contact TEXT,
     outcome TEXT NOT NULL,
     record JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Clientele: one row per contact, with where they stand.
+CREATE TABLE IF NOT EXISTS contacts (
+    id BIGSERIAL PRIMARY KEY,
+    domain TEXT NOT NULL,
+    company TEXT,
+    contact_name TEXT,
+    contact_email TEXT NOT NULL,
+    title TEXT,
+    status TEXT NOT NULL,      -- contacted | engaged | meeting_booked | cold_lead | non_respondent | escalated
+    last_outcome TEXT,
+    followups_sent INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (domain, contact_email)
+);
+-- Every email we send, so outcomes can be traced back to the exact email that earned them.
+CREATE TABLE IF NOT EXISTS emails (
+    id BIGSERIAL PRIMARY KEY,
+    thread_id TEXT,
+    domain TEXT NOT NULL,
+    kind TEXT NOT NULL,        -- cold | followup_1..3 | proposal | clarify | confirm | invite | thanks
+    subject TEXT,
+    body TEXT,
+    quality JSONB,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Feedback repo: guidance the writer uses, ranked by the outcome that produced it.
+CREATE TABLE IF NOT EXISTS feedback (
+    id BIGSERIAL PRIMARY KEY,
+    source TEXT NOT NULL,      -- human | outcome
+    scope TEXT NOT NULL DEFAULT 'global',   -- global | role:<role> | industry:<industry>
+    guidance TEXT NOT NULL,
+    outcome_score REAL NOT NULL DEFAULT 0.5, -- 0..1: booked 1.0, positive 0.8, negative 0.3, no reply 0.1
+    evidence JSONB,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Emails that earned a positive reply: style examples for similar roles.
+CREATE TABLE IF NOT EXISTS exemplars (
+    id BIGSERIAL PRIMARY KEY,
+    domain TEXT NOT NULL,
+    role TEXT,
+    subject TEXT,
+    body TEXT NOT NULL,
+    outcome TEXT,
+    outcome_score REAL NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (domain, subject)
+);
+-- Token use per model call.
+CREATE TABLE IF NOT EXISTS llm_usage (
+    id BIGSERIAL PRIMARY KEY,
+    domain TEXT,
+    purpose TEXT,              -- the structured output asked for, e.g. EmailDraft, ReplyRead
+    model TEXT,
+    input_tokens INT NOT NULL DEFAULT 0,
+    output_tokens INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 """
@@ -143,19 +205,128 @@ def save_thread(thread_id: str, domain: str, subject: str, ctx: dict):
 def awaiting_threads() -> list[dict]:
     _init()
     with _conn() as c:
-        cur = c.execute("SELECT thread_id, domain, subject, ctx, processed_ids, last_outbound_at, created_at "
+        cur = c.execute("SELECT thread_id, domain, subject, ctx, processed_ids, last_outbound_at, created_at, "
+                        "replied, sentiment, followups_sent "
                         "FROM threads WHERE status = 'awaiting' ORDER BY created_at")
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
 def update_thread(thread_id: str, status: str, outcome: str, processed_ids: list[str],
-                  touched_outbound: bool):
+                  touched_outbound: bool, replied: bool | None = None, sentiment: str | None = None,
+                  followups_sent: int | None = None):
     _init()
+    sets, args = ["status=%s", "outcome=%s", "processed_ids=%s", "updated_at=now()"], [status, outcome, Json(processed_ids)]
+    if touched_outbound:
+        sets.append("last_outbound_at=now()")
+    if replied is not None:
+        sets.append("replied=%s"); args.append(replied)
+    if sentiment is not None:
+        sets.append("sentiment=%s"); args.append(sentiment)
+    if followups_sent is not None:
+        sets.append("followups_sent=%s"); args.append(followups_sent)
     with _conn() as c:
-        c.execute("UPDATE threads SET status=%s, outcome=%s, processed_ids=%s, updated_at=now()"
-                  + (", last_outbound_at=now()" if touched_outbound else "") + " WHERE thread_id=%s",
-                  (status, outcome, Json(processed_ids), thread_id))
+        c.execute(f"UPDATE threads SET {', '.join(sets)} WHERE thread_id=%s", (*args, thread_id))
+
+
+# ---- clientele, sent emails, token use (best effort: never stop a run) ------
+def _safe(fn):
+    def wrapper(*a, **k):
+        if not enabled():
+            return None
+        try:
+            _init()
+            return fn(*a, **k)
+        except psycopg.Error as e:
+            print(f"  [db] {fn.__name__} skipped: {e}")
+            return None
+    return wrapper
+
+
+@_safe
+def upsert_contact(domain: str, company: str, name: str, email: str, title: str | None,
+                   status: str, last_outcome: str | None = None, followups_sent: int | None = None):
+    with _conn() as c:
+        c.execute(
+            "INSERT INTO contacts (domain, company, contact_name, contact_email, title, status, last_outcome, followups_sent) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,COALESCE(%s,0)) "
+            "ON CONFLICT (domain, contact_email) DO UPDATE SET status=EXCLUDED.status, "
+            "last_outcome=COALESCE(EXCLUDED.last_outcome, contacts.last_outcome), "
+            "followups_sent=COALESCE(%s, contacts.followups_sent), "
+            "company=COALESCE(EXCLUDED.company, contacts.company), title=COALESCE(EXCLUDED.title, contacts.title), "
+            "updated_at=now()",
+            (domain, company, name, email, title, status, last_outcome, followups_sent, followups_sent))
+
+
+@_safe
+def log_email(thread_id: str | None, domain: str, kind: str, subject: str, body: str, quality=None):
+    with _conn() as c:
+        c.execute("INSERT INTO emails (thread_id, domain, kind, subject, body, quality) VALUES (%s,%s,%s,%s,%s,%s)",
+                  (thread_id, domain, kind, subject, body, Json(quality) if quality is not None else None))
+
+
+@_safe
+def thread_emails(thread_id: str) -> list[dict]:
+    with _conn() as c:
+        cur = c.execute("SELECT kind, subject, body, created_at FROM emails WHERE thread_id=%s ORDER BY id", (thread_id,))
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+@_safe
+def record_usage(domain: str | None, purpose: str, model: str, input_tokens: int, output_tokens: int):
+    with _conn() as c:
+        c.execute("INSERT INTO llm_usage (domain, purpose, model, input_tokens, output_tokens) VALUES (%s,%s,%s,%s,%s)",
+                  (domain, purpose, model, input_tokens, output_tokens))
+
+
+# ---- feedback repo and exemplars (feedback.py, learn.py) ---------------------
+@_safe
+def add_feedback(source: str, scope: str, guidance: str, outcome_score: float, evidence: dict | None = None) -> int:
+    with _conn() as c:
+        return c.execute("INSERT INTO feedback (source, scope, guidance, outcome_score, evidence) "
+                         "VALUES (%s,%s,%s,%s,%s) RETURNING id",
+                         (source, scope, guidance, outcome_score, Json(evidence) if evidence else None)).fetchone()[0]
+
+
+@_safe
+def feedback_for(scopes: list[str], limit: int) -> list[dict]:
+    """Active guidance for these scopes, best outcome first, newest first among equals."""
+    with _conn() as c:
+        cur = c.execute("SELECT id, source, scope, guidance, outcome_score, created_at FROM feedback "
+                        "WHERE active AND scope = ANY(%s) ORDER BY outcome_score DESC, created_at DESC LIMIT %s",
+                        (scopes, limit))
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+@_safe
+def all_feedback(limit: int = 200) -> list[dict]:
+    with _conn() as c:
+        cur = c.execute("SELECT id, source, scope, guidance, outcome_score, active, created_at FROM feedback "
+                        "ORDER BY active DESC, outcome_score DESC, created_at DESC LIMIT %s", (limit,))
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+@_safe
+def add_exemplar(domain: str, role: str | None, subject: str, body: str, outcome: str, outcome_score: float):
+    with _conn() as c:
+        c.execute("INSERT INTO exemplars (domain, role, subject, body, outcome, outcome_score) VALUES (%s,%s,%s,%s,%s,%s) "
+                  "ON CONFLICT (domain, subject) DO UPDATE SET outcome=EXCLUDED.outcome, "
+                  "outcome_score=GREATEST(exemplars.outcome_score, EXCLUDED.outcome_score)",
+                  (domain, role, subject, body, outcome, outcome_score))
+
+
+@_safe
+def exemplars_for(role: str | None, limit: int) -> list[dict]:
+    """Best-scoring winning emails, same role first."""
+    with _conn() as c:
+        cur = c.execute("SELECT domain, role, subject, body, outcome, outcome_score FROM exemplars "
+                        "ORDER BY (role IS NOT DISTINCT FROM %s) DESC, outcome_score DESC, created_at DESC LIMIT %s",
+                        (role, limit))
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
 def last_run(domain: str) -> dict | None:

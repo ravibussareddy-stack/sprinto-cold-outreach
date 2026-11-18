@@ -146,3 +146,12 @@ The system researches and drafts. It never emails a prospect directly: `To:` is 
 ## Cost
 
 Pages are cleaned and capped at ~1,500 words before reaching the model. Each company costs roughly 3–6 Gemini calls. Cached pages (7 days in Neon) cost nothing on re-runs. Set `GEMINI_MODEL` in `.env` to switch models.
+
+## Quality, learning and the dashboard
+
+- **Quality checks** (`writer.quality_checks`): every draft is checked for structure - time-of-day greeting, "Hope you're doing well", a hook naming the company, exactly one question just before the sign-off, "Kind regards," plus the sender's name, UK spelling, 75-125 words, no placeholders. Results are stored with each run.
+- **Disagreement score** (`disagreement.py`, 0-100, report only in build 1): structure (25, from failed quality checks), wrong info (45, unsupported claims about the company *or* about Sprinto) and a sceptical judge (30).
+- **Replies** (`check_replies.py`, Gmail mode): positive -> book automatically; negative -> a thank-you email and the contact becomes a *cold lead*; no reply -> up to 3 follow-ups 48h apart, each with a new value proposition and a different ask, then *non-respondent* and no more emails.
+- **Feedback repo** (`feedback.py`, Neon `feedback` table): guidance scoped global / role / industry with an outcome score. The writer gets the relevant items ranked best-first and follows the higher-ranked one when two conflict. Add your own with `python feedback.py add "..." --scope role:cto`.
+- **Self-reinforcement** (`learn.py`): when a conversation ends, the emails and replies are analysed into lessons scored by outcome (booked 1.0, positive 0.8, negative 0.3, no reply 0.1); emails that earned a positive reply are saved as examples for that role.
+- **Dashboard** (`web/`, Vercel): engagement rate (any reply / conversations), booking rate (booked / positive replies), pipeline by stage, contacts, emails by type, token use and estimated cost (`GEMINI_PRICE_INPUT_PER_M` / `GEMINI_PRICE_OUTPUT_PER_M`), and the feedback repo.

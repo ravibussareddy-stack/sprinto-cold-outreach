@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 
 import config
 from llm import ask
+from pydantic import BaseModel, Field
+
 from schemas import CompanyProfile, EmailDraft, PainPoints
 
 SPRINTO_CONTEXT = """Sprinto (sprinto.com) automates compliance for SaaS companies:
@@ -144,19 +146,145 @@ def validate(draft: EmailDraft, first_name: str, greeting_line: str | None = Non
     return problems
 
 
+US_SPELLINGS = re.compile(
+    r"\b(\w*(?:organiz|prioritiz|optimiz|analyz|realiz|recogniz|minimiz|maximiz|standardiz|customiz|centraliz)\w*"
+    r"|behaviors?|colors?|favor\w*|honors?|centers?|defense|catalogs?)\b", re.I)
+SIGN_OFFS = ("kind regards,", "best wishes,")
+
+
+def _paragraphs(body: str) -> list[str]:
+    return [p.strip() for p in re.split(r"\n\s*\n", body.strip()) if p.strip()]
+
+
+def quality_checks(draft: EmailDraft, first_name: str, greeting_line: str | None = None,
+                   sender_name: str | None = None, company: str | None = None) -> list[dict]:
+    """Named structure checks for one email, each {"check", "ok", "detail"}.
+    Expected structure: greeting / Hope you're doing well / hook naming the company /
+    pain + Sprinto outcome / one question / sign-off with the sender's name."""
+    body = draft.body.strip()
+    norm = body.replace("’", "'")
+    paras = _paragraphs(norm)
+    words = len(body.split())
+    sign_idx = next((i for i, p in enumerate(paras) if p.lower().startswith(SIGN_OFFS)), None)
+    checks = []
+
+    def add(name, ok, detail=""):
+        checks.append({"check": name, "ok": bool(ok), "detail": detail})
+
+    if greeting_line:
+        add("greeting", body.startswith(greeting_line), f'expected "{greeting_line}"')
+    else:
+        add("greeting", re.match(rf"^(Good (morning|afternoon|evening)|Hi|Hello|Dear) {re.escape(first_name)},", body),
+            "time-of-day greeting with first name")
+    add("wellbeing_line", len(paras) > 1 and paras[1].lower().startswith("hope you're doing well"),
+        'second line "Hope you\'re doing well."')
+    if company:
+        hook = paras[2] if len(paras) > 2 else ""
+        add("hook_names_company", company.split()[0].lower() in hook.lower(), "first content line names the company")
+    q = body.count("?")
+    add("one_question", q == 1, f"{q} question marks")
+    cta_ok = sign_idx is not None and sign_idx >= 1 and "?" in paras[sign_idx - 1]
+    add("question_before_sign_off", cta_ok, "the question is the last line before the sign-off")
+    first_sender = (sender_name or "").split(",")[0].split()[0].lower() if sender_name else ""
+    add("sign_off", sign_idx is not None and (not first_sender or first_sender in paras[sign_idx].lower()),
+        'ends "Kind regards," / "Best wishes," and the sender name')
+    add("length", 75 <= words <= 125, f"{words} words (target 75-125)")
+    us = sorted({m.group(0) for m in US_SPELLINGS.finditer(body)})
+    add("uk_spelling", not us, f"US spellings: {', '.join(us)}" if us else "")
+    add("no_placeholders_or_banned", not BANNED.search(body + draft.subject), "")
+    return checks
+
+
+def quality_summary(checks: list[dict]) -> dict:
+    failed = [c["check"] for c in checks if not c["ok"]]
+    return {"passed": len(checks) - len(failed), "total": len(checks), "failed": failed, "checks": checks}
+
+
+def _guidance_block(guidance: list[dict] | None, exemplars: list[dict] | None) -> str:
+    out = ""
+    if guidance:
+        lines = [f"{i}. (outcome score {g['outcome_score']:.2f}, {g['scope']}) {g['guidance']}"
+                 for i, g in enumerate(guidance, 1)]
+        out += ("\n\nLessons from past outcomes, ranked best first. Apply the ones relevant to this "
+                "recipient; if two conflict, follow the higher-ranked one:\n" + "\n".join(lines))
+    if exemplars:
+        ex = "\n---\n".join(f"Subject: {e['subject']}\n{e['body']}" for e in exemplars)
+        out += ("\n\nEmails that earned positive replies (tone and structure reference only - never "
+                f"reuse their facts, names or companies):\n---\n{ex}\n---")
+    return out
+
+
 def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_name: str,
-                max_attempts: int = 2) -> tuple[EmailDraft, list[str]]:
+                max_attempts: int = 2, guidance: list[dict] | None = None,
+                exemplars: list[dict] | None = None) -> tuple[EmailDraft, list[str]]:
     hello = greeting(poc["first_name"])
     base = (f"Recipient: {poc['first_name']} {poc.get('last_name','')}, {poc.get('title')} at "
             f"{profile.company_name}\nSender name: {sender_name}\n"
             f"Greeting line to open with: {hello}\n\n"
             f"Pain points (use #1 as the main angle):\n{json.dumps(pains.model_dump(), indent=1)}\n\n"
-            f"Research:\n{profile.model_dump_json(indent=1)}")
+            f"Research:\n{profile.model_dump_json(indent=1)}" + _guidance_block(guidance, exemplars))
     feedback = ""
-    for _ in range(max_attempts):
+    for attempt in range(max_attempts):
         draft = ask(EmailDraft, EMAIL_SYSTEM, base + feedback)
         problems = validate(draft, poc["first_name"], hello)
-        if not problems:
+        soft = [c for c in quality_checks(draft, poc["first_name"], hello, sender_name, profile.company_name)
+                if not c["ok"]]
+        if not problems and not soft:
             return draft, []
-        feedback = f"\n\nYour previous draft failed these checks, fix them: {problems}\nPrevious draft:\n{draft.body}"
-    return draft, problems
+        if attempt + 1 < max_attempts:
+            fix = problems + [f"{c['check']}: {c['detail']}" for c in soft]
+            feedback = f"\n\nYour previous draft failed these checks, fix them: {fix}\nPrevious draft:\n{draft.body}"
+    return draft, problems          # only hard failures block sending; soft ones are reported
+
+
+# ---- follow-ups when there is no reply (Gmail mode) ---------------------------
+class FollowUp(BaseModel):
+    body: str = Field(description="The full email body, plain text")
+    value_angle: str = Field(description="The value proposition this follow-up uses, in a few words")
+    engagement_ask: str = Field(description="What it asks the reader to do, in a few words")
+
+
+FOLLOWUP_PLAYBOOK = {
+    1: "A short, friendly nudge. Bring ONE new benefit not used before (e.g. ready-made policies "
+       "and security training, or continuous monitoring after the audit) and ask a simple yes/no question.",
+    2: "Lead with something useful. Offer a concrete resource drawn only from what Sprinto does "
+       "(e.g. a short checklist of what a SOC 2 or ISO 27001 audit asks for) and ask whether they would "
+       "like it sent over. A different angle and a different ask from every earlier email.",
+    3: "A polite final note. Acknowledge they are busy, say this is the last email, give an easy way out, "
+       "and ask whether someone else at the company looks after security compliance.",
+}
+
+FOLLOWUP_SYSTEM = f"""You write a follow-up to a cold email from Sprinto's Growth Lead that got no reply.
+{SPRINTO_CONTEXT}
+
+Style: UK business English - polite, warm, brief. UK spelling.
+Rules:
+- Open with exactly the greeting line you are given, then a blank line, then "Hope you're doing well."
+- Never repeat a value proposition, phrase, hook or ask already used in the earlier emails (given).
+- Never invent facts, numbers, customers or Sprinto claims beyond the Sprinto description above.
+- 50-100 words including the greeting. Exactly one question.
+- Sign off with "Kind regards," on its own line, then the sender name given (name and company on
+  separate lines)."""
+
+
+def follow_up(n: int, first_name: str, title: str | None, company: str, research: dict,
+              previous_emails: list[str], sender_name: str, max_attempts: int = 2) -> FollowUp:
+    hello = greeting(first_name)
+    base = (f"This is follow-up {n} of {len(FOLLOWUP_PLAYBOOK)}. Approach for this one: {FOLLOWUP_PLAYBOOK[n]}\n\n"
+            f"Recipient: {first_name}, {title or 'unknown role'} at {company}\nSender name: {sender_name}\n"
+            f"Greeting line to open with: {hello}\n\nResearch:\n{json.dumps(research, indent=1)}\n\n"
+            "Earlier emails in this thread (do not repeat their angles or asks):\n"
+            + "\n---\n".join(previous_emails))
+    feedback = ""
+    for attempt in range(max_attempts):
+        fu = ask(FollowUp, FOLLOWUP_SYSTEM, base + feedback)
+        d = EmailDraft(subject="", body=fu.body, hook_used=fu.value_angle, reasoning=fu.engagement_ask)
+        bad = [c for c in quality_checks(d, first_name, hello, sender_name) if not c["ok"] and c["check"] != "length"]
+        words = len(fu.body.split())
+        if not bad and 40 <= words <= 120:
+            return fu
+        if attempt + 1 < max_attempts:
+            feedback = (f"\n\nFix these problems: {[c['check'] + ': ' + c['detail'] for c in bad]}"
+                        f"{'' if 40 <= words <= 120 else f'; length {words} words (want 50-100)'}\n"
+                        f"Previous draft:\n{fu.body}")
+    return fu
