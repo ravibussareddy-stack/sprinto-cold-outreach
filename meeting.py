@@ -169,12 +169,18 @@ def _propose_body(first: str, slots: list[str], sender_name: str, ack: str | Non
     """`ack` answers the time they asked for (e.g. 'Unfortunately Tue 24 Nov, 12:00 IST isn't
     free on my side.') before the alternatives, so the reply never ignores what they said."""
     intro = ("Thank you for coming back to me. " + ack + " Would any of these times suit you instead?"
-             if ack else "Thank you for coming back to me. Would any of these times suit you for a 20-minute call?")
+             if ack else "Thank you for coming back to me. Would any of these times suit you for a short call?")
     lines = [writer.greeting(first), "", intro, ""]
     lines += [f"- {_fmt(s)}" for s in slots]
     lines += ["", "Just reply with the one that works best, or suggest another time.", "",
               _sign_off(sender_name)]
     return "\n".join(lines)
+
+
+def _confirm_body(first: str, slot: str, sender_name: str) -> str:
+    return (f"{writer.greeting(first)}\n\nThank you - that's confirmed for {_fmt(slot)}. You'll receive "
+            f"the calendar invite with the video call link from Calendly shortly.\n\n"
+            f"Looking forward to speaking with you.\n\n{_sign_off(sender_name)}")
 
 
 def _clarify_body(first: str, iso: str, note: str, sender_name: str) -> str:
@@ -328,18 +334,34 @@ def build_graph(ctx: Ctx) -> StateGraph:
             ctx.log(f"  booked (dry run): {_fmt(slot)}")
             return {"booked_slot": slot, "meeting_status": "confirmed", "outcome": "booked",
                     "trace": ["book_meeting: dry run, invite not sent"]}
+        trace = []
+        if config.CALENDLY_BOOKING and config.CALENDLY_TOKEN:
+            # Build 1: the Calendly invitee is your own inbox (SEND_TO), never the prospect.
+            ok, res, line = _attempt("calendly_booking", lambda: calendar_tool.book_calendly(
+                slot, ctx.contact_name, config.SEND_TO))
+            trace.append(line)
+            if ok:
+                ok2, err, line2 = _attempt("send_email", lambda: sender.send(
+                    f"Confirmed: call on {_fmt(slot)}", _confirm_body(first, slot, ctx.sender_name),
+                    ctx.contact_name, ctx.contact_email, in_reply_to=ctx.in_reply_to))
+                trace.append(line2)
+                ctx.log(f"  booked in Calendly: {_fmt(slot)}")
+                return {"booked_slot": slot, "meeting_status": "confirmed", "outcome": "booked",
+                        "trace": trace}
+            ctx.log(f"  Calendly booking failed ({res}) -> sending the invite by email instead")
 
         def _send():
-            sender.send(f"Invite: 20-min call, {_fmt(slot)}",
+            sender.send(f"Invite: call, {_fmt(slot)}",
                         _invite_body(first, slot, ctx.sender_name),
                         ctx.contact_name, ctx.contact_email,
                         attachment=("invite.ics", _ics(ctx, slot), "text", "calendar"),
                         in_reply_to=ctx.in_reply_to)
         ok, err, line = _attempt("book_meeting", _send)
+        trace.append(line)
         if not ok:
-            return {"outcome": "aborted", "escalation": "book_meeting failed; invite not sent", "trace": [line]}
+            return {"outcome": "aborted", "escalation": "book_meeting failed; invite not sent", "trace": trace}
         ctx.log(f"  booked: {_fmt(slot)}")
-        return {"booked_slot": slot, "meeting_status": "confirmed", "outcome": "booked", "trace": [line]}
+        return {"booked_slot": slot, "meeting_status": "confirmed", "outcome": "booked", "trace": trace}
 
     def finish(s):
         upd = {"trace": []}

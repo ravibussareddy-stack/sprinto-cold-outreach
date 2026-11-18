@@ -16,6 +16,7 @@ from retry import PermanentError
 from replies import ReplyRead
 
 config.CALENDLY_TOKEN = ""  # tests use busy files only, never the live calendar
+config.CALENDLY_BOOKING = False
 
 retry.time.sleep = lambda s: None          # no back-off delay in tests
 

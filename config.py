@@ -64,6 +64,11 @@ CALENDAR_BUSY_FILE = os.getenv("CALENDAR_BUSY_FILE", "")
 # Calendly personal access token (availability:read). When set, live busy times
 # from Calendly are used instead of CALENDAR_BUSY_FILE.
 CALENDLY_TOKEN = os.getenv("CALENDLY_TOKEN", "")
+# CALENDLY_BOOKING=1: offer only times your Calendly event type can be booked at, and book
+# the agreed time through Calendly (it lands on the Google Calendar connected to Calendly,
+# with a Meet link). Build 1: the Calendly invitee is SEND_TO, never the prospect.
+CALENDLY_BOOKING = os.getenv("CALENDLY_BOOKING", "0") == "1"
+CALENDLY_EVENT_TYPE = os.getenv("CALENDLY_EVENT_TYPE", "")   # event type URI; blank = first active one
 # Prospect replies are read from REPLIES_DIR/<domain>.txt, one reply per block,
 # blocks separated by a line containing only ---.
 REPLIES_DIR = os.getenv("REPLIES_DIR", "replies")

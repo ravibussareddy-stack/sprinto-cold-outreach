@@ -36,6 +36,7 @@ jobs:
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
       SEND_TO: ${{ secrets.SEND_TO }}
       CALENDLY_TOKEN: ${{ secrets.CALENDLY_TOKEN }}
+      CALENDLY_BOOKING: "1"
       SENDER_NAME: ${{ vars.SENDER_NAME || 'Growth Team, Sprinto' }}
       USE_JINA_FALLBACK: "1"
       REPLY_MODE: gmail
