@@ -19,6 +19,8 @@ import poc as poc_mod
 import replies
 import sender
 
+config.CALENDLY_TOKEN = ""  # tests use busy files only, never the live calendar
+
 DOMAIN = sys.argv[1] if len(sys.argv) > 1 else "atlan.com"
 FAKE_CONTACT = {"first_name": "Test", "last_name": "Contact", "email": "test@example.invalid",
                 "title": "CTO (TEST STUB)", "source": "test stub", "why": "placeholder for end-to-end test"}

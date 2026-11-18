@@ -15,6 +15,8 @@ from calendar_tool import check_calendar
 from retry import PermanentError
 from replies import ReplyRead
 
+config.CALENDLY_TOKEN = ""  # tests use busy files only, never the live calendar
+
 retry.time.sleep = lambda s: None          # no back-off delay in tests
 
 SENT = []

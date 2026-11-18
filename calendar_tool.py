@@ -6,27 +6,51 @@ Tool description (what / when / when not / returns):
 - When not: to list meetings, or for dates beyond SLOT_LOOKAHEAD_DAYS.
 - Returns: {"status": "free" | "no-calendar-access", "slots": [ISO datetimes]}.
 
-Source: CALENDAR_BUSY_FILE (busy intervals as JSON). Live Google Calendar
-free/busy needs OAuth and is not wired up yet, so without the file the tool
-reports no-calendar-access and the agent escalates to the Growth Lead.
+Sources, in order:
+1. Calendly (CALENDLY_TOKEN): live busy times from the calendars connected to
+   your Calendly account (read-only, availability:read).
+2. CALENDAR_BUSY_FILE: busy intervals as JSON, for tests or offline runs.
+Neither set -> no-calendar-access, and the agent escalates to the Growth Lead.
 """
 import datetime as dt
 import json
 from zoneinfo import ZoneInfo
 
+import requests
+
 import config
 
+CALENDLY_API = "https://api.calendly.com"
 
-def _busy_intervals() -> list[tuple[dt.datetime, dt.datetime]]:
+
+def _calendly_busy(now: dt.datetime) -> list[tuple[dt.datetime, dt.datetime]]:
+    """Busy intervals for the next SLOT_LOOKAHEAD_DAYS (Calendly allows at most 7 days per call)."""
+    h = {"Authorization": f"Bearer {config.CALENDLY_TOKEN}"}
+    me = requests.get(f"{CALENDLY_API}/users/me", headers=h, timeout=config.REQUEST_TIMEOUT)
+    me.raise_for_status()
+    user = me.json()["resource"]["uri"]
+    start = now.astimezone(dt.timezone.utc) + dt.timedelta(minutes=1)
+    end = start + dt.timedelta(days=min(config.SLOT_LOOKAHEAD_DAYS, 7)) - dt.timedelta(minutes=2)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    r = requests.get(f"{CALENDLY_API}/user_busy_times", headers=h, timeout=config.REQUEST_TIMEOUT,
+                     params={"user": user, "start_time": start.strftime(fmt), "end_time": end.strftime(fmt)})
+    r.raise_for_status()
+    iso = lambda s: dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    return [(iso(b["start_time"]), iso(b["end_time"])) for b in r.json().get("collection", [])]
+
+
+def _busy_intervals(now: dt.datetime) -> tuple[str, list[tuple[dt.datetime, dt.datetime]]]:
+    if config.CALENDLY_TOKEN:
+        return "calendly", _calendly_busy(now)
     with open(config.CALENDAR_BUSY_FILE) as f:
         raw = json.load(f)
-    return [(dt.datetime.fromisoformat(a), dt.datetime.fromisoformat(b)) for a, b in raw]
+    return "file", [(dt.datetime.fromisoformat(a), dt.datetime.fromisoformat(b)) for a, b in raw]
 
 
 def check_calendar(now: dt.datetime, exclude: set[str] | None = None) -> dict:
-    if not config.CALENDAR_BUSY_FILE:
+    if not config.CALENDLY_TOKEN and not config.CALENDAR_BUSY_FILE:
         return {"status": "no-calendar-access", "slots": []}
-    busy = _busy_intervals()          # OSError here is transient and gets retried
+    source, busy = _busy_intervals(now)   # network / file errors are transient and get retried
     tz = ZoneInfo(config.SLOT_TIMEZONE)
     now_local = now.astimezone(tz)
     exclude = exclude or set()
@@ -45,5 +69,5 @@ def check_calendar(now: dt.datetime, exclude: set[str] | None = None) -> dict:
                 continue
             slots.append(iso)
             if len(slots) == config.SLOTS_TO_OFFER:
-                return {"status": "free", "slots": slots}
-    return {"status": "free", "slots": slots}
+                return {"status": "free", "slots": slots, "source": source, "busy_count": len(busy)}
+    return {"status": "free", "slots": slots, "source": source, "busy_count": len(busy)}

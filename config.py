@@ -61,6 +61,9 @@ SLOT_LOOKAHEAD_DAYS = 7
 # of busy intervals: [["2026-11-13T10:00:00+05:30", "2026-11-13T11:00:00+05:30"], ...]
 # Blank = no calendar access, which the agent treats as an escalation.
 CALENDAR_BUSY_FILE = os.getenv("CALENDAR_BUSY_FILE", "")
+# Calendly personal access token (availability:read). When set, live busy times
+# from Calendly are used instead of CALENDAR_BUSY_FILE.
+CALENDLY_TOKEN = os.getenv("CALENDLY_TOKEN", "")
 # Prospect replies are read from REPLIES_DIR/<domain>.txt, one reply per block,
 # blocks separated by a line containing only ---.
 REPLIES_DIR = os.getenv("REPLIES_DIR", "replies")
