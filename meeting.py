@@ -45,6 +45,7 @@ import config
 import crm
 import replies
 import sender
+import writer
 from retry import PermanentError, with_retry
 
 
@@ -127,11 +128,24 @@ def _ics(ctx: Ctx, iso: str) -> bytes:
     return ("\r\n".join(lines) + "\r\n").encode()
 
 
-def _propose_body(first: str, slots: list[str]) -> str:
-    lines = [f"Hi {first},", "", "Thanks for getting back. Would any of these work for a 20-minute call?", ""]
+def _sign_off(sender_name: str) -> str:
+    # "Ravi Bussareddy, Sprinto" -> name and company on separate lines, as in the cold email
+    return "Kind regards,\n" + sender_name.replace(", ", "\n")
+
+
+def _propose_body(first: str, slots: list[str], sender_name: str) -> str:
+    lines = [writer.greeting(first), "", "Thank you for coming back to me. Would any of these times "
+             "suit you for a 20-minute call?", ""]
     lines += [f"- {_fmt(s)}" for s in slots]
-    lines += ["", "Reply with the one that suits you, or suggest another time."]
+    lines += ["", "Just reply with the one that works best, or suggest another time.", "",
+              _sign_off(sender_name)]
     return "\n".join(lines)
+
+
+def _invite_body(first: str, slot: str, sender_name: str) -> str:
+    return (f"{writer.greeting(first)}\n\nThank you - that's confirmed for {_fmt(slot)}. "
+            f"The calendar invite is attached.\n\nLooking forward to speaking with you.\n\n"
+            f"{_sign_off(sender_name)}")
 
 
 def build_graph(ctx: Ctx) -> StateGraph:
@@ -199,7 +213,7 @@ def build_graph(ctx: Ctx) -> StateGraph:
             return {"meeting_status": "pending_confirmation", "trace": ["send_email: dry run, not sent"]}
         subject = f"Re: {ctx.subject}" if ctx.subject else "Re: call times"
         ok, err, line = _attempt("send_email", lambda: sender.send(
-            subject, _propose_body(first, slots), ctx.contact_name, ctx.contact_email,
+            subject, _propose_body(first, slots, ctx.sender_name), ctx.contact_name, ctx.contact_email,
             in_reply_to=ctx.in_reply_to))
         if not ok:
             return {"outcome": "escalated_to_growth_lead",
@@ -215,7 +229,7 @@ def build_graph(ctx: Ctx) -> StateGraph:
 
         def _send():
             sender.send(f"Invite: 20-min call, {_fmt(slot)}",
-                        f"Hi {first},\n\nConfirmed: {_fmt(slot)}. The calendar invite is attached.\n\nSprinto",
+                        _invite_body(first, slot, ctx.sender_name),
                         ctx.contact_name, ctx.contact_email,
                         attachment=("invite.ics", _ics(ctx, slot), "text", "calendar"),
                         in_reply_to=ctx.in_reply_to)
