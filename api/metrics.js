@@ -26,7 +26,10 @@ async function safe(pool, sql, fallback, params) {
 module.exports = async (req, res) => {
   const pool = getPool();
   try {
-    const REVIEW_THRESHOLD = (await rubric.load(pool)).rubric.review.disagreement_threshold;
+    const rub = (await rubric.load(pool)).rubric;
+    const REVIEW_THRESHOLD = rub.review.disagreement_threshold;
+    const [month] = await safe(pool, `SELECT coalesce(sum(input_tokens),0)::bigint AS tin, coalesce(sum(output_tokens),0)::bigint AS tout
+                                      FROM llm_usage WHERE created_at >= date_trunc('month', now())`, [{ tin: 0, tout: 0 }]);
     const [conv] = await safe(pool, `
       SELECT count(*)::int AS started,
              count(*) FILTER (WHERE replied)::int AS replied,
@@ -121,6 +124,10 @@ module.exports = async (req, res) => {
                   est_cost_usd: cost(Number(u.input_tokens), Number(u.output_tokens)),
                   est_cost_inr: cost(Number(u.input_tokens), Number(u.output_tokens)) * USD_INR })) },
       pipeline: { companies: pipeline.length, by_stage: stageCounts, rows: pipeline },
+      budget: (() => {
+        const spent = cost(Number(month.tin), Number(month.tout)) * USD_INR, limit = Number(rub.budget.monthly_inr) || 0;
+        return { limit_inr: limit, spent_month_inr: spent, used: limit ? spent / limit : null, paused: limit > 0 && spent >= limit };
+      })(),
       contacts: contacts.length,
       feedback: fb,
     });

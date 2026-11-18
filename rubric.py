@@ -16,6 +16,8 @@ import db
 
 DEFAULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib", "rubric_defaults.json")
 DORMANT_RULES = ("any_named_cert", "soc2_and_iso", "off")
+SEND_MODES = ("auto", "fixed")
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 _active: dict | None = None
 
 
@@ -53,6 +55,12 @@ def merge(base: dict, override: dict | None) -> dict:
         out["decision"] = copy.deepcopy(base["decision"])       # inconsistent thresholds: use defaults
     if out["size"]["min_employees"] > out["size"]["max_employees"]:
         out["size"] = copy.deepcopy(base["size"])
+    sw = out["send_window"]
+    days = [x for x in sw["days"] if x in WEEKDAYS]
+    if sw["mode"] not in SEND_MODES or not days or not (0 <= sw["start_hour"] < sw["end_hour"] <= 24):
+        out["send_window"] = copy.deepcopy(base["send_window"])
+    else:
+        sw["days"] = days
     return out
 
 

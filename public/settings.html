@@ -89,6 +89,18 @@ dash.nav("rubric");
       stage: ["Fetches for stage", ""], max_extra_fetches: ["Most extra fetches per company", "Hard cap on the loop."] }],
     ["review", "Review", "", {
       disagreement_threshold: ["Send to review above (disagreement)", "Drafts scoring above this appear in Needs review."] }],
+    ["followups", "Follow-up timers", "Days of silence before each step. A reply from them starts the count again.", {
+      after_first_days: ["Follow-up 1 after (days)", "Days after our email with no reply."],
+      after_second_days: ["Follow-up 2 after (days)", "Days after follow-up 1."],
+      after_third_days: ["Follow-up 3 after (days)", "Days after follow-up 2."],
+      give_up_after_days: ["Close after (days)", "Days after follow-up 3: non-respondent (or handed to you if they had shown interest)."] }],
+    ["send_window", "Send window for follow-ups", "Default from research: Tue-Thu mornings. In auto mode it switches to your own best days and hours once there is enough data.", {
+      mode: ["Mode", "auto: learn from replies; fixed: always use the window below."],
+      days: ["Days", "Comma separated: mon, tue, wed, thu, fri, sat, sun"],
+      start_hour: ["From (hour, 0-23)", "Local time (Asia/Kolkata)."], end_hour: ["Until (hour, 1-24)", ""],
+      min_sends_to_learn: ["Sends needed before learning", "Below this, the window above is used."] }],
+    ["budget", "Budget", "Model spend this calendar month. At the limit, research and replies pause until it is raised or the month ends.", {
+      monthly_inr: ["Monthly budget (INR)", "0 means no limit."] }],
   ];
   var RULE_LABELS = { any_named_cert: "Any named certification (lecturer's rule)",
     soc2_and_iso: "Only if it holds both SOC 2 and ISO 27001",
@@ -119,7 +131,10 @@ dash.nav("rubric");
       return '<section class="glass card section"><h2>' + E(sec[1]) + "</h2>" + (sec[2] ? '<p class="muted small" style="margin:-8px 0 12px">' + E(sec[2]) + "</p>" : "") +
         '<div class="fields">' + Object.keys(fields).map(function (key) {
           var id = name + "." + key, v = state.saved[name][key], d = state.defaults[name][key], input;
-          if (key === "dormant_rule") {
+          if (key === "mode") {
+            input = '<select id="' + id + '">' + ["auto", "fixed"].map(function (m) {
+              return '<option value="' + m + '"' + (m === v ? " selected" : "") + ">" + (m === "auto" ? "Auto - learn from replies" : "Fixed") + "</option>"; }).join("") + "</select>";
+          } else if (key === "dormant_rule") {
             input = '<select id="' + id + '">' + state.rules.map(function (r) {
               return '<option value="' + r + '"' + (r === v ? " selected" : "") + ">" + E(RULE_LABELS[r] || r) + "</option>"; }).join("") + "</select>";
           } else if (Array.isArray(d)) {

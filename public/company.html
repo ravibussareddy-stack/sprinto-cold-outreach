@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Company</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .timeline { display: grid; gap: 10px; position: relative; }
+  .tl { display: grid; grid-template-columns: 120px 1fr; gap: 12px; }
+  .tl .when { font-size: 12.5px; color: var(--muted); padding-top: 12px; }
+  .tl .item { padding: 10px 14px; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--glass-border); transition: all .2s ease; }
+  .tl .item:hover { border-color: var(--blue-500); box-shadow: 0 6px 16px rgba(59,130,246,.18); }
+  .tl .item.in { border-left: 3px solid var(--blue-700); border-radius: 0 14px 14px 0; }
+  .tl summary { cursor: pointer; list-style: none; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tl summary::-webkit-details-marker { display: none; }
+  .tl pre { white-space: pre-wrap; font-family: inherit; font-size: 13.5px; margin: 10px 0 0; }
+  .facts { display: grid; grid-template-columns: 150px 1fr; gap: 6px 12px; font-size: 14px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  @media (max-width: 600px) { .tl { grid-template-columns: 1fr; } .tl .when { padding: 0; } }
+</style>
+</head>
+<body>
+<main style="max-width:1100px">
+  <header class="glass top">
+    <div class="brand"><div class="logo">S</div><div><h1 id="title">Company</h1><div class="muted small" id="sub"></div></div></div>
+    <div class="actions" id="stage"></div>
+  </header>
+  <nav class="glass nav" id="nav"></nav>
+  <div id="error" class="error"></div>
+  <div id="content"></div>
+</main>
+<script src="app.js"></script>
+<script>
+dash.nav("pipeline");
+(function () {
+  var E = dash.esc, domain = new URLSearchParams(location.search).get("domain") || "";
+  var KIND = { cold: ["Cold email", "strong"], followup_1: ["Follow-up 1", "mid"], followup_2: ["Follow-up 2", "mid"], followup_3: ["Follow-up 3", "mid"],
+    proposal: ["Times proposed", ""], clarify: ["Time check", ""], confirm: ["Confirmation", "strong"], invite: ["Calendar invite", "strong"],
+    thanks: ["Thank-you", "soft"], reply: ["Their reply", "warn"] };
+  var STATUS = { meeting_booked: "Meeting booked", engaged: "Engaged", contacted: "Contacted", cold_lead: "Cold lead",
+    non_respondent: "Non-respondent", escalated: "Needs you" };
+  function pill(t, c) { return '<span class="pill ' + (c || "") + '">' + E(t) + "</span>"; }
+  function list(items) { return items && items.length ? E(items.join(", ")) : '<span class="muted">-</span>'; }
+
+  dash.api("/api/company?domain=" + encodeURIComponent(domain)).then(function (c) {
+    document.title = c.company + " - company";
+    document.getElementById("title").textContent = c.company;
+    document.getElementById("sub").textContent = c.domain + " · " + c.runs + " run(s) · " + c.timeline.length + " email(s) in and out";
+    document.getElementById("stage").innerHTML = pill(c.decision || "-", c.decision === "DORMANT" ? "soft" : "strong") +
+      (c.fit_score == null ? "" : " " + pill("fit " + c.fit_score, "soft"));
+    var sw = c.send_window;
+    var next = c.open.length ? c.open.map(function (o) {
+      return '<div class="todo-item medium"><span class="sev"></span><div><b>Next: ' + E(o.next) + " on " + E(dash.when(o.due)) +
+        '</b><div class="muted small">' + E(o.days) + " days after our last email; follow-ups go out in the send window (" +
+        E(sw.days.join(", ")) + " " + E(sw.start_hour) + ":00-" + E(sw.end_hour) + ":00).</div></div></div>";
+    }).join("") : '<div class="muted small">No open conversation.</div>';
+
+    var timeline = c.timeline.length ? c.timeline.map(function (t) {
+      var k = KIND[t.kind] || [t.kind, "soft"];
+      return '<div class="tl"><div class="when">' + E(dash.when(t.at)) + '</div><details class="item' + (t.kind === "reply" ? " in" : "") + '"><summary>' +
+        pill(k[0], k[1]) + "<span>" + E(t.subject || "") + "</span>" + (t.from_run ? '<span class="muted small">(from the run record)</span>' : "") +
+        "</summary><pre>" + E(t.body || "") + "</pre></details></div>";
+    }).join("") : '<div class="empty">No emails sent yet.</div>';
+
+    var drafts = c.drafts.length ? c.drafts.map(function (d) {
+      return '<tr><td class="muted small">' + E(dash.when(d.at)) + '</td><td><a href="draft.html?id=' + E(d.id) + '">' + E(d.subject) + "</a>" +
+        (d.parent_run_id ? ' <span class="muted small">(redraft of ' + E(d.parent_run_id) + ")</span>" : "") + "</td><td>" +
+        (d.disagreement == null ? "-" : E(d.disagreement) + "/100") + "</td><td>" + E(d.quality || "-") + "</td><td>" + dash.statusPills(d.status) + "</td></tr>";
+    }).join("") : '<tr><td colspan="5" class="empty">No drafts.</td></tr>';
+
+    var contacts = c.contacts.length ? c.contacts.map(function (p) {
+      return "<div><b>" + E(p.contact_name || "-") + '</b> <span class="muted small">' + E(p.title || "") + " · " + E(p.contact_email) + "</span> " +
+        pill(STATUS[p.status] || p.status) + ' <span class="muted small">' + E(p.followups_sent) + " follow-up(s)</span></div>";
+    }).join("") : '<div class="muted small">No contact yet.</div>';
+
+    var meetings = c.meetings.length ? c.meetings.map(function (m) {
+      return "<div>" + pill("Booked", "strong") + " " + E(m.slot ? dash.when(m.slot) : "time not recorded") + ' <span class="muted small">with ' + E(m.contact || "-") + "</span></div>";
+    }).join("") : '<div class="muted small">None.</div>';
+
+    var f = c.facts;
+    document.getElementById("content").innerHTML =
+      '<div class="grid-2">' +
+        '<section class="glass card"><h2>Why it is here</h2><p><b>' + E(c.reason || "-") + "</b></p>" +
+          "<details><summary class='small'>Score reasons (" + c.score_reasons.length + ")</summary><ul class='small'>" +
+          c.score_reasons.map(function (r) { return "<li>" + E(r) + "</li>"; }).join("") + "</ul></details>" +
+          (c.flags.length ? "<details><summary class='small'>Flags (" + c.flags.length + ")</summary><ul class='small'>" +
+            c.flags.map(function (r) { return "<li>" + E(r) + "</li>"; }).join("") + "</ul></details>" : "") +
+          "<details><summary class='small'>Pages read (" + c.pages_read.length + ")</summary><ul class='small'>" +
+          c.pages_read.map(function (u) { return '<li><a href="' + E(u) + '" target="_blank" rel="noopener">' + E(u) + "</a></li>"; }).join("") + "</ul></details></section>" +
+        '<section class="glass card"><h2>Facts from their website</h2><dl class="facts">' +
+          "<dt>What they do</dt><dd>" + E(f.what_they_do || "-") + "</dd><dt>Stage</dt><dd>" + E(f.funding_stage || "unknown") + "</dd>" +
+          "<dt>Employees</dt><dd>" + E(f.employees || "unknown") + "</dd><dt>Named customers</dt><dd>" + list(f.named_customers) + "</dd>" +
+          "<dt>Certifications</dt><dd>" + list(f.certifications) + "</dd><dt>Industries</dt><dd>" + list(f.industries) + "</dd></dl></section>" +
+      "</div>" +
+      '<div class="grid-2">' +
+        '<section class="glass card"><h2>Contact</h2>' + contacts + '<h2 style="margin-top:16px">Meetings</h2>' + meetings + "</section>" +
+        '<section class="glass card"><h2>Next scheduled step</h2>' + next + "</section>" +
+      "</div>" +
+      '<section class="glass card section"><div class="row-head"><h2>Every email, in and out</h2><span class="muted small">oldest first; click to read</span></div>' +
+        '<div class="timeline">' + timeline + "</div></section>" +
+      '<section class="glass card section"><h2>Draft versions</h2><div class="table-wrap"><table><thead><tr><th>When</th><th>Subject</th><th>Disagreement</th><th>Quality</th><th>Status</th></tr></thead><tbody>' +
+        drafts + "</tbody></table></div></section>";
+  }).catch(function (e) { document.getElementById("error").textContent = e.message; });
+})();
+</script>
+</body>
+</html>

@@ -316,8 +316,8 @@ def _gmail_ctx():
 def _stub_followups():
     angles = []
 
-    def fake(n, first, title, company, research, previous, sender_name, max_attempts=2):
-        angles.append(n)
+    def fake(n, first, title, company, research, previous, sender_name, max_attempts=2, stage="cold"):
+        angles.append((n, stage) if stage != "cold" else n)
         return _writer.FollowUp(body=f"Good morning Asha,\n\nHope you're doing well.\n\nFollow-up {n}?\n\n"
                                      "Kind regards,\nGrowth", value_angle=f"angle {n}", engagement_ask=f"ask {n}")
     _writer.follow_up = fake
@@ -352,7 +352,8 @@ def test_reply_after_a_follow_up_goes_on_to_schedule():
         s, waiting = meeting.resume(c, tid, "yes, keen to talk", persistent=False)
     finally:
         _writer.follow_up = real
-    assert waiting and s.followups_sent == 1 and s.replied and s.sentiment == "positive", (s.trace,)
+    # the reply starts a fresh silence count; the total still shows the follow-up that was sent
+    assert waiting and s.followups_sent == 0 and s.followups_total == 1 and s.replied and s.sentiment == "positive", (s.trace,)
     assert s.meeting_status == "pending_confirmation" and len(s.times_proposed) == 3
 
 
@@ -364,3 +365,19 @@ def test_negative_reply_is_thanked_and_ends():
     assert s.outcome == "not_interested" and s.sentiment == "negative" and s.replied
     assert len(SENT) == 1 and "Thank you for letting me know" in BODIES[0], BODIES
     assert CRM == ["not_interested"]
+
+
+
+def test_silence_after_interest_gets_three_scheduling_nudges_then_hands_off():
+    real = _writer.follow_up
+    angles = _stub_followups()
+    config.CALENDAR_BUSY_FILE = make_busy([])
+    replies.classify = classifier([("interested", None)])
+    SENT.clear(); BODIES.clear(); CRM.clear()
+    try:
+        s = meeting.run(_gmail_ctx(), ["yes, keen to talk"])     # then silence after our proposed times
+    finally:
+        _writer.follow_up = real
+    assert angles == [(1, "scheduling"), (2, "scheduling"), (3, "scheduling")], angles
+    assert s.outcome == "escalated_to_growth_lead" and "after 3 follow-up" in s.escalation, (s.outcome, s.escalation)
+    assert s.followups_total == 3 and [a for _, a in SENT] == [False] * 4      # the proposal, then three nudges

@@ -9,7 +9,9 @@
   },
   "certifications": {
     "dormant_rule": "any_named_cert",
-    "not_certifications": ["gdpr"]
+    "not_certifications": [
+      "gdpr"
+    ]
   },
   "stage_points": {
     "series_a_c": 30,
@@ -41,5 +43,25 @@
   },
   "review": {
     "disagreement_threshold": 20
+  },
+  "followups": {
+    "after_first_days": 3,
+    "after_second_days": 3,
+    "after_third_days": 2,
+    "give_up_after_days": 3
+  },
+  "send_window": {
+    "mode": "auto",
+    "days": [
+      "tue",
+      "wed",
+      "thu"
+    ],
+    "start_hour": 8,
+    "end_hour": 11,
+    "min_sends_to_learn": 30
+  },
+  "budget": {
+    "monthly_inr": 500
   }
 }

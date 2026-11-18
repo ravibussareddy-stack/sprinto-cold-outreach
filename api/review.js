@@ -42,7 +42,11 @@ module.exports = async (req, res) => {
       WHERE (r.record->'disagreement'->>'score')::numeric > $1
         AND NOT EXISTS (SELECT 1 FROM reviews v WHERE v.run_id = r.id)
       ORDER BY r.created_at DESC LIMIT 100`, [THRESHOLD]);
-    res.status(200).json({ threshold: THRESHOLD, items: r.rows });
+    const recent = await pool.query(`
+      SELECT v.id, v.run_id, v.email_action, v.note, v.created_at, r.domain, r.status,
+             r.record->'email'->>'subject' AS subject, (r.record->'disagreement'->>'score')::numeric AS score
+      FROM reviews v JOIN runs r ON r.id = v.run_id ORDER BY v.created_at DESC LIMIT 30`);
+    res.status(200).json({ threshold: THRESHOLD, items: r.rows, recent: recent.rows });
   } catch (e) {
     res.status(500).json({ error: "database request failed" });
   }

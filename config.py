@@ -21,6 +21,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 # price list and set these (the dashboard reads the same names from Vercel env).
 GEMINI_PRICE_INPUT_PER_M = float(os.getenv("GEMINI_PRICE_INPUT_PER_M", "0.30"))
 GEMINI_PRICE_OUTPUT_PER_M = float(os.getenv("GEMINI_PRICE_OUTPUT_PER_M", "2.50"))
+USD_INR = float(os.getenv("USD_INR", "88"))           # assumed rate for the INR budget and costs
 
 # --- Storage: Neon (serverless Postgres) -----------------------------------
 # Leave blank to run without a database (no page cache, no run history).

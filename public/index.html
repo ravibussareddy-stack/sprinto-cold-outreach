@@ -76,6 +76,16 @@
       <div class="row-head"><h2>Latest draft per company</h2><span class="muted small">earlier versions are folded under each card</span></div>
       <div class="cards" id="email-cards"></div>
     </section>
+    <section class="glass card section">
+      <div class="row-head"><h2>Best time to send follow-ups</h2><span class="muted small" id="st-mode"></span></div>
+      <div class="grid-2" style="margin-top:0">
+        <div><div class="stats" id="st-stats"></div><div class="small" id="st-explain"></div></div>
+        <div><div class="table-wrap"><table style="min-width:0">
+          <thead><tr><th>Day</th><th>Sent</th><th>Replied</th><th>Reply rate</th></tr></thead>
+          <tbody id="st-days"></tbody></table></div></div>
+      </div>
+      <div class="small muted" id="st-sources" style="margin-top:10px"></div>
+    </section>
   </div>
 
   <!-- ===== Review ===== -->
@@ -86,6 +96,13 @@
       <div class="table-wrap"><table>
         <thead><tr><th>When</th><th>Company</th><th>Score</th><th>What drove it</th><th>Subject</th><th></th></tr></thead>
         <tbody id="review-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table></div>
+    </section>
+    <section class="glass card section">
+      <div class="row-head"><h2>Recently reviewed</h2><span class="muted small">what you marked, and whether the email had been sent</span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>When</th><th>Company</th><th>Score</th><th>Your action</th><th>Was it sent?</th><th>Subject</th></tr></thead>
+        <tbody id="reviewed-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
       </table></div>
     </section>
   </div>
@@ -124,6 +141,7 @@
   <div class="page" data-page="costs">
     <section class="glass card section">
       <div class="stats" id="cost-stats"></div>
+      <div id="budget-box" style="margin:4px 0 16px"></div>
       <div class="row-head"><h2>Cost by step</h2><span class="muted small" id="price-note"></span></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Step</th><th>Calls</th><th>Cost (INR)</th><th>Cost (USD)</th><th>Tokens</th></tr></thead>
@@ -263,7 +281,7 @@
     document.getElementById("stage-chips").innerHTML = chips.join("");
     var shown = rows.filter(function (r) { return state.stage === "All" || r.stage === state.stage; });
     document.getElementById("pipe-rows").innerHTML = shown.length ? shown.map(function (r) {
-      return "<tr><td><b>" + E(r.company) + '</b><div class="muted small">' + E(r.domain) + "</div></td><td>" + pill(r.stage, STAGE_PILL[r.stage]) +
+      return '<tr><td><a href="company.html?domain=' + encodeURIComponent(r.domain) + '"><b>' + E(r.company) + '</b></a><div class="muted small">' + E(r.domain) + "</div></td><td>" + pill(r.stage, STAGE_PILL[r.stage]) +
         "</td><td class='small'>" + E(r.reason || "-") + "</td><td>" + E(r.fit_score == null ? "-" : r.fit_score) +
         "</td><td class='muted small'>" + E(dash.when(r.last_activity)) + "</td></tr>";
     }).join("") : '<tr><td colspan="5" class="empty">No companies at this stage.</td></tr>';
@@ -278,7 +296,7 @@
     var rows = state.contacts.filter(function (x) { return !q || [x.contact_name, x.company, x.domain, x.status, x.title].join(" ").toLowerCase().indexOf(q) >= 0; });
     document.getElementById("contact-rows").innerHTML = rows.length ? rows.map(function (x) {
       var label = STATUS_LABEL[x.status] || x.status;
-      return "<tr><td><b>" + E(x.contact_name || "-") + '</b><div class="muted small">' + E(x.contact_email) + "</div></td><td>" + E(x.company || x.domain) +
+      return "<tr><td><b>" + E(x.contact_name || "-") + '</b><div class="muted small">' + E(x.contact_email) + '</div></td><td><a href="company.html?domain=' + encodeURIComponent(x.domain) + '">' + E(x.company || x.domain) + "</a>" +
         "</td><td class='small'>" + E(x.title || "-") + "</td><td>" + pill(label, STAGE_PILL[label]) + "</td><td>" + E(x.followups_sent) +
         " / 3</td><td class='muted small'>" + E(dash.when(x.updated_at)) + "</td></tr>";
     }).join("") : '<tr><td colspan="6" class="empty">' + (state.contacts.length ? "No match." : "No contacts yet.") + "</td></tr>";
@@ -297,7 +315,7 @@
     document.getElementById("email-cards").innerHTML = order.length ? order.map(function (dom) {
       var list = byDomain[dom], r = list[0], older = list.slice(1);
       var score = r.disagreement_score == null ? "" : pill(r.disagreement_score + "/100", Number(r.disagreement_score) > Number(m.disagreement.threshold) ? "warn" : "soft");
-      return '<div class="glass lift company-card"><div class="head"><div><b>' + E(dom) + '</b> <span class="muted small">' + E(dash.when(r.created_at)) +
+      return '<div class="glass lift company-card"><div class="head"><div><a href="company.html?domain=' + encodeURIComponent(dom) + '"><b>' + E(dom) + '</b></a> <span class="muted small">' + E(dash.when(r.created_at)) +
         "</span></div><div>" + score + " " + dash.statusPills(r.status) + '</div></div><div class="subject"><a href="draft.html?id=' + E(r.id) + '">' + E(r.subject) +
         "</a></div>" + (older.length ? "<details><summary>" + older.length + " earlier version" + (older.length > 1 ? "s" : "") + '</summary><div class="versions">' +
         older.map(function (o) {
@@ -322,6 +340,37 @@
         '" data-action="kept">Kept</button> <button class="btn" data-run="' + E(x.id) + '" data-action="rewritten">Rewritten</button></td></tr>';
     }).join("") : '<tr><td colspan="6" class="empty">Nothing to review - every draft is at or below ' + E(r.threshold) + ".</td></tr>";
     dash.navBadge("review", rows.length);
+    var ACTION = { kept: ["Kept as is", "strong"], rewritten: ["Rewritten by you", "mid"], redrafted: ["Redrafted with feedback", ""] };
+    document.getElementById("reviewed-rows").innerHTML = (r.recent || []).length ? r.recent.map(function (x) {
+      var a = ACTION[x.email_action] || [x.email_action, "soft"];
+      var sent = (x.status || "").indexOf("SENT") === 0 ? "Yes - to your own inbox, when it was drafted" : "No";
+      var redraft = (x.note || "").match(/as run (\d+)/);
+      return "<tr><td class='muted small'>" + E(dash.when(x.created_at)) + '</td><td><a href="company.html?domain=' + encodeURIComponent(x.domain) + '">' + E(x.domain) +
+        "</a></td><td>" + (x.score == null ? "-" : E(Math.round(x.score)) + "/100") + "</td><td>" + pill(a[0], a[1]) +
+        (redraft ? ' <a class="small" href="draft.html?id=' + redraft[1] + '">new version</a>' : "") + "</td><td class='small'>" + E(sent) +
+        '</td><td><a href="draft.html?id=' + E(x.run_id) + '">' + E(x.subject || "-") + "</a></td></tr>";
+    }).join("") : '<tr><td colspan="6" class="empty">Nothing reviewed yet.</td></tr>';
+  }
+
+  function renderSendTime(t) {
+    var w = t.window, o = t.observed, rate = function (x) { return x.sent ? Math.round(x.replied / x.sent * 100) + "%" : "-"; };
+    var days = w.days.map(function (d) { return d.charAt(0).toUpperCase() + d.slice(1); }).join(", ");
+    document.getElementById("st-mode").textContent = "mode: " + t.mode + " \u00b7 times in " + t.timezone;
+    document.getElementById("st-stats").innerHTML = stat(days, "send days") + stat(w.start_hour + ":00-" + w.end_hour + ":00", "send hours") +
+      stat(o.sends, "tracked sends") + stat(o.sends ? Math.round(o.replied / o.sends * 100) + "%" : "-", "reply rate");
+    var src = { research: "Using the research default until " + t.min_sends_to_learn + " emails have been sent in tracked conversations (" + o.sends + " so far).",
+                observed: "Learnt from your own replies: these days and hours have had the best reply rate.",
+                fixed: "Fixed in the rubric: observations are shown but not used." }[w.source];
+    document.getElementById("st-explain").innerHTML = E(src) + "<br>Inside the window: " + E(rate(o.in_window)) + " reply rate (" + o.in_window.sent +
+      " sent) \u00b7 outside: " + E(rate(o.out_of_window)) + " (" + o.out_of_window.sent + " sent). Replies to prospects are always sent straight away; the window applies to follow-ups.";
+    document.getElementById("st-days").innerHTML = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map(function (d) {
+      var x = o.by_day[d], on = w.days.indexOf(d) >= 0;
+      return "<tr><td>" + (on ? "<b>" : "") + E(d.charAt(0).toUpperCase() + d.slice(1)) + (on ? "</b> " + pill("window", "soft") : "") + "</td><td>" + x.sent +
+        "</td><td>" + x.replied + "</td><td>" + E(rate(x)) + "</td></tr>";
+    }).join("");
+    document.getElementById("st-sources").innerHTML = "Research behind the default: " + t.sources.map(function (s) {
+      return '<a href="' + E(s.url) + '" target="_blank" rel="noopener">' + E(s.name) + "</a> (" + E(s.finding) + ")";
+    }).join("; ") + ".";
   }
 
   // ---------- learning ----------
@@ -338,6 +387,15 @@
   }
 
   // ---------- costs ----------
+  function renderBudget(b) {
+    if (!b) return;
+    var pct = b.used == null ? 0 : Math.min(1, b.used);
+    document.getElementById("budget-box").innerHTML = b.limit_inr ?
+      '<div class="small"><b>Monthly budget:</b> ' + dash.inr(b.spent_month_inr) + " of " + dash.inr(b.limit_inr, 0) + " used this month" +
+      (b.paused ? ' <span class="pill warn">Paused</span>' : "") + ' \u00b7 <a href="settings.html">change</a></div><div class="bar"><span style="width:' +
+      Math.round(pct * 100) + '%"></span></div>' : '<div class="small muted">No monthly budget set (0 = no limit). <a href="settings.html">Set one</a>.</div>';
+  }
+
   function renderCosts(t) {
     document.getElementById("cost-stats").innerHTML = stat(dash.inr(t.est_cost_inr), "total model cost") +
       stat("$" + Number(t.est_cost_usd || 0).toFixed(4), "in US dollars") + stat(intFmt((t.input || 0) + (t.output || 0)), "tokens");
@@ -355,7 +413,7 @@
   function load() {
     document.getElementById("error").textContent = "";
     Promise.all([dash.api("/api/metrics"), dash.api("/api/contacts"), dash.api("/api/feedback"), dash.api("/api/runs"),
-                 dash.api("/api/review"), dash.api("/api/insights")])
+                 dash.api("/api/review"), dash.api("/api/insights"), dash.api("/api/sendtime")])
       .then(function (r) {
         last = { m: r[0], runs: r[3] };
         renderOverview(r[0], r[5]);
@@ -367,6 +425,8 @@
         renderReview(r[4]);
         renderFeedback(r[2]);
         renderCosts(r[0].tokens);
+        renderBudget(r[0].budget);
+        renderSendTime(r[6]);
         document.getElementById("updated").textContent = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
       })
       .catch(function (e) { document.getElementById("error").textContent = e.message; });

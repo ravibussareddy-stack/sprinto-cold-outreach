@@ -16,6 +16,7 @@ import os
 import time
 from dataclasses import asdict
 
+import budget
 import config
 import db
 import llm
@@ -41,6 +42,10 @@ def process(domain: str, do_send: bool, sender_name: str, contact: dict | None =
     t0 = time.time()
     rec = {"domain": domain, "status": None}
     log(f"\n=== {domain} ===")
+    b = budget.status()
+    if b["paused"]:
+        log("  PAUSED: " + budget.pause_message(b))
+        return rec | {"status": "PAUSED", "error": budget.pause_message(b), "budget": b, "seconds": 0.0}
     try:
         return _process(domain, do_send, sender_name, rec, t0, contact)
     except Exception as e:

@@ -97,6 +97,14 @@ module.exports = async (req, res) => {
       detail: upcoming.slice(0, 3).map((m) => `${m.contact || m.domain}: ${new Date(m.slot).toUTCString().slice(0, 22)} UTC`).join("; "), link: "#contacts" });
     if (failed.length) todo.push({ severity: "low", title: `${failed.length} compan${failed.length > 1 ? "ies" : "y"} could not be processed`,
       detail: failed.slice(0, 4).map((x) => `${x.domain}: ${(x.reason || x.status || "").slice(0, 60)}`).join("; "), link: "#pipeline" });
+    const month = await one(pool, `SELECT coalesce(sum(input_tokens),0)::bigint AS tin, coalesce(sum(output_tokens),0)::bigint AS tout
+                                   FROM llm_usage WHERE created_at >= date_trunc('month', now())`);
+    const spentMonth = ((Number(month.tin || 0) / 1e6) * PRICE_IN + (Number(month.tout || 0) / 1e6) * PRICE_OUT) * USD_INR;
+    const limit = Number(r.budget.monthly_inr) || 0;
+    if (limit && spentMonth >= limit) todo.unshift({ severity: "high", title: "Paused: monthly budget reached",
+      detail: `Spent \u20b9${spentMonth.toFixed(2)} of \u20b9${limit}. Raise the budget on Filters & rubric to resume.`, link: "settings.html" });
+    else if (limit && spentMonth >= 0.8 * limit) todo.push({ severity: "medium", title: `${Math.round(spentMonth / limit * 100)}% of this month's budget used`,
+      detail: `\u20b9${spentMonth.toFixed(2)} of \u20b9${limit}; everything pauses at the limit.`, link: "index.html#costs" });
     if (latest.length && dormant.length / latest.length > 0.5) todo.push({ severity: "low",
       title: `${dormant.length} of ${latest.length} companies are dormant`,
       detail: "Most already hold SOC 2. If SOC 2-only companies should be expansion leads, change the dormant rule.",

@@ -254,7 +254,16 @@ FOLLOWUP_PLAYBOOK = {
        "and ask whether someone else at the company looks after security compliance.",
 }
 
-FOLLOWUP_SYSTEM = f"""You write a follow-up to a cold email from Sprinto's Growth Lead that got no reply.
+SCHEDULING_PLAYBOOK = {
+    1: "They said they were interested and we offered meeting times, then went quiet. A short, friendly nudge: "
+       "ask whether any of the times suit, or offer to find new ones. Do not re-pitch.",
+    2: "Offer flexibility: ask them to name a time that suits, or a better week. One short line on what the call "
+       "will cover. A different ask from the first nudge.",
+    3: "A polite last note on scheduling: no pressure, happy to pick it up whenever suits, and ask whether a "
+       "colleague should join or take the call instead.",
+}
+
+FOLLOWUP_SYSTEM = f"""You write a follow-up to an email from Sprinto's Growth Lead that got no reply.
 {SPRINTO_CONTEXT}
 
 Style: UK business English - polite, warm, brief. UK spelling.
@@ -268,9 +277,11 @@ Rules:
 
 
 def follow_up(n: int, first_name: str, title: str | None, company: str, research: dict,
-              previous_emails: list[str], sender_name: str, max_attempts: int = 2) -> FollowUp:
+              previous_emails: list[str], sender_name: str, max_attempts: int = 2, stage: str = "cold") -> FollowUp:
+    """stage "cold": no reply to the cold email; stage "scheduling": they were interested, then went quiet."""
     hello = greeting(first_name)
-    base = (f"This is follow-up {n} of {len(FOLLOWUP_PLAYBOOK)}. Approach for this one: {FOLLOWUP_PLAYBOOK[n]}\n\n"
+    book = SCHEDULING_PLAYBOOK if stage == "scheduling" else FOLLOWUP_PLAYBOOK
+    base = (f"This is follow-up {n} of {len(book)}. Approach for this one: {book[n]}\n\n"
             f"Recipient: {first_name}, {title or 'unknown role'} at {company}\nSender name: {sender_name}\n"
             f"Greeting line to open with: {hello}\n\nResearch:\n{json.dumps(research, indent=1)}\n\n"
             "Earlier emails in this thread (do not repeat their angles or asks):\n"

@@ -117,6 +117,7 @@ def parse_request(body) -> tuple[list[dict] | None, dict | None]:
 
 
 ERROR_CODES = {"ERROR": "pipeline_error", "FAILED": "site_unreachable", "NO_POC": "no_contact_found",
+               "PAUSED": "budget_exceeded",
                "DRAFT_FAILED_CHECKS": "draft_failed_checks"}
 
 

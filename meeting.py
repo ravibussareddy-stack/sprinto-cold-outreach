@@ -64,7 +64,8 @@ class MeetingState:
     outcome: str = ""
     escalation: str = ""
     booked_slot: str | None = None
-    followups_sent: int = 0
+    followups_sent: int = 0               # follow-ups in the current silence (resets when they reply)
+    followups_total: int = 0
     replied: bool = False
     sentiment: str | None = None          # positive | negative | unclear
     trace: list = field(default_factory=list)
@@ -109,6 +110,7 @@ class Sched(TypedDict):
     ambiguity_note: str | None            # why it was contradictory, e.g. "the 21st is a Saturday"
     ack_note: str | None                  # one sentence answering their time, used in the next email
     followups_sent: int
+    followups_total: int
     replied: bool
     sentiment: str | None
     trace: Annotated[list, operator.add]
@@ -252,7 +254,7 @@ def build_graph(ctx: Ctx) -> StateGraph:
             sentiment = "positive"          # an unclear later reply does not undo earlier interest
         return {"intent": r.intent, "chosen_index": r.chosen_slot_index, "proposed_start": proposed,
                 "guess_start": guess, "ambiguity_note": r.ambiguity_note, "ack_note": ack,
-                "replied": True, "sentiment": sentiment}
+                "replied": True, "sentiment": sentiment, "followups_sent": 0}   # a reply starts a fresh silence count
 
     def clarify(s):
         """Their time was contradictory ('Tuesday the 21st'): ask them to confirm our best guess."""
@@ -328,25 +330,28 @@ def build_graph(ctx: Ctx) -> StateGraph:
         n = (s.get("followups_sent") or 0) + 1
         prev = [e["body"] for e in (db.thread_emails(ctx.thread_id) or []) if e["kind"] != "reply"] \
             if ctx.thread_id else []
+        stage = "scheduling" if s["scheduling"] else "cold"
         ok, fu, line = _attempt("write_followup", lambda: writer.follow_up(
-            n, first, ctx.title, ctx.company, ctx.research, prev, ctx.sender_name), attempts=2)
+            n, first, ctx.title, ctx.company, ctx.research, prev, ctx.sender_name, stage=stage), attempts=2)
         if not ok:
             return {"outcome": "escalated_to_growth_lead", "escalation": f"follow-up {n} not written: {fu}",
                     "trace": [line]}
         ctx.log(f"  no reply -> follow-up {n}/{config.MAX_FOLLOWUPS}: {fu.value_angle} (asks: {fu.engagement_ask})")
+        total = (s.get("followups_total") or 0) + 1
         if not ctx.do_send:
-            return {"followups_sent": n, "trace": [f"followup_{n}: dry run, not sent"]}
+            return {"followups_sent": n, "followups_total": total, "trace": [f"followup_{n}: dry run, not sent"]}
         subject = f"Re: {ctx.subject}" if ctx.subject else "Following up"
         sent, err, sline = _attempt("send_email", lambda: _send(f"followup_{n}", subject, fu.body))
         if not sent:
             return {"outcome": "escalated_to_growth_lead", "escalation": f"send_email failed: {err}",
                     "trace": [line, sline]}
-        return {"followups_sent": n, "trace": [f"followup_{n}: {fu.value_angle}", sline]}
+        return {"followups_sent": n, "followups_total": total, "trace": [f"followup_{n} ({stage}): {fu.value_angle}", sline]}
 
     def silent(s):
-        return {"outcome": "escalated_to_growth_lead",
-                "escalation": f"no reply within {config.FOLLOWUP_HOURS}h follow-up window",
-                "trace": ["follow-up window passed, no reply"]}
+        n = s.get("followups_sent") or 0
+        why = (f"interested, then no reply after {n} follow-up(s) on the proposed times" if ctx.followups
+               else f"no reply within {config.FOLLOWUP_HOURS}h follow-up window")
+        return {"outcome": "escalated_to_growth_lead", "escalation": why, "trace": [why]}
 
     def unclear(s):
         where = "unclear reply during scheduling" if s["scheduling"] else "first reply unclear"
@@ -437,10 +442,10 @@ def build_graph(ctx: Ctx) -> StateGraph:
 
     def route_read(s):
         if s["last_reply"] is None:
+            if ctx.followups and (s.get("followups_sent") or 0) < config.MAX_FOLLOWUPS:
+                return "follow_up"      # cold silence, or silence after they showed interest
             if s["scheduling"]:
                 return "silent"
-            if ctx.followups and (s.get("followups_sent") or 0) < config.MAX_FOLLOWUPS:
-                return "follow_up"
             return "no_reply"
         intent, idx = s["intent"], s["chosen_index"]
         picked_offered = intent == "confirms_time" and idx is not None and 0 <= idx < len(s["times_proposed"])
@@ -514,7 +519,7 @@ def _initial() -> dict:
             "outcome": "", "escalation": "", "booked_slot": None, "scheduling": False,
             "last_reply": None, "intent": "", "chosen_index": None, "proposed_start": None,
             "guess_start": None, "ambiguity_note": None, "ack_note": None,
-            "followups_sent": 0, "replied": False, "sentiment": None, "trace": []}
+            "followups_sent": 0, "followups_total": 0, "replied": False, "sentiment": None, "trace": []}
 
 
 @contextmanager
