@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .steps { display: grid; gap: 12px; counter-reset: step; }
+  .step { display: grid; grid-template-columns: 44px 1fr; gap: 14px; padding: 16px 18px; }
+  .step .n { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-weight: 700; color: #fff;
+             background: linear-gradient(135deg, #1d4ed8, #60a5fa); box-shadow: 0 6px 14px rgba(29,78,216,.3); }
+  .step h3 { margin: 2px 0 4px; font-size: 16px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14px; }
+  .step .src { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .grid-3 .glass { padding: 16px 18px; }
+  .grid-3 h3 { margin: 0 0 6px; font-size: 15px; }
+  .grid-3 p { margin: 0; font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main style="max-width:1000px">
+  <header class="glass top">
+    <div class="brand"><div class="logo">S</div>
+      <div><h1>How it works</h1><div class="muted small">Where every piece of data comes from, and what happens at each step.</div></div></div>
+  </header>
+  <nav class="glass nav" id="nav"></nav>
+
+  <section class="section">
+    <div class="steps">
+      <div class="glass lift step"><div class="n">1</div><div><h3>Read the company's website</h3>
+        <p>The homepage is fetched with a plain web request (robots.txt is checked first; a page that comes back almost empty is
+          retried through a text-reader service). Navigation, footers and cookie banners are stripped and the text is capped.</p>
+        <div class="src"><span class="pill">Source: the company's own public website</span><span class="pill soft">cached 7 days</span></div></div></div>
+      <div class="glass lift step"><div class="n">2</div><div><h3>Pull out the facts</h3>
+        <p>Gemini turns the page text into named fields: what they sell and to whom, funding stage, headcount, named customers,
+          certifications, enterprise features, open roles. Certification badges are also found with a pattern scan of the raw HTML.</p>
+        <div class="src"><span class="pill">Source: step 1 text</span><span class="pill soft">model: Gemini</span></div></div></div>
+      <div class="glass lift step"><div class="n">3</div><div><h3>Qualify, with an agent loop</h3>
+        <p>Code checks which facts are still missing (certifications, is it B2B SaaS, stage) and fetches the one page most likely to
+          answer each - careers, pricing, security or about - up to the limit in the rubric. Then the rubric decides: qualified,
+          flagged, dormant (already certified), disqualified, or manual check. Every point has a written reason.</p>
+        <div class="src"><span class="pill">Source: up to 4 more pages of the same site</span><a class="pill soft" href="settings.html">rules: Filters &amp; rubric</a></div></div></div>
+      <div class="glass lift step"><div class="n">4</div><div><h3>Find the person to write to</h3>
+        <p><b>Contacts are not scraped from the web.</b> They come from one of three places: the Hunter.io domain-search API (switched
+          off for now), a contact you add by hand after looking them up in Apollo (the <code>POC_OVERRIDES</code> secret - the brief's
+          Option B), or a contact passed in with a test case. Without one, the company stops at "No contact".</p>
+        <div class="src"><span class="pill">Source: Apollo lookup by you, Hunter.io, or the test input</span></div></div></div>
+      <div class="glass lift step"><div class="n">5</div><div><h3>Two pain points</h3>
+        <p>Gemini names the two problems this person most likely feels about compliance, each tied to a specific fact from step 2.</p>
+        <div class="src"><span class="pill">Source: steps 2 and 4</span></div></div></div>
+      <div class="glass lift step"><div class="n">6</div><div><h3>Write the email</h3>
+        <p><b>Emails are written, not fetched.</b> Gemini drafts a UK-style email addressed by first name, opening with a researched
+          fact, using the best-ranked feedback and winning emails for that role. Quality checks test its structure; the disagreement
+          score checks for wrong or unsupported claims. Above the threshold it goes to Review.</p>
+        <div class="src"><span class="pill">Source: steps 2-5 + feedback repo</span><a class="pill soft" href="index.html#review">Review</a></div></div></div>
+      <div class="glass lift step"><div class="n">7</div><div><h3>Send - to your own inbox only</h3>
+        <p>Sent through Gmail (SMTP with an app password). The To: address is always your own inbox, as the brief requires; the
+          intended recipient is written in the footer.</p>
+        <div class="src"><span class="pill">Gmail SMTP</span><span class="pill soft">To: your inbox</span></div></div></div>
+      <div class="glass lift step"><div class="n">8</div><div><h3>Replies, meetings, follow-ups</h3>
+        <p>Replies are read from Gmail (IMAP). Interested: free times are taken from Calendly and offered, or the time they named is
+          booked. Declined: a thank-you, and they become a cold lead. No reply: up to three follow-ups with new angles, then
+          non-respondent. Each finished conversation is turned into lessons for the feedback repo.</p>
+        <div class="src"><span class="pill">Gmail IMAP</span><span class="pill">Calendly</span><span class="pill soft">checked every 30 min</span></div></div></div>
+    </div>
+  </section>
+
+  <section class="section grid-3">
+    <div class="glass lift"><h3>Where it runs</h3><p>This dashboard and the test-case API run on Vercel; the batch run and the reply
+      checker run on GitHub Actions. Everything is stored in a Neon Postgres database.</p></div>
+    <div class="glass lift"><h3>What you do</h3><p>Give the list of domains, add contacts from Apollo, review drafts above the
+      threshold, add feedback, and tune the rubric.</p></div>
+    <div class="glass lift"><h3>What it never does</h3><p>Email a prospect directly, log in to any website, or guess a fact it did
+      not find - unsupported claims raise the disagreement score.</p></div>
+  </section>
+</main>
+<script src="app.js"></script>
+<script>dash.nav("how");</script>
+</body>
+</html>

@@ -4,6 +4,7 @@ const rubric = require("../lib/rubric");
 // The Overview page: what needs doing now, and how this week compares with last week.
 const PRICE_IN = parseFloat(process.env.GEMINI_PRICE_INPUT_PER_M || "0.30");
 const PRICE_OUT = parseFloat(process.env.GEMINI_PRICE_OUTPUT_PER_M || "2.50");
+const USD_INR = parseFloat(process.env.USD_INR || "88");
 
 async function rows(pool, sql, params) {
   try { return (await pool.query(sql, params || [])).rows; } catch (e) { return []; }
@@ -45,6 +46,7 @@ async function windowStats(pool, fromDays, toDays, threshold) {
     emails_sent: sent.emails_sent || 0, replies: sent.replies || 0,
     tokens: Number(tok.tin || 0) + Number(tok.tout || 0),
     est_cost_usd: (Number(tok.tin || 0) / 1e6) * PRICE_IN + (Number(tok.tout || 0) / 1e6) * PRICE_OUT,
+    est_cost_inr: ((Number(tok.tin || 0) / 1e6) * PRICE_IN + (Number(tok.tout || 0) / 1e6) * PRICE_OUT) * USD_INR,
   };
 }
 
@@ -108,7 +110,7 @@ module.exports = async (req, res) => {
       ["emails_sent", "Emails sent", "count", true], ["replies", "Replies received", "count", true],
       ["engagement_rate", "Engagement rate", "pct", true], ["booked", "Meetings booked", "count", true],
       ["booking_rate", "Booking rate", "pct", true], ["avg_quality", "Email quality", "pct", true],
-      ["avg_disagreement", "Avg disagreement", "score", false], ["est_cost_usd", "Est. model cost", "usd", false],
+      ["avg_disagreement", "Avg disagreement", "score", false], ["est_cost_inr", "Model cost", "inr", false],
     ];
     const trends = METRICS.map(([key, label, fmt, higherBetter]) => {
       const a = cur[key], b = prev[key];
@@ -142,7 +144,7 @@ module.exports = async (req, res) => {
     const certTop = Object.entries(certCounts).sort((a, b) => b[1] - a[1]);
     if (certTop.length) highlights.push(`Dormant companies most often hold ${certTop.slice(0, 3).map(([c, n]) => `${c} (${n})`).join(", ")}.`);
     if (failedChecks.length) highlights.push(`Most-failed quality check: ${failedChecks[0].check_name} (${failedChecks[0].n} draft(s)).`);
-    if (cur.tokens) highlights.push(`Model use: ${cur.tokens.toLocaleString("en-GB")} tokens, about $${cur.est_cost_usd.toFixed(4)}.`);
+    if (cur.tokens) highlights.push(`Model cost about ₹${cur.est_cost_inr.toFixed(2)} (${cur.tokens.toLocaleString("en-IN")} tokens).`);
 
     res.status(200).json({ todo, trends, highlights, dormant_certs: certTop.map(([cert, n]) => ({ cert, n })),
                            failed_checks: failedChecks, top_lessons: topLessons, this_week: cur, last_week: prev });

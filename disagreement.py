@@ -44,7 +44,10 @@ CLAIM_SYSTEM = f"""List every factual claim the email makes.
   the research explicitly says so.
 - Claims about what Sprinto does or achieves (about = "sprinto"): supported only if the Sprinto
   description below says so. Invented numbers or outcomes (e.g. "weeks to hours") are unsupported.
-Opinions and general statements ("reviews like that take time") are not claims. Never assume support.
+Not claims: the greeting, the recipient's own name or title (they are inputs, not research), the
+sign-off, opinions, and hedged general statements ("reviews like that often take time"). A general
+statement worded as a certainty about THIS company or its customers ("your customers invariably...")
+IS a claim and needs support. Never assume support.
 
 Sprinto description:
 {SPRINTO_CONTEXT}"""

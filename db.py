@@ -398,3 +398,17 @@ def get_setting(key: str):
     with _conn() as c:
         row = c.execute("SELECT value FROM settings WHERE key=%s", (key,)).fetchone()
     return row[0] if row else None
+
+
+@_safe
+def get_run(run_id: int) -> dict | None:
+    with _conn() as c:
+        row = c.execute("SELECT id, domain, record, created_at FROM runs WHERE id=%s", (run_id,)).fetchone()
+    return None if not row else {"id": row[0], "domain": row[1], "record": row[2], "created_at": row[3]}
+
+
+@_safe
+def add_run_review(run_id: int, domain: str, action: str, note: str):
+    with _conn() as c:
+        c.execute("INSERT INTO reviews (run_id, domain, email_action, note) VALUES (%s,%s,%s,%s)",
+                  (run_id, domain, action, note))

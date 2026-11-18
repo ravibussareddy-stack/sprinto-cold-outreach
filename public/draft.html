@@ -13,6 +13,24 @@
   <nav class="glass nav" id="nav" style="margin-top:0"></nav>
   <div id="error" class="error"></div>
   <div id="content"></div>
+  <section class="glass card section" id="feedback" hidden>
+    <h2>Feedback on this email</h2>
+    <p class="muted small" style="margin-top:-6px">Say what is wrong or what to do instead. It is saved to the feedback repo and used for
+      every future draft it applies to. Then redraft this one to see if the disagreement score improves (nothing is sent).</p>
+    <div class="form-row">
+      <div><textarea class="input" id="fb-text" placeholder="e.g. Don't guess about their team's workload; stick to facts from their website."></textarea></div>
+      <div><label class="small"><b>Applies to</b></label><select class="input" id="fb-scope">
+        <option value="global">Every email</option><option value="role:cto">CTOs / engineering</option><option value="role:ceo">CEOs</option>
+        <option value="role:founder">Founders</option><option value="role:security">Security / compliance leads</option>
+        <option value="role:operations">Operations</option></select></div>
+      <div><label class="small"><b>Weight</b></label><select class="input" id="fb-score">
+        <option value="1.0">Strong (1.0)</option><option value="0.8" selected>Normal (0.8)</option><option value="0.6">Light (0.6)</option></select></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="fb-save">Save feedback</button>
+        <button class="btn primary" id="redraft">Redraft with feedback</button></div>
+    </div>
+    <div class="note small" id="fb-note" style="margin-top:10px"></div>
+    <div id="compare" style="margin-top:14px"></div>
+  </section>
 </main>
 <script src="app.js"></script>
 <script>
@@ -92,6 +110,68 @@ dash.nav("emails");
       body: JSON.stringify({ run_id: Number(id), action: b.dataset.action }) })
       .then(function () { document.getElementById("review-banner").textContent = "Reviewed: marked " + b.dataset.action + "."; })
       .catch(function (e) { document.getElementById("error").textContent = e.message; });
+  });
+})();
+</script>
+<script>
+(function () {
+  var E = dash.esc, id = new URLSearchParams(location.search).get("id");
+  var ROLE = [[/ciso|security|compliance|grc|trust/i, "role:security"], [/\bcto\b|technology|engineering|engineer/i, "role:cto"],
+              [/\bceo\b|chief executive/i, "role:ceo"], [/founder/i, "role:founder"], [/\bcoo\b|operations/i, "role:operations"]];
+  var note = document.getElementById("fb-note");
+  function say(t, cls) { note.textContent = t; note.className = "note small " + (cls || ""); }
+
+  dash.api("/api/run?id=" + encodeURIComponent(id)).then(function (r) {
+    var rec = r.record || {};
+    if (!rec.email) return;
+    document.getElementById("feedback").hidden = false;
+    var title = (rec.poc && rec.poc.title) || "";
+    for (var i = 0; i < ROLE.length; i++) if (ROLE[i][0].test(title)) { document.getElementById("fb-scope").value = ROLE[i][1]; break; }
+    if (location.hash === "#feedback") document.getElementById("feedback").scrollIntoView({ behavior: "smooth" });
+  });
+
+  function saveFeedback() {
+    var text = document.getElementById("fb-text").value.trim();
+    if (!text) return Promise.resolve(null);
+    if (text.length < 5) return Promise.reject(new Error("Write at least a few words."));
+    return dash.api("/api/feedback", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ guidance: text, scope: document.getElementById("fb-scope").value,
+                             score: Number(document.getElementById("fb-score").value), run_id: Number(id) }) });
+  }
+
+  document.getElementById("fb-save").addEventListener("click", function () {
+    saveFeedback().then(function (r) { if (r) { say("Saved to the feedback repo as #" + r.id + ".", "ok"); document.getElementById("fb-text").value = ""; }
+                                       else say("Write some feedback first.", "bad"); })
+      .catch(function (e) { say(e.message, "bad"); });
+  });
+
+  function side(label, x, better) {
+    var parts = x.parts || {};
+    return '<div class="side' + (better ? " better" : "") + '"><div class="row-head"><b>' + E(label) + '</b><span class="pill ' + (better ? "strong" : "soft") + '">' +
+      E(x.disagreement == null ? "-" : x.disagreement + "/100") + "</span></div>" +
+      '<div class="muted small">structure ' + E(parts.structure != null ? parts.structure : (parts.rules || 0)) + " \u00b7 wrong info " +
+      E(parts.wrong_info != null ? parts.wrong_info : (parts.claims || 0)) + " \u00b7 judge " + E(parts.judge || 0) +
+      (x.quality ? " \u00b7 quality " + E(x.quality) : "") + "</div>" +
+      (x.wrong_info && x.wrong_info.length ? '<div class="small" style="margin-top:6px"><b>Unsupported:</b> ' + E(x.wrong_info.join("; ")) + "</div>" : "") +
+      '<p style="margin:10px 0 4px"><b>' + E(x.subject || "") + '</b></p><pre class="body small">' + E(x.body || "") + "</pre>" +
+      (x.run_id ? '<a class="small" href="draft.html?id=' + E(x.run_id) + '">open run ' + E(x.run_id) + "</a>" : "") + "</div>";
+  }
+
+  document.getElementById("redraft").addEventListener("click", function () {
+    var btn = this;
+    btn.disabled = true;
+    say("Saving feedback and redrafting... about 30-60 seconds.", "");
+    saveFeedback().then(function () {
+      return dash.api("/api/redraft", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ run_id: Number(id) }) });
+    }).then(function (r) {
+      var verdict = r.change == null ? "" : r.change < 0 ? "Disagreement down " + Math.abs(r.change) + " points." :
+                    r.change === 0 ? "Disagreement unchanged." : "Disagreement up " + r.change + " points.";
+      say(verdict + " Used " + r.guidance_used.length + " piece(s) of feedback" + (r.needs_review ? "; still above " + r.threshold + ", so it stays in review." : "."), r.improved ? "ok" : "");
+      document.getElementById("compare").innerHTML = '<div class="compare">' + side("Before", r.before, false) + side("After (redrafted)", r.after, r.improved) + "</div>" +
+        (r.guidance_used.length ? '<div class="small muted" style="margin-top:10px">Feedback used, best first: ' +
+          r.guidance_used.map(function (g) { return "#" + g.id + " (" + g.scope + ", " + Number(g.score).toFixed(1) + ")"; }).join(", ") + "</div>" : "");
+    }).catch(function (e) { say("Redraft failed: " + e.message, "bad"); })
+      .then(function () { btn.disabled = false; });
   });
 })();
 </script>

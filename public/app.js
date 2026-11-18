@@ -42,19 +42,24 @@
     el.style.setProperty("--my", (ev.clientY - r.top) + "px");
   });
 
-  // Navigation shared by every page. Dashboard sections are hash pages inside index.html.
-  var NAV = [["overview", "Overview", "index.html#overview"], ["pipeline", "Pipeline", "index.html#pipeline"],
-             ["contacts", "Contacts", "index.html#contacts"], ["review", "Review", "index.html#review"],
-             ["emails", "Emails", "index.html#emails"], ["learning", "Learning", "index.html#learning"],
-             ["costs", "Costs", "index.html#costs"], ["rubric", "Filters & rubric", "settings.html"],
-             ["test", "Run a test case", "test.html"]];
+  // Navigation shared by every page, in groups. Dashboard sections are hash pages in index.html.
+  var NAV = [
+    ["", [["overview", "Overview", "index.html#overview"]]],
+    ["Outreach", [["pipeline", "Pipeline", "index.html#pipeline"], ["contacts", "Contacts", "index.html#contacts"],
+                  ["emails", "Emails", "index.html#emails"]]],
+    ["Quality", [["review", "Review", "index.html#review"], ["learning", "Feedback & learning", "index.html#learning"]]],
+    ["Setup", [["costs", "Costs", "index.html#costs"], ["rubric", "Filters & rubric", "settings.html"],
+               ["test", "Run a test case", "test.html"], ["how", "How it works", "how.html"]]],
+  ];
   var badges = {};
   function nav(active) {
     var el = document.getElementById("nav");
     if (!el) return;
-    el.innerHTML = NAV.map(function (n) {
-      var badge = badges[n[0]] ? '<span class="badge">' + badges[n[0]] + "</span>" : "";
-      return '<a href="' + n[2] + '" class="' + (n[0] === active ? "on" : "") + '" data-key="' + n[0] + '">' + esc(n[1]) + badge + "</a>";
+    el.innerHTML = NAV.map(function (g) {
+      return (g[0] ? '<span class="group">' + esc(g[0]) + "</span>" : "") + g[1].map(function (n) {
+        var badge = badges[n[0]] ? '<span class="badge">' + badges[n[0]] + "</span>" : "";
+        return '<a href="' + n[2] + '" class="' + (n[0] === active ? "on" : "") + '" data-key="' + n[0] + '">' + esc(n[1]) + badge + "</a>";
+      }).join("");
     }).join("");
   }
   function navBadge(key, n) {
@@ -67,5 +72,28 @@
     b.textContent = n;
   }
 
-  window.dash = { api: api, esc: esc, pct: pct, num: num, when: when, countUp: countUp, nav: nav, navBadge: navBadge };
+  // "SENT | no_reply (flagged: thin evidence, ...)" -> short pills: Sent, No reply, Flagged
+  var STATUS_WORDS = { SENT: ["Sent", "strong"], DRAFTED: ["Draft", ""], REDRAFTED: ["Redraft", "mid"],
+    DRAFT_FAILED_CHECKS: ["Failed checks", "warn"], NO_POC: ["No contact", "soft"], DORMANT: ["Dormant", "soft"],
+    DISQUALIFIED: ["Disqualified", "soft"], MANUAL_REVIEW: ["Manual check", "warn"], FAILED: ["Unreachable", "warn"],
+    ERROR: ["Error", "warn"], awaiting_reply: ["Awaiting reply", ""], no_reply: ["No reply", "soft"],
+    booked: ["Booked", "strong"], not_interested: ["Declined", "soft"], non_respondent: ["No response", "soft"],
+    escalated_to_growth_lead: ["Needs you", "warn"], aborted: ["Aborted", "warn"] };
+  function statusPills(status) {
+    if (!status) return "";
+    var parts = status.split(" (")[0].split("|").map(function (x) { return x.trim(); }).filter(Boolean);
+    var html = parts.map(function (p) {
+      var w = STATUS_WORDS[p] || [p.replace(/_/g, " ").toLowerCase(), "soft"];
+      return '<span class="pill ' + w[1] + '">' + esc(w[0]) + "</span>";
+    }).join(" ");
+    if (status.indexOf("flagged") >= 0) html += ' <span class="pill warn" title="thin evidence: review before a real send">Flagged</span>';
+    return html;
+  }
+  function inr(x, digits) {
+    return x == null || isNaN(x) ? "-" : "\u20b9" + Number(x).toLocaleString("en-IN", { minimumFractionDigits: digits == null ? 2 : digits,
+                                                                                        maximumFractionDigits: digits == null ? 2 : digits });
+  }
+
+  window.dash = { api: api, esc: esc, pct: pct, num: num, when: when, countUp: countUp, nav: nav, navBadge: navBadge,
+                  statusPills: statusPills, inr: inr };
 })();

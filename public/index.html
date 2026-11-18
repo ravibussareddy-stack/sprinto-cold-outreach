@@ -15,10 +15,10 @@
       <div class="logo">S</div>
       <div>
         <h1 id="page-title">Overview</h1>
-        <div class="muted small">Sprinto outreach &middot; build 1: every email goes to your inbox &middot; updated <span id="updated">-</span></div>
+        <div class="muted small" id="page-sub">Sprinto outreach</div>
       </div>
     </div>
-    <div class="actions"><button class="btn" id="refresh">Refresh</button></div>
+    <div class="actions"><span class="muted small">updated <span id="updated">-</span></span><button class="btn" id="refresh">Refresh</button></div>
   </header>
   <nav class="glass nav" id="nav"></nav>
   <div id="error" class="error"></div>
@@ -39,101 +39,96 @@
     </div>
     <section class="glass card section">
       <h2>Weekly trends</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Metric</th><th>This week</th><th>Last week</th><th>Change</th></tr></thead>
-          <tbody id="trend-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Metric</th><th>This week</th><th>Last week</th><th>Change</th></tr></thead>
+        <tbody id="trend-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+      </table></div>
     </section>
   </div>
 
   <!-- ===== Pipeline ===== -->
   <div class="page" data-page="pipeline">
     <section class="glass card section">
-      <div class="row-head"><h2>Companies in the pipeline</h2><span class="muted small" id="pipe-count"></span></div>
       <div class="chips" id="stage-chips"></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Company</th><th>Stage</th><th>Why</th><th>Fit score</th><th>Last activity</th></tr></thead>
-          <tbody id="pipe-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Company</th><th>Stage</th><th>Why</th><th>Fit</th><th>Last activity</th></tr></thead>
+        <tbody id="pipe-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table></div>
     </section>
   </div>
 
   <!-- ===== Contacts ===== -->
   <div class="page" data-page="contacts">
     <section class="glass card section">
-      <div class="row-head"><h2>Contacts</h2><input type="search" id="contact-search" placeholder="Search name, company, status"></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Contact</th><th>Company</th><th>Role</th><th>Status</th><th>Follow-ups</th><th>Last outcome</th><th>Updated</th></tr></thead>
-          <tbody id="contact-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
-    </section>
-  </div>
-
-  <!-- ===== Review ===== -->
-  <div class="page" data-page="review">
-    <section class="glass card section" id="review-card">
-      <div class="row-head"><h2>Needs review <span class="muted small" id="review-rule"></span></h2>
-        <span class="muted small">Mark each one so it leaves the queue (this also feeds the rewrite rate)</span></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>When</th><th>Company</th><th>Disagreement</th><th>Why</th><th>Subject</th><th></th></tr></thead>
-          <tbody id="review-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <div class="stats" id="contact-stats"></div>
+      <div class="row-head"><h2>Everyone contacted</h2><input type="search" id="contact-search" placeholder="Search name, company, status"></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Contact</th><th>Company</th><th>Role</th><th>Status</th><th>Follow-ups</th><th>Updated</th></tr></thead>
+        <tbody id="contact-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table></div>
     </section>
   </div>
 
   <!-- ===== Emails ===== -->
   <div class="page" data-page="emails">
     <section class="glass card section">
-      <h2>Emails sent, by type</h2>
-      <div class="hbars" id="email-kinds"></div>
-    </section>
-    <section class="glass card section">
-      <h2>Recent drafts and runs</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>When</th><th>Company</th><th>Decision</th><th>Fit</th><th>Disagreement</th><th>Subject</th><th>Status</th></tr></thead>
-          <tbody id="run-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <div class="stats" id="email-stats"></div>
+      <div class="row-head"><h2>Latest draft per company</h2><span class="muted small">earlier versions are folded under each card</span></div>
+      <div class="cards" id="email-cards"></div>
     </section>
   </div>
 
-  <!-- ===== Learning ===== -->
+  <!-- ===== Review ===== -->
+  <div class="page" data-page="review">
+    <section class="glass card section">
+      <div class="row-head"><h2>Drafts above disagreement <span id="review-rule">20</span></h2>
+        <span class="muted small">Open one to give feedback and redraft it, or mark it Kept / Rewritten</span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>When</th><th>Company</th><th>Score</th><th>What drove it</th><th>Subject</th><th></th></tr></thead>
+        <tbody id="review-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <!-- ===== Feedback & learning ===== -->
   <div class="page" data-page="learning">
     <section class="glass card section">
-      <div class="row-head"><h2>Feedback repo</h2>
-        <span class="muted small">Ranked as the writer sees it: higher outcome score wins when two conflict</span></div>
+      <h2>Add feedback</h2>
+      <p class="muted small" style="margin-top:-6px">It goes straight into the repo; the writer uses it for the next drafts, ranked by its score.</p>
+      <div class="form-row">
+        <div><label class="small"><b>Feedback</b></label><textarea class="input" id="fb-text" placeholder="e.g. Never guess about the reader's workload; open with a fact from their site."></textarea></div>
+        <div><label class="small"><b>Applies to</b></label><select class="input" id="fb-scope">
+          <option value="global">Every email</option><option value="role:cto">CTOs / engineering</option>
+          <option value="role:ceo">CEOs</option><option value="role:founder">Founders</option>
+          <option value="role:security">Security / compliance leads</option><option value="role:operations">Operations</option></select></div>
+        <div><label class="small"><b>Weight</b></label><select class="input" id="fb-score">
+          <option value="1.0">Strong (1.0)</option><option value="0.8" selected>Normal (0.8)</option><option value="0.6">Light (0.6)</option></select></div>
+        <div><button class="btn primary" id="fb-save">Save</button></div>
+      </div>
+      <div class="note small" id="fb-note" style="margin-top:8px"></div>
+    </section>
+    <section class="glass card section">
+      <div class="row-head"><h2>Feedback repo</h2><span class="muted small">Ranked as the writer sees it: the higher score wins when two conflict</span></div>
       <div class="lessons" id="lessons"></div>
     </section>
     <section class="glass card section">
       <h2>Winning emails used as examples</h2>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Company</th><th>Role</th><th>Subject</th><th>Outcome</th><th>Score</th></tr></thead>
-          <tbody id="exemplar-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Company</th><th>Role</th><th>Subject</th><th>Outcome</th><th>Score</th></tr></thead>
+        <tbody id="exemplar-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table></div>
     </section>
   </div>
 
   <!-- ===== Costs ===== -->
   <div class="page" data-page="costs">
     <section class="glass card section">
-      <div class="row-head"><h2>Token use and cost</h2><span class="muted small" id="price-note"></span></div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Step</th><th>Calls</th><th>Tokens in</th><th>Tokens out</th><th>Est. cost</th></tr></thead>
-          <tbody id="token-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-        </table>
-      </div>
+      <div class="stats" id="cost-stats"></div>
+      <div class="row-head"><h2>Cost by step</h2><span class="muted small" id="price-note"></span></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Step</th><th>Calls</th><th>Cost (INR)</th><th>Cost (USD)</th><th>Tokens</th></tr></thead>
+        <tbody id="token-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table></div>
     </section>
   </div>
 </main>
@@ -142,240 +137,236 @@
 <script>
 (function () {
   var E = dash.esc;
-  var STEP_NAMES = { CompanyProfile: "Extract company profile", PainPoints: "Pain points", EmailDraft: "Write cold email",
-    ClaimCheck: "Disagreement: claims", JudgeVerdict: "Disagreement: judge", ReplyRead: "Read reply",
-    FollowUp: "Write follow-up", Lessons: "Learn from outcome" };
-  var KIND_NAMES = { cold: "Cold email", followup_1: "Follow-up 1", followup_2: "Follow-up 2", followup_3: "Follow-up 3",
-    proposal: "Times proposed", clarify: "Time check", confirm: "Confirmation", invite: "Calendar invite",
-    thanks: "Thank-you (declined)", reply: "Replies received" };
+  var PAGES = {
+    overview: ["Overview", "What needs doing and how the week went"],
+    pipeline: ["Pipeline", "Every company researched, where it stands and why"],
+    contacts: ["Contacts", "People emailed and where each conversation is"],
+    emails: ["Emails", "What was written, how it scored, and what was sent"],
+    review: ["Review", "Drafts whose disagreement score is above the threshold"],
+    learning: ["Feedback & learning", "What the writer learns from, and your feedback"],
+    costs: ["Costs", "Model spend, in rupees"],
+  };
+  var STEP_NAMES = { CompanyProfile: "Read the company website", PainPoints: "Pain points", EmailDraft: "Write the email",
+    ClaimCheck: "Disagreement: check claims", JudgeVerdict: "Disagreement: judge", ReplyRead: "Read replies",
+    FollowUp: "Write follow-ups", Lessons: "Learn from outcomes" };
+  var KIND_NAMES = { cold: "Cold emails", followup_1: "Follow-up 1", followup_2: "Follow-up 2", followup_3: "Follow-up 3",
+    proposal: "Times proposed", clarify: "Time checks", confirm: "Confirmations", invite: "Invites", thanks: "Thank-yous", reply: "Replies in" };
   var STAGE_PILL = { "Meeting booked": "strong", "Engaged": "mid", "Contacted": "", "Qualified": "",
     "Qualified - no contact": "soft", "Cold lead": "soft", "Non-respondent": "soft", "Needs you": "warn",
-    "Dormant": "soft", "Disqualified": "soft", "Manual review": "warn", "Error": "warn" };
+    "Dormant": "soft", "Disqualified": "soft", "Manual review": "warn", "Error": "warn", "Site unreachable": "warn" };
   var STATUS_LABEL = { meeting_booked: "Meeting booked", engaged: "Engaged", contacted: "Contacted",
     cold_lead: "Cold lead", non_respondent: "Non-respondent", escalated: "Needs you" };
-  var pipelineRows = [], stageFilter = "All", contacts = [];
+  var state = { pipeline: [], stage: "All", contacts: [], disView: "all" };
+  try { state.disView = sessionStorage.getItem("disView") || "all"; } catch (e) {}
 
   function pill(text, cls) { return '<span class="pill ' + (cls || "") + '">' + E(text) + "</span>"; }
+  function stat(value, label) { return '<div class="stat"><b>' + E(value) + "</b><span>" + E(label) + "</span></div>"; }
+  var pctFmt = function (x) { return x == null ? "-" : Math.round(x * 100) + "%"; };
+  var intFmt = function (x) { return x == null ? "-" : Math.round(x).toLocaleString("en-IN"); };
 
-  function tile(label, value, fmt, sub, ratio) {
-    var el = document.createElement("div");
-    el.className = "glass lift tile";
-    el.innerHTML = '<div class="label">' + E(label) + '</div><div class="value">-</div><div class="sub">' + E(sub || "") +
-      "</div>" + (ratio != null ? '<div class="bar"><span></span></div>' : "");
-    dash.countUp(el.querySelector(".value"), value, fmt);
-    if (ratio != null) setTimeout(function () { el.querySelector(".bar span").style.width = Math.round(ratio * 100) + "%"; }, 30);
-    return el;
-  }
-
-  var disagreementView = "all";
-  var DIS_VIEWS = [["all", "All"], ["wrong", "Gone wrong"], ["flagged", "Above threshold"],
-                   ["bad_outcome", "Declined / no reply"], ["rewritten", "Rewritten"]];
-  var DIS_HELP = { all: "every draft", wrong: "above threshold, declined / no reply, or rewritten",
-                   flagged: "drafts above the review threshold", bad_outcome: "conversation ended declined or with no reply",
-                   rewritten: "drafts you marked as rewritten" };
-  try { disagreementView = sessionStorage.getItem("disView") || "all"; } catch (e) {}
-
-  function disagreementTile(d) {
-    var el = document.createElement("div");
-    el.className = "glass lift tile";
-    function draw(animate) {
-      var v = d[disagreementView] || {};
-      el.innerHTML = '<div class="label">Average disagreement</div><div class="value">-</div><div class="sub">' +
-        E(v.n ? v.n + " draft(s): " + DIS_HELP[disagreementView] : "no drafts in this group yet") + " (lower is better)</div>" +
-        '<div class="bar"><span></span></div><div class="seg">' + DIS_VIEWS.map(function (o) {
-          return '<button data-v="' + o[0] + '" class="' + (o[0] === disagreementView ? "on" : "") + '">' + E(o[1]) + "</button>";
-        }).join("") + "</div>";
-      var fmt = function (x) { return x == null ? "-" : Math.round(x) + "/100"; };
-      if (animate) dash.countUp(el.querySelector(".value"), v.avg, fmt); else el.querySelector(".value").textContent = fmt(v.avg);
-      setTimeout(function () { el.querySelector(".bar span").style.width = (v.avg == null ? 0 : Math.round(v.avg)) + "%"; }, 30);
-    }
-    el.addEventListener("click", function (ev) {
-      var b = ev.target.closest(".seg button");
-      if (!b) return;
-      disagreementView = b.dataset.v;
-      try { sessionStorage.setItem("disView", disagreementView); } catch (e) {}
-      draw(true);
-    });
-    draw(true);
-    return el;
-  }
-
-  function renderReview(r) {
-    document.getElementById("review-rule").textContent = "(disagreement above " + r.threshold + ")";
-    var rows = r.items || [];
-    document.getElementById("review-rows").innerHTML = rows.length ? rows.map(function (x) {
-      var p = x.parts || {};
-      var why = [];
-      if ((p.structure || p.rules) > 0) why.push("structure " + (p.structure != null ? p.structure : p.rules));
-      if ((p.wrong_info || p.claims) > 0) why.push("wrong info " + (p.wrong_info != null ? p.wrong_info : p.claims));
-      if (p.judge > 0) why.push("judge " + p.judge);
-      var failed = (x.failed_checks || []).length ? '<div class="muted small">failed: ' + E(x.failed_checks.join(", ")) + "</div>" : "";
-      return "<tr><td class='muted'>" + E(dash.when(x.created_at)) + '</td><td><a href="draft.html?id=' + E(x.id) + '">' + E(x.domain) +
-        "</a></td><td>" + pill(Math.round(x.score) + "/100", "warn") + "</td><td class='small'>" + E(why.join(", ") || "-") + failed +
-        "</td><td>" + E(x.subject || "-") + '</td><td style="white-space:nowrap"><button class="btn" data-run="' + E(x.id) +
-        '" data-action="kept">Kept</button> <button class="btn" data-run="' + E(x.id) + '" data-action="rewritten">Rewritten</button></td></tr>';
-    }).join("") : '<tr><td colspan="6" class="empty">Nothing to review - every draft is at or below ' + E(r.threshold) + ".</td></tr>";
-  }
-
-  function renderTiles(m) {
-    var c = m.conversations || {}, q = m.quality || {}, t = m.tokens || {};
-    var box = document.getElementById("tiles");
-    box.innerHTML = "";
-    var pctFmt = function (x) { return x == null ? "-" : Math.round(x * 100) + "%"; };
-    var intFmt = function (x) { return x == null ? "-" : Math.round(x).toLocaleString("en-GB"); };
-    box.appendChild(tile("Engagement rate", m.engagement_rate, pctFmt, (c.replied || 0) + " of " + (c.started || 0) + " conversations replied (yes or no)", m.engagement_rate || 0));
-    box.appendChild(tile("Booking rate", m.booking_rate, pctFmt, (c.booked || 0) + " booked of " + (c.positive || 0) + " positive replies", m.booking_rate || 0));
-    box.appendChild(tile("Meetings booked", c.booked || 0, intFmt, (c.awaiting || 0) + " conversation(s) still open"));
-    box.appendChild(tile("Replies", (c.positive || 0) + (c.negative || 0), intFmt, (c.positive || 0) + " positive, " + (c.negative || 0) + " negative"));
-    box.appendChild(tile("No reply", c.non_respondent || 0, intFmt, (c.followups || 0) + " follow-ups sent in total"));
-    box.appendChild(tile("Email quality", q.avg_quality, pctFmt, "average structure checks passed", q.avg_quality || 0));
-    box.appendChild(disagreementTile(m.disagreement || {}));
-    var rq = (m.disagreement || {}).review_queue || 0;
-    var rt = tile("Needs review", rq, intFmt, "drafts above " + ((m.disagreement || {}).threshold || 20) + " not yet reviewed");
-    if (rq > 0) rt.classList.add("alert");
-    rt.style.cursor = "pointer";
-    rt.addEventListener("click", function () { location.hash = "#review"; });
-    box.appendChild(rt);
-    box.appendChild(tile("Tokens used", (t.input || 0) + (t.output || 0), intFmt,
-      "est. $" + (t.est_cost_usd || 0).toFixed(4) + " (" + intFmt(t.input) + " in / " + intFmt(t.output) + " out)"));
-    box.appendChild(tile("Pipeline", (m.pipeline || {}).companies || 0, intFmt, (m.contacts || 0) + " contact(s), " + ((m.feedback || {}).lessons || 0) + " lessons learnt"));
-  }
-
-  function renderPipeline() {
-    var counts = {}, all = pipelineRows.length;
-    pipelineRows.forEach(function (r) { counts[r.stage] = (counts[r.stage] || 0) + 1; });
-    var chips = ['<button class="chip ' + (stageFilter === "All" ? "on" : "") + '" data-stage="All">All<b>' + all + "</b></button>"];
-    Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).forEach(function (s) {
-      chips.push('<button class="chip ' + (stageFilter === s ? "on" : "") + '" data-stage="' + E(s) + '">' + E(s) + "<b>" + counts[s] + "</b></button>");
-    });
-    document.getElementById("stage-chips").innerHTML = chips.join("");
-    document.getElementById("pipe-count").textContent = all + " companies researched";
-    var rows = pipelineRows.filter(function (r) { return stageFilter === "All" || r.stage === stageFilter; });
-    document.getElementById("pipe-rows").innerHTML = rows.length ? rows.map(function (r) {
-      return "<tr><td><b>" + E(r.company) + '</b><div class="muted small">' + E(r.domain) + "</div></td><td>" +
-        pill(r.stage, STAGE_PILL[r.stage]) + "</td><td class='small'>" + E(r.reason || r.decision || "-") + "</td><td>" + E(r.fit_score == null ? "-" : r.fit_score) +
-        "</td><td class='muted'>" + E(dash.when(r.last_activity)) + "</td></tr>";
-    }).join("") : '<tr><td colspan="5" class="empty">No companies at this stage.</td></tr>';
-  }
-
-  function renderContacts() {
-    var q = (document.getElementById("contact-search").value || "").toLowerCase();
-    var rows = contacts.filter(function (c) {
-      return !q || [c.contact_name, c.company, c.domain, c.status, c.title].join(" ").toLowerCase().indexOf(q) >= 0;
-    });
-    document.getElementById("contact-rows").innerHTML = rows.length ? rows.map(function (c) {
-      var label = STATUS_LABEL[c.status] || c.status;
-      return "<tr><td><b>" + E(c.contact_name || "-") + '</b><div class="muted small">' + E(c.contact_email) + "</div></td><td>" +
-        E(c.company || c.domain) + "</td><td>" + E(c.title || "-") + "</td><td>" + pill(label, STAGE_PILL[label]) + "</td><td>" +
-        E(c.followups_sent) + " / 3</td><td>" + E(c.last_outcome || "-") + "</td><td class='muted'>" + E(dash.when(c.updated_at)) + "</td></tr>";
-    }).join("") : '<tr><td colspan="7" class="empty">' + (contacts.length ? "No match." : "No contacts yet.") + "</td></tr>";
-  }
-
-  function renderKinds(kinds) {
-    var box = document.getElementById("email-kinds");
-    if (!kinds.length) { box.innerHTML = '<div class="empty">No emails logged yet - tracking starts with the next conversation.</div>'; return; }
-    var max = Math.max.apply(null, kinds.map(function (k) { return k.n; }));
-    box.innerHTML = kinds.map(function (k) {
-      return '<div class="hbar"><span>' + E(KIND_NAMES[k.kind] || k.kind) + '</span><div class="track"><span data-w="' +
-        Math.round(k.n / max * 100) + '"></span></div><b>' + E(k.n) + "</b></div>";
-    }).join("");
-    setTimeout(function () { box.querySelectorAll(".track span").forEach(function (s) { s.style.width = s.dataset.w + "%"; }); }, 30);
-  }
-
-  function renderTokens(t) {
-    document.getElementById("price-note").textContent = "est. at $" + t.price_per_m.input + " / $" + t.price_per_m.output + " per 1M tokens in / out";
-    var rows = t.by_purpose || [];
-    document.getElementById("token-rows").innerHTML = rows.length ? rows.map(function (u) {
-      return "<tr><td>" + E(STEP_NAMES[u.purpose] || u.purpose) + "</td><td>" + dash.num(u.calls) + "</td><td>" + dash.num(u.input_tokens) +
-        "</td><td>" + dash.num(u.output_tokens) + "</td><td>$" + u.est_cost_usd.toFixed(4) + "</td></tr>";
-    }).join("") + "<tr><td><b>Total</b></td><td></td><td><b>" + dash.num(t.input) + "</b></td><td><b>" + dash.num(t.output) +
-      "</b></td><td><b>$" + t.est_cost_usd.toFixed(4) + "</b></td></tr>"
-      : '<tr><td colspan="5" class="empty">No usage recorded yet - tracking starts with the next run.</td></tr>';
-  }
-
-  function renderFeedback(f) {
-    var box = document.getElementById("lessons");
-    box.innerHTML = f.lessons.length ? f.lessons.map(function (l, i) {
-      var w = Math.round(l.outcome_score * 100);
-      return '<div class="lesson"><div class="meta"><b>#' + (i + 1) + "</b>" + pill(l.scope) + pill(l.source, "soft") +
-        (l.outcome ? pill(l.outcome, "soft") : "") + (l.active ? "" : pill("inactive", "warn")) +
-        '<span class="score"><span class="track"><span style="width:' + w + '%"></span></span>' + l.outcome_score.toFixed(2) + "</span></div>" +
-        E(l.guidance) + "</div>";
-    }).join("") : '<div class="empty">No lessons yet. They are added automatically when conversations end, or with <code>python feedback.py add "..."</code>.</div>';
-    document.getElementById("exemplar-rows").innerHTML = f.exemplars.length ? f.exemplars.map(function (e) {
-      return "<tr><td>" + E(e.domain) + "</td><td>" + E(e.role || "-") + "</td><td>" + E(e.subject) + "</td><td>" + pill(e.outcome) +
-        "</td><td>" + Number(e.outcome_score).toFixed(2) + "</td></tr>";
-    }).join("") : '<tr><td colspan="5" class="empty">None yet - emails that earn a positive reply are saved here.</td></tr>';
-  }
-
-  function renderRuns(rows) {
-    document.getElementById("run-rows").innerHTML = rows.length ? rows.slice(0, 40).map(function (r) {
-      var d = r.disagreement_score == null ? '<span class="muted">-</span>' : E(r.disagreement_score) + "/100";
-      return "<tr><td class='muted'>" + E(dash.when(r.created_at)) + '</td><td><a href="draft.html?id=' + E(r.id) + '">' + E(r.domain) +
-        "</a></td><td>" + pill(r.decision || "-", "soft") + "</td><td>" + E(r.score == null ? "-" : r.score) + "</td><td>" + d +
-        "</td><td>" + E(r.subject || "-") + "</td><td class='muted small'>" + E(r.status || "-") + "</td></tr>";
-    }).join("") : '<tr><td colspan="7" class="empty">No runs yet.</td></tr>';
-  }
-
-  var PAGES = { overview: "Overview", pipeline: "Pipeline", contacts: "Contacts", review: "Review",
-                emails: "Emails", learning: "Learning", costs: "Costs" };
+  // ---------- routing ----------
   function route() {
     var p = (location.hash || "#overview").slice(1);
     if (!PAGES[p]) p = "overview";
     document.querySelectorAll(".page").forEach(function (el) { el.hidden = el.dataset.page !== p; });
-    document.getElementById("page-title").textContent = PAGES[p];
+    document.getElementById("page-title").textContent = PAGES[p][0];
+    document.getElementById("page-sub").textContent = PAGES[p][1];
     dash.nav(p);
     window.scrollTo(0, 0);
   }
   window.addEventListener("hashchange", route);
 
-  function fmtTrend(v, fmt) {
-    if (v == null) return "-";
-    if (fmt === "pct") return Math.round(v * 100) + "%";
-    if (fmt === "score") return Math.round(v) + "/100";
-    if (fmt === "usd") return "$" + Number(v).toFixed(4);
-    return Math.round(v).toLocaleString("en-GB");
+  // ---------- overview ----------
+  function tile(label, value, fmt, sub, ratio, href) {
+    var el = document.createElement(href ? "a" : "div");
+    el.className = "glass lift tile";
+    if (href) { el.href = href; el.style.color = "inherit"; el.style.textDecoration = "none"; }
+    el.innerHTML = '<div class="label">' + E(label) + '</div><div class="value">-</div><div class="sub">' + E(sub || "") + "</div>" +
+      (ratio != null ? '<div class="bar"><span></span></div>' : "");
+    dash.countUp(el.querySelector(".value"), value, fmt);
+    if (ratio != null) setTimeout(function () { el.querySelector(".bar span").style.width = Math.round(Math.min(1, ratio) * 100) + "%"; }, 30);
+    return el;
   }
 
-  function renderOverview(ins) {
+  var DIS_VIEWS = [["all", "All"], ["wrong", "Gone wrong"], ["flagged", "Above threshold"], ["bad_outcome", "Declined / no reply"], ["rewritten", "Rewritten"]];
+  var DIS_HELP = { all: "every draft", wrong: "above threshold, declined / no reply, or rewritten", flagged: "above the review threshold",
+                   bad_outcome: "conversation ended badly", rewritten: "drafts you marked rewritten" };
+  function disagreementTile(d) {
+    var el = document.createElement("div");
+    el.className = "glass lift tile";
+    function draw() {
+      var v = d[state.disView] || {};
+      el.innerHTML = '<div class="label">Average disagreement</div><div class="value">-</div><div class="sub">' +
+        E(v.n ? v.n + " draft(s), " + DIS_HELP[state.disView] : "no drafts in this group yet") + '</div><div class="bar"><span></span></div>' +
+        '<div class="seg">' + DIS_VIEWS.map(function (o) { return '<button data-v="' + o[0] + '" class="' + (o[0] === state.disView ? "on" : "") + '">' + E(o[1]) + "</button>"; }).join("") + "</div>";
+      dash.countUp(el.querySelector(".value"), v.avg, function (x) { return x == null ? "-" : Math.round(x) + "/100"; });
+      setTimeout(function () { el.querySelector(".bar span").style.width = (v.avg == null ? 0 : Math.round(v.avg)) + "%"; }, 30);
+    }
+    el.addEventListener("click", function (ev) {
+      var b = ev.target.closest(".seg button");
+      if (!b) return;
+      state.disView = b.dataset.v;
+      try { sessionStorage.setItem("disView", state.disView); } catch (e) {}
+      draw();
+    });
+    draw();
+    return el;
+  }
+
+  function renderOverview(m, ins) {
+    var c = m.conversations || {}, t = m.tokens || {}, d = m.disagreement || {};
+    var box = document.getElementById("tiles");
+    box.innerHTML = "";
+    box.appendChild(tile("Engagement rate", m.engagement_rate, pctFmt, (c.replied || 0) + " of " + (c.started || 0) + " conversations got a reply", m.engagement_rate || 0, "#contacts"));
+    box.appendChild(tile("Booking rate", m.booking_rate, pctFmt, (c.booked || 0) + " meetings from " + (c.positive || 0) + " positive replies", m.booking_rate || 0, "#contacts"));
+    var rt = tile("Needs review", d.review_queue || 0, intFmt, "drafts above " + (d.threshold || 20), null, "#review");
+    if (d.review_queue) rt.classList.add("alert");
+    box.appendChild(rt);
+    box.appendChild(disagreementTile(d));
+    box.appendChild(tile("Model cost", t.est_cost_inr, function (x) { return dash.inr(x); },
+      intFmt((t.input || 0) + (t.output || 0)) + " tokens so far", null, "#costs"));
+    box.appendChild(tile("Companies", (m.pipeline || {}).companies || 0, intFmt, (m.contacts || 0) + " contacted, " + ((m.feedback || {}).lessons || 0) + " lessons learnt", null, "#pipeline"));
+
     var todo = ins.todo || [];
     document.getElementById("todo-count").textContent = todo.length ? todo.length + " item(s)" : "";
-    document.getElementById("todo").innerHTML = todo.length ? todo.map(function (t) {
-      return '<a class="todo-item ' + E(t.severity) + '" href="' + E(t.link || "#") + '"><span class="sev"></span><div><b>' + E(t.title) +
-        '</b><div class="muted small">' + E(t.detail || "") + "</div></div></a>";
+    document.getElementById("todo").innerHTML = todo.length ? todo.map(function (x) {
+      return '<a class="todo-item ' + E(x.severity) + '" href="' + E(x.link || "#") + '"><span class="sev"></span><div><b>' + E(x.title) +
+        '</b><div class="muted small">' + E(x.detail || "") + "</div></div></a>";
     }).join("") : '<div class="empty">Nothing needs you right now.</div>';
     document.getElementById("highlights").innerHTML = (ins.highlights || []).map(function (h) { return "<li>" + E(h) + "</li>"; }).join("") ||
       '<li class="muted">No activity in the last 7 days.</li>';
     document.getElementById("dormant-certs").innerHTML = (ins.dormant_certs || []).length ?
-      '<span class="muted small" style="align-self:center">Why companies are dormant:</span>' + ins.dormant_certs.map(function (c) {
-        return '<span class="pill soft">' + E(c.cert) + " &middot; " + E(c.n) + "</span>"; }).join("") : "";
-    document.getElementById("trend-rows").innerHTML = (ins.trends || []).map(function (t) {
-      var change = t.delta == null ? '<span class="muted">-</span>' : (t.delta === 0 ? '<span class="muted">no change</span>' :
-        '<span class="' + (t.better ? "up" : "down") + '">' + (t.delta > 0 ? "&#9650; " : "&#9660; ") +
-        E(fmtTrend(Math.abs(t.delta), t.fmt)) + "</span>");
-      return "<tr><td>" + E(t.label) + "</td><td><b>" + E(fmtTrend(t.current, t.fmt)) + "</b></td><td class='muted'>" +
-        E(fmtTrend(t.previous, t.fmt)) + "</td><td>" + change + "</td></tr>";
+      '<span class="muted small" style="align-self:center">Dormant because they already hold:</span>' +
+      ins.dormant_certs.map(function (x) { return pill(x.cert + " · " + x.n, "soft"); }).join("") : "";
+    var fmtT = function (v, f) {
+      if (v == null) return "-";
+      if (f === "pct") return Math.round(v * 100) + "%";
+      if (f === "score") return Math.round(v) + "/100";
+      if (f === "inr") return dash.inr(v);
+      return Math.round(v).toLocaleString("en-IN");
+    };
+    document.getElementById("trend-rows").innerHTML = (ins.trends || []).map(function (x) {
+      var ch = x.delta == null ? '<span class="muted">-</span>' : x.delta === 0 ? '<span class="muted">no change</span>' :
+        '<span class="' + (x.better ? "up" : "down") + '">' + (x.delta > 0 ? "▲ " : "▼ ") + E(fmtT(Math.abs(x.delta), x.fmt)) + "</span>";
+      return "<tr><td>" + E(x.label) + "</td><td><b>" + E(fmtT(x.current, x.fmt)) + "</b></td><td class='muted'>" + E(fmtT(x.previous, x.fmt)) + "</td><td>" + ch + "</td></tr>";
     }).join("");
   }
 
+  // ---------- pipeline ----------
+  function renderPipeline() {
+    var counts = {}, rows = state.pipeline;
+    rows.forEach(function (r) { counts[r.stage] = (counts[r.stage] || 0) + 1; });
+    var chips = ['<button class="chip ' + (state.stage === "All" ? "on" : "") + '" data-stage="All">All<b>' + rows.length + "</b></button>"];
+    Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a]; }).forEach(function (s) {
+      chips.push('<button class="chip ' + (state.stage === s ? "on" : "") + '" data-stage="' + E(s) + '">' + E(s) + "<b>" + counts[s] + "</b></button>");
+    });
+    document.getElementById("stage-chips").innerHTML = chips.join("");
+    var shown = rows.filter(function (r) { return state.stage === "All" || r.stage === state.stage; });
+    document.getElementById("pipe-rows").innerHTML = shown.length ? shown.map(function (r) {
+      return "<tr><td><b>" + E(r.company) + '</b><div class="muted small">' + E(r.domain) + "</div></td><td>" + pill(r.stage, STAGE_PILL[r.stage]) +
+        "</td><td class='small'>" + E(r.reason || "-") + "</td><td>" + E(r.fit_score == null ? "-" : r.fit_score) +
+        "</td><td class='muted small'>" + E(dash.when(r.last_activity)) + "</td></tr>";
+    }).join("") : '<tr><td colspan="5" class="empty">No companies at this stage.</td></tr>';
+  }
+
+  // ---------- contacts ----------
+  function renderContacts(m) {
+    var c = m.conversations || {};
+    document.getElementById("contact-stats").innerHTML = stat(c.started || 0, "conversations") + stat(c.positive || 0, "positive replies") +
+      stat(c.negative || 0, "declined") + stat(c.non_respondent || 0, "no response") + stat(c.followups || 0, "follow-ups sent") + stat(c.awaiting || 0, "open now");
+    var q = (document.getElementById("contact-search").value || "").toLowerCase();
+    var rows = state.contacts.filter(function (x) { return !q || [x.contact_name, x.company, x.domain, x.status, x.title].join(" ").toLowerCase().indexOf(q) >= 0; });
+    document.getElementById("contact-rows").innerHTML = rows.length ? rows.map(function (x) {
+      var label = STATUS_LABEL[x.status] || x.status;
+      return "<tr><td><b>" + E(x.contact_name || "-") + '</b><div class="muted small">' + E(x.contact_email) + "</div></td><td>" + E(x.company || x.domain) +
+        "</td><td class='small'>" + E(x.title || "-") + "</td><td>" + pill(label, STAGE_PILL[label]) + "</td><td>" + E(x.followups_sent) +
+        " / 3</td><td class='muted small'>" + E(dash.when(x.updated_at)) + "</td></tr>";
+    }).join("") : '<tr><td colspan="6" class="empty">' + (state.contacts.length ? "No match." : "No contacts yet.") + "</td></tr>";
+  }
+
+  // ---------- emails: one card per company ----------
+  function renderEmails(m, runs) {
+    var drafts = runs.filter(function (r) { return r.subject; });
+    var q = m.quality || {};
+    var sent = (m.emails_by_kind || []).filter(function (k) { return k.kind !== "reply"; }).reduce(function (a, k) { return a + k.n; }, 0);
+    document.getElementById("email-stats").innerHTML = stat(drafts.length, "drafts written") + stat(sent, "emails sent (logged)") +
+      stat(q.avg_quality == null ? "-" : Math.round(q.avg_quality * 100) + "%", "quality checks passed") +
+      (m.emails_by_kind || []).filter(function (k) { return k.kind !== "cold"; }).map(function (k) { return stat(k.n, (KIND_NAMES[k.kind] || k.kind).toLowerCase()); }).join("");
+    var byDomain = {}, order = [];
+    drafts.forEach(function (r) { if (!byDomain[r.domain]) { byDomain[r.domain] = []; order.push(r.domain); } byDomain[r.domain].push(r); });
+    document.getElementById("email-cards").innerHTML = order.length ? order.map(function (dom) {
+      var list = byDomain[dom], r = list[0], older = list.slice(1);
+      var score = r.disagreement_score == null ? "" : pill(r.disagreement_score + "/100", Number(r.disagreement_score) > Number(m.disagreement.threshold) ? "warn" : "soft");
+      return '<div class="glass lift company-card"><div class="head"><div><b>' + E(dom) + '</b> <span class="muted small">' + E(dash.when(r.created_at)) +
+        "</span></div><div>" + score + " " + dash.statusPills(r.status) + '</div></div><div class="subject"><a href="draft.html?id=' + E(r.id) + '">' + E(r.subject) +
+        "</a></div>" + (older.length ? "<details><summary>" + older.length + " earlier version" + (older.length > 1 ? "s" : "") + '</summary><div class="versions">' +
+        older.map(function (o) {
+          return '<a href="draft.html?id=' + E(o.id) + '"><span class="muted">' + E(dash.when(o.created_at)) + "</span><span>" + E(o.subject) + "</span><span>" +
+            (o.disagreement_score == null ? "" : E(o.disagreement_score) + "/100") + "</span></a>";
+        }).join("") + "</div></details>" : "") + "</div>";
+    }).join("") : '<div class="empty">No drafts yet.</div>';
+  }
+
+  // ---------- review ----------
+  function renderReview(r) {
+    document.getElementById("review-rule").textContent = r.threshold;
+    var rows = r.items || [];
+    document.getElementById("review-rows").innerHTML = rows.length ? rows.map(function (x) {
+      var p = x.parts || {}, why = [];
+      if ((p.structure || p.rules) > 0) why.push("structure " + (p.structure != null ? p.structure : p.rules));
+      if ((p.wrong_info || p.claims) > 0) why.push("wrong info " + (p.wrong_info != null ? p.wrong_info : p.claims));
+      if (p.judge > 0) why.push("judge " + p.judge);
+      return "<tr><td class='muted small'>" + E(dash.when(x.created_at)) + "</td><td>" + E(x.domain) + "</td><td>" + pill(Math.round(x.score) + "/100", "warn") +
+        "</td><td class='small'>" + E(why.join(", ") || "-") + "</td><td>" + E(x.subject || "-") + '</td><td style="white-space:nowrap">' +
+        '<a class="btn primary" href="draft.html?id=' + E(x.id) + '#feedback">Feedback &amp; redraft</a> <button class="btn" data-run="' + E(x.id) +
+        '" data-action="kept">Kept</button> <button class="btn" data-run="' + E(x.id) + '" data-action="rewritten">Rewritten</button></td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty">Nothing to review - every draft is at or below ' + E(r.threshold) + ".</td></tr>";
+    dash.navBadge("review", rows.length);
+  }
+
+  // ---------- learning ----------
+  function renderFeedback(f) {
+    document.getElementById("lessons").innerHTML = f.lessons.length ? f.lessons.map(function (l, i) {
+      var w = Math.round(l.outcome_score * 100);
+      return '<div class="lesson"><div class="meta"><b>#' + (i + 1) + "</b>" + pill(l.scope) + pill(l.source === "human" ? "you" : "learnt", "soft") +
+        (l.outcome ? pill(l.outcome, "soft") : "") + '<span class="score"><span class="track"><span style="width:' + w + '%"></span></span>' +
+        Number(l.outcome_score).toFixed(2) + "</span></div>" + E(l.guidance) + "</div>";
+    }).join("") : '<div class="empty">No feedback yet. Add some above, or it will be learnt as conversations end.</div>';
+    document.getElementById("exemplar-rows").innerHTML = f.exemplars.length ? f.exemplars.map(function (e) {
+      return "<tr><td>" + E(e.domain) + "</td><td>" + E(e.role || "-") + "</td><td>" + E(e.subject) + "</td><td>" + pill(e.outcome) + "</td><td>" + Number(e.outcome_score).toFixed(2) + "</td></tr>";
+    }).join("") : '<tr><td colspan="5" class="empty">None yet - emails that earn a positive reply are saved here.</td></tr>';
+  }
+
+  // ---------- costs ----------
+  function renderCosts(t) {
+    document.getElementById("cost-stats").innerHTML = stat(dash.inr(t.est_cost_inr), "total model cost") +
+      stat("$" + Number(t.est_cost_usd || 0).toFixed(4), "in US dollars") + stat(intFmt((t.input || 0) + (t.output || 0)), "tokens");
+    document.getElementById("price-note").textContent = "estimated at $" + t.price_per_m.input + " / $" + t.price_per_m.output +
+      " per 1M tokens in / out, ₹" + t.usd_inr + " per $";
+    var rows = t.by_purpose || [];
+    document.getElementById("token-rows").innerHTML = rows.length ? rows.map(function (u) {
+      return "<tr><td>" + E(STEP_NAMES[u.purpose] || u.purpose) + "</td><td>" + intFmt(u.calls) + "</td><td><b>" + dash.inr(u.est_cost_inr) + "</b></td><td class='muted'>$" +
+        u.est_cost_usd.toFixed(4) + "</td><td class='muted'>" + intFmt(u.input_tokens + u.output_tokens) + "</td></tr>";
+    }).join("") : '<tr><td colspan="5" class="empty">No usage recorded yet.</td></tr>';
+  }
+
+  // ---------- load ----------
+  var last = {};
   function load() {
     document.getElementById("error").textContent = "";
     Promise.all([dash.api("/api/metrics"), dash.api("/api/contacts"), dash.api("/api/feedback"), dash.api("/api/runs"),
                  dash.api("/api/review"), dash.api("/api/insights")])
       .then(function (r) {
-        var m = r[0];
-        renderTiles(m);
-        pipelineRows = (m.pipeline || {}).rows || [];
+        last = { m: r[0], runs: r[3] };
+        renderOverview(r[0], r[5]);
+        state.pipeline = (r[0].pipeline || {}).rows || [];
         renderPipeline();
-        contacts = r[1];
-        renderContacts();
-        renderKinds(m.emails_by_kind || []);
-        renderTokens(m.tokens);
-        renderFeedback(r[2]);
-        renderRuns(r[3]);
+        state.contacts = r[1];
+        renderContacts(r[0]);
+        renderEmails(r[0], r[3]);
         renderReview(r[4]);
-        renderOverview(r[5]);
-        dash.navBadge("review", (r[4].items || []).length);
+        renderFeedback(r[2]);
+        renderCosts(r[0].tokens);
         document.getElementById("updated").textContent = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
       })
       .catch(function (e) { document.getElementById("error").textContent = e.message; });
@@ -384,10 +375,10 @@
   document.getElementById("stage-chips").addEventListener("click", function (ev) {
     var b = ev.target.closest(".chip");
     if (!b) return;
-    stageFilter = b.dataset.stage;
+    state.stage = b.dataset.stage;
     renderPipeline();
   });
-  document.getElementById("contact-search").addEventListener("input", renderContacts);
+  document.getElementById("contact-search").addEventListener("input", function () { if (last.m) renderContacts(last.m); });
   document.getElementById("review-rows").addEventListener("click", function (ev) {
     var b = ev.target.closest("button[data-run]");
     if (!b) return;
@@ -395,6 +386,16 @@
     dash.api("/api/review", { method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ run_id: Number(b.dataset.run), action: b.dataset.action }) })
       .then(load).catch(function (e) { document.getElementById("error").textContent = e.message; b.disabled = false; });
+  });
+  document.getElementById("fb-save").addEventListener("click", function () {
+    var note = document.getElementById("fb-note");
+    var text = document.getElementById("fb-text").value.trim();
+    if (text.length < 5) { note.textContent = "Write at least a few words."; note.className = "note small bad"; return; }
+    dash.api("/api/feedback", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ guidance: text, scope: document.getElementById("fb-scope").value, score: Number(document.getElementById("fb-score").value) }) })
+      .then(function (r) { note.textContent = "Saved as #" + r.id + ". It will be used from the next draft."; note.className = "note small ok";
+                           document.getElementById("fb-text").value = ""; load(); })
+      .catch(function (e) { note.textContent = e.message; note.className = "note small bad"; });
   });
   document.getElementById("refresh").addEventListener("click", load);
   route();

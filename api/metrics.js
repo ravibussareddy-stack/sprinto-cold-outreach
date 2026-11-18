@@ -6,6 +6,8 @@ const rubric = require("../lib/rubric");
 // Booking rate    = meetings booked / conversations with a positive reply.
 const PRICE_IN = parseFloat(process.env.GEMINI_PRICE_INPUT_PER_M || "0.30");
 const PRICE_OUT = parseFloat(process.env.GEMINI_PRICE_OUTPUT_PER_M || "2.50");
+// Costs are shown in INR. Assumed rate; set USD_INR in Vercel to the current one.
+const USD_INR = parseFloat(process.env.USD_INR || "88");
 
 const STAGE_BY_CONTACT = {
   meeting_booked: "Meeting booked", engaged: "Engaged", contacted: "Contacted",
@@ -112,11 +114,12 @@ module.exports = async (req, res) => {
         bad_outcome: { avg: n(quality.avg_bad), n: quality.bad_n || 0 },
         rewritten: { avg: n(quality.avg_rewritten), n: quality.rewritten_n || 0 },
       },
-      tokens: { input: tin, output: tout, est_cost_usd: cost(tin, tout),
-                price_per_m: { input: PRICE_IN, output: PRICE_OUT },
+      tokens: { input: tin, output: tout, est_cost_usd: cost(tin, tout), est_cost_inr: cost(tin, tout) * USD_INR,
+                usd_inr: USD_INR, price_per_m: { input: PRICE_IN, output: PRICE_OUT },
                 by_purpose: usage.map((u) => ({ ...u, input_tokens: Number(u.input_tokens),
                   output_tokens: Number(u.output_tokens),
-                  est_cost_usd: cost(Number(u.input_tokens), Number(u.output_tokens)) })) },
+                  est_cost_usd: cost(Number(u.input_tokens), Number(u.output_tokens)),
+                  est_cost_inr: cost(Number(u.input_tokens), Number(u.output_tokens)) * USD_INR })) },
       pipeline: { companies: pipeline.length, by_stage: stageCounts, rows: pipeline },
       contacts: contacts.length,
       feedback: fb,

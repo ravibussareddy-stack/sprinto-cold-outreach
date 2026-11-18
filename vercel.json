@@ -3,6 +3,11 @@
   "framework": null,
   "outputDirectory": "public",
   "functions": {
-    "api/run_case.py": { "maxDuration": 300 }
+    "api/run_case.py": {
+      "maxDuration": 300
+    },
+    "api/redraft.py": {
+      "maxDuration": 120
+    }
   }
 }
