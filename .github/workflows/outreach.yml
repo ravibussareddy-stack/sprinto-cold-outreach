@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: outreach-run
+  group: outreach
   cancel-in-progress: false
 
 jobs:
@@ -38,6 +38,7 @@ jobs:
       CALENDLY_TOKEN: ${{ secrets.CALENDLY_TOKEN }}
       SENDER_NAME: ${{ vars.SENDER_NAME || 'Growth Team, Sprinto' }}
       USE_JINA_FALLBACK: "1"
+      REPLY_MODE: gmail
       SLOT_TIMEZONE: Asia/Kolkata
       INPUT_DOMAINS: ${{ inputs.domains }}
       INPUT_SEND: ${{ inputs.send }}

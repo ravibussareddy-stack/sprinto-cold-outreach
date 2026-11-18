@@ -23,7 +23,7 @@ SENT = []
 CRM = []
 
 
-def fake_send(subject, body, name, email, attachment=None):
+def fake_send(subject, body, name, email, attachment=None, in_reply_to=None):
     SENT.append((subject, attachment is not None))
     return config.SEND_TO
 
@@ -139,7 +139,7 @@ def test_permanent_booking_failure_aborts_with_escalation():
     def refused(*a, **k):
         raise PermanentError("invite refused by server")
     real = sender.send
-    sender.send = lambda subject, body, name, email, attachment=None: (
+    sender.send = lambda subject, body, name, email, attachment=None, in_reply_to=None: (
         refused() if attachment else real(subject, body, name, email, attachment))
     try:
         s = run_case([("interested", None), ("confirms_time", 0)], ["yes", "ok"], do_send=True)

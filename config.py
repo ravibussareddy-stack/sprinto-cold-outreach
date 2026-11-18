@@ -67,6 +67,11 @@ CALENDLY_TOKEN = os.getenv("CALENDLY_TOKEN", "")
 # Prospect replies are read from REPLIES_DIR/<domain>.txt, one reply per block,
 # blocks separated by a line containing only ---.
 REPLIES_DIR = os.getenv("REPLIES_DIR", "replies")
+# Where replies come from:
+#   file  - REPLIES_DIR/<domain>.txt, read in the same run (tests and demos)
+#   gmail - real replies in your inbox over IMAP; the conversation is saved in Neon
+#           and check_replies.py continues it whenever a reply arrives
+REPLY_MODE = os.getenv("REPLY_MODE", "file")
 FOLLOWUP_HOURS = 48                # no reply within this window -> hand off
 MAX_REPLY_ROUNDS = 2               # counter-proposals before escalating
 

@@ -23,12 +23,16 @@ Retry table (per tool, decided before the build):
     book_meeting    transient -> retry 3x; permanent (invite refused) -> abort
     update_crm      transient -> retry 3x (inside crm.py); still failing -> log by hand
 
-Replies only reach this code as files (see replies.py), because the To: address is always
-your own inbox. Dry runs (no --send) skip every outbound action but walk the same flow.
+Replies reach this code in one of two ways (REPLY_MODE):
+    file  - run(): all replies from REPLIES_DIR/<domain>.txt in one go (tests and demos)
+    gmail - start() after the cold email, then check_replies.py calls resume() for each
+            real reply found in your inbox (inbox.py). Checkpoints are kept in Neon.
+Dry runs (no --send) skip every outbound action but walk the same flow.
 """
 import datetime as dt
 import operator
 import uuid
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from typing import Annotated, TypedDict
 
@@ -69,6 +73,8 @@ class Ctx:
     sender_name: str
     do_send: bool
     log: callable = print
+    subject: str = ""                     # cold email subject; follow-ups reply in that thread
+    in_reply_to: str | None = None        # Message-ID of the reply being answered (Gmail mode)
 
 
 class Sched(TypedDict):
@@ -191,8 +197,10 @@ def build_graph(ctx: Ctx) -> StateGraph:
         ctx.log(f"  proposed: {', '.join(_fmt(x) for x in slots)}")
         if not ctx.do_send:
             return {"meeting_status": "pending_confirmation", "trace": ["send_email: dry run, not sent"]}
+        subject = f"Re: {ctx.subject}" if ctx.subject else "Re: call times"
         ok, err, line = _attempt("send_email", lambda: sender.send(
-            "Re: call times", _propose_body(first, slots), ctx.contact_name, ctx.contact_email))
+            subject, _propose_body(first, slots), ctx.contact_name, ctx.contact_email,
+            in_reply_to=ctx.in_reply_to))
         if not ok:
             return {"outcome": "escalated_to_growth_lead",
                     "escalation": f"send_email failed: {err}", "trace": [line]}
@@ -209,7 +217,8 @@ def build_graph(ctx: Ctx) -> StateGraph:
             sender.send(f"Invite: 20-min call, {_fmt(slot)}",
                         f"Hi {first},\n\nConfirmed: {_fmt(slot)}. The calendar invite is attached.\n\nSprinto",
                         ctx.contact_name, ctx.contact_email,
-                        attachment=("invite.ics", _ics(ctx, slot), "text", "calendar"))
+                        attachment=("invite.ics", _ics(ctx, slot), "text", "calendar"),
+                        in_reply_to=ctx.in_reply_to)
         ok, err, line = _attempt("book_meeting", _send)
         if not ok:
             return {"outcome": "aborted", "escalation": "book_meeting failed; invite not sent", "trace": [line]}
@@ -289,16 +298,57 @@ def _initial() -> dict:
             "last_reply": None, "intent": "", "chosen_index": None, "trace": []}
 
 
+@contextmanager
+def _saver(persistent: bool):
+    """Neon (Postgres) checkpoints when the conversation must survive between runs
+    (Gmail mode, where a reply can arrive hours later); local SQLite otherwise."""
+    if persistent:
+        from langgraph.checkpoint.postgres import PostgresSaver
+        with PostgresSaver.from_conn_string(config.NEON_DATABASE_URL) as s:
+            s.setup()
+            yield s
+    else:
+        with SqliteSaver.from_conn_string(config.CHECKPOINT_DB) as s:
+            yield s
+
+
+def _snapshot(graph, thread) -> tuple[MeetingState, bool]:
+    snap = graph.get_state(thread)
+    values = snap.values
+    state = MeetingState(**{k: values.get(k) for k in asdict(MeetingState()).keys()})
+    return state, bool(snap.next)                   # True = paused, waiting for the prospect
+
+
+def start(ctx: Ctx, persistent: bool = True) -> tuple[str, MeetingState, bool]:
+    """Begin a conversation after the cold email went out: runs until the first pause."""
+    thread_id = f"{ctx.domain}:{uuid.uuid4().hex[:8]}"
+    thread = {"configurable": {"thread_id": thread_id}}
+    with _saver(persistent) as saver:
+        graph = build_graph(ctx).compile(checkpointer=saver)
+        graph.invoke(_initial(), thread)
+        state, waiting = _snapshot(graph, thread)
+    return thread_id, state, waiting
+
+
+def resume(ctx: Ctx, thread_id: str, reply: str | None, persistent: bool = True) -> tuple[MeetingState, bool]:
+    """Continue a saved conversation with one reply (None = the follow-up window passed)."""
+    thread = {"configurable": {"thread_id": thread_id}}
+    with _saver(persistent) as saver:
+        graph = build_graph(ctx).compile(checkpointer=saver)
+        graph.invoke(Command(resume=reply if reply is not None else {"silence": True}), thread)
+        return _snapshot(graph, thread)
+
+
 def run(ctx: Ctx, reply_blocks: list[str]) -> MeetingState:
-    """Drive the graph with the prospect's replies. Each pause at await_reply takes the next
-    reply; when the list runs out, the graph gets None (silence) and hands off."""
+    """File mode: drive the graph with all replies at once. Each pause at await_reply takes
+    the next reply; when the list runs out, the graph gets silence and hands off."""
     queue = list(reply_blocks)
     thread = {"configurable": {"thread_id": f"{ctx.domain}:{uuid.uuid4().hex[:8]}"}}
-    with SqliteSaver.from_conn_string(config.CHECKPOINT_DB) as saver:
+    with _saver(False) as saver:
         graph = build_graph(ctx).compile(checkpointer=saver)
         graph.invoke(_initial(), thread)
         while graph.get_state(thread).next:          # paused, waiting for the prospect
             reply = queue.pop(0) if queue else {"silence": True}
             graph.invoke(Command(resume=reply), thread)
-        values = graph.get_state(thread).values
-    return MeetingState(**{k: values.get(k) for k in asdict(MeetingState()).keys()})
+        state, _ = _snapshot(graph, thread)
+    return state

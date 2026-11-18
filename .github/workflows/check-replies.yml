@@ -1,0 +1,48 @@
+name: Check replies
+
+# Reads replies in your Gmail inbox and continues each waiting conversation:
+# propose times, send the calendar invite, or hand off. All emails still go
+# only to YOUR OWN inbox (SEND_TO).
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes (GitHub may start it a few minutes late)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: outreach            # never overlaps an outreach run
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GEMINI_API_KEY1: ${{ secrets.GEMINI_API_KEY1 }}
+      GEMINI_API_KEY2: ${{ secrets.GEMINI_API_KEY2 }}
+      GEMINI_API_KEY3: ${{ secrets.GEMINI_API_KEY3 }}
+      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL || secrets.DATABASE_URL }}
+      GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+      SEND_TO: ${{ secrets.SEND_TO }}
+      CALENDLY_TOKEN: ${{ secrets.CALENDLY_TOKEN }}
+      SENDER_NAME: ${{ vars.SENDER_NAME || 'Growth Team, Sprinto' }}
+      SLOT_TIMEZONE: Asia/Kolkata
+      REPLY_MODE: gmail
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check replies
+        run: python check_replies.py

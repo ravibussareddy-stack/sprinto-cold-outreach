@@ -36,7 +36,7 @@ SCENARIOS = {
 SENT, CRM = [], []
 
 
-def fake_send(subject, body, name, email, attachment=None):
+def fake_send(subject, body, name, email, attachment=None, in_reply_to=None):
     SENT.append({"subject": subject, "attachment": bool(attachment)})
     return config.SEND_TO
 

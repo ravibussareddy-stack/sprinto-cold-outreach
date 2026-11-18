@@ -35,6 +35,18 @@ CREATE TABLE IF NOT EXISTS reviews (
     note TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS threads (
+    thread_id TEXT PRIMARY KEY,          -- LangGraph thread (checkpoints live in Neon too)
+    domain TEXT NOT NULL,
+    subject TEXT NOT NULL,               -- cold email subject; replies are matched on it
+    ctx JSONB NOT NULL,                  -- contact, company, sender name
+    status TEXT NOT NULL DEFAULT 'awaiting',   -- awaiting | done
+    outcome TEXT,
+    processed_ids JSONB NOT NULL DEFAULT '[]', -- Message-IDs of replies already handled
+    last_outbound_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS crm_outcomes (
     id BIGSERIAL PRIMARY KEY,
     domain TEXT NOT NULL,
@@ -117,6 +129,33 @@ def save_crm_outcome(domain: str, contact: str, outcome: str, record: dict):
         c.execute(
             "INSERT INTO crm_outcomes (domain, contact, outcome, record) VALUES (%s,%s,%s,%s)",
             (domain, contact, outcome, Json(json.loads(json.dumps(record, default=str)))))
+
+
+# ---- conversations waiting for a reply (check_replies.py) --------------------
+def save_thread(thread_id: str, domain: str, subject: str, ctx: dict):
+    """Raises on DB errors: without this row the reply could never be matched."""
+    _init()
+    with _conn() as c:
+        c.execute("INSERT INTO threads (thread_id, domain, subject, ctx) VALUES (%s,%s,%s,%s)",
+                  (thread_id, domain, subject, Json(ctx)))
+
+
+def awaiting_threads() -> list[dict]:
+    _init()
+    with _conn() as c:
+        cur = c.execute("SELECT thread_id, domain, subject, ctx, processed_ids, last_outbound_at, created_at "
+                        "FROM threads WHERE status = 'awaiting' ORDER BY created_at")
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+def update_thread(thread_id: str, status: str, outcome: str, processed_ids: list[str],
+                  touched_outbound: bool):
+    _init()
+    with _conn() as c:
+        c.execute("UPDATE threads SET status=%s, outcome=%s, processed_ids=%s, updated_at=now()"
+                  + (", last_outbound_at=now()" if touched_outbound else "") + " WHERE thread_id=%s",
+                  (status, outcome, Json(processed_ids), thread_id))
 
 
 def last_run(domain: str) -> dict | None:

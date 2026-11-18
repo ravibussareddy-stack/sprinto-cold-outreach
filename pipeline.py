@@ -118,11 +118,24 @@ def _process(domain, do_send, sender_name, rec, t0):
     if not problems:
         ctx = meeting.Ctx(domain=domain, contact_name=f"{contact['first_name']} {contact['last_name']}",
                           contact_email=contact["email"], company=profile.company_name or domain,
-                          sender_name=sender_name, do_send=do_send, log=log)
-        state = meeting.run(ctx, replies.load_replies(domain))
-        rec["meeting"] = asdict(state)
-        rec["outcome"] = state.outcome
-        rec["status"] += f" | {state.outcome}"
+                          sender_name=sender_name, do_send=do_send, log=log, subject=draft.subject)
+        if config.REPLY_MODE == "gmail" and do_send and db.enabled():
+            # Real replies: save the conversation and let check_replies.py continue it.
+            thread_id, state, _ = meeting.start(ctx)
+            db.save_thread(thread_id, domain, draft.subject,
+                           {"domain": domain, "contact_name": ctx.contact_name,
+                            "contact_email": ctx.contact_email, "company": ctx.company,
+                            "sender_name": sender_name})
+            rec["thread_id"] = thread_id
+            rec["meeting"] = asdict(state)
+            rec["outcome"] = "awaiting_reply"
+            rec["status"] += " | awaiting_reply"
+            log(f"  waiting for a reply in Gmail (thread {thread_id})")
+        else:
+            state = meeting.run(ctx, replies.load_replies(domain))
+            rec["meeting"] = asdict(state)
+            rec["outcome"] = state.outcome
+            rec["status"] += f" | {state.outcome}"
     if q["decision"] == "QUALIFIED_FLAGGED":
         rec["status"] += " (flagged: thin evidence, review before a real send)"
     rec["seconds"] = round(time.time() - t0, 1)
