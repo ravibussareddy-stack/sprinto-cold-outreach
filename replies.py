@@ -25,7 +25,14 @@ class ReplyRead(BaseModel):
     proposed_start: Optional[str] = Field(None, description=(
         "If they name one specific day and time (e.g. 'Tuesday 12pm'), its start as ISO 8601 "
         "with UTC offset, resolved against today's date in the given timezone (the next such "
-        "day in the future). Null if no specific time, or if it is a range or vague ('next week')."))
+        "day in the future). Null if no specific time, if it is a range or vague ('next week'), "
+        "or if the day and date contradict each other."))
+    ambiguity_note: Optional[str] = Field(None, description=(
+        "If they named a time but it is contradictory or unclear, one short plain sentence saying "
+        "why, written to them, e.g. 'the 21st is a Saturday'. Else null."))
+    best_guess_start: Optional[str] = Field(None, description=(
+        "Only when ambiguity_note is set: the most likely intended start as ISO 8601 with UTC "
+        "offset (prefer the named weekday on the date nearest to the one they wrote). Else null."))
 
 
 SYSTEM = """You classify one reply from a prospect to a cold email about SOC 2 / ISO 27001 compliance.
@@ -34,7 +41,10 @@ SYSTEM = """You classify one reply from a prospect to a cold email about SOC 2 /
 - counter_proposes: suggests a time of their own (give proposed_times and proposed_start),
   including a first reply like "Yes, can we do Tuesday at 12pm?"
 - not_interested: declines, unsubscribe, wrong person, no need
-- unclear: anything else, including out-of-office. Never guess."""
+- unclear: anything else, including out-of-office. Never guess.
+If the time they name is contradictory (e.g. "Tuesday the 21st" when the 21st is a Saturday),
+do not pick one silently: leave proposed_start null, explain in ambiguity_note and give
+best_guess_start, so we can ask them to confirm."""
 
 
 def load_replies(domain: str) -> list[str]:

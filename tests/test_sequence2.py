@@ -23,8 +23,12 @@ SENT = []
 CRM = []
 
 
+BODIES = []
+
+
 def fake_send(subject, body, name, email, attachment=None, in_reply_to=None):
     SENT.append((subject, attachment is not None))
+    BODIES.append(body)
     return config.SEND_TO
 
 
@@ -218,3 +222,47 @@ def test_first_reply_with_busy_time_offers_alternatives():
     assert when.isoformat() in s.rejected_slots, s.rejected_slots
     assert s.outcome == "booked" and s.booked_slot != when.isoformat(), (s.outcome, s.trace)
     assert [a for _, a in SENT] == [False, True], SENT   # proposal of alternatives, then the invite
+
+
+
+# ---- replies that name a time we must answer, not ignore ----
+def _scripted(*fns):
+    """classify() stub that answers each reply with the next function in turn."""
+    queue = list(fns)
+    return lambda reply, slots: queue.pop(0)(reply, slots)
+
+
+def _read(**kw):
+    base = dict(intent="counter_proposes", chosen_slot_index=None, proposed_times=["their time"])
+    return lambda reply, slots: ReplyRead(**(base | kw))
+
+
+def test_contradictory_time_asks_to_confirm_then_yes_books_it():
+    guess = _future_noon()
+    config.CALENDAR_BUSY_FILE = make_busy([])
+    replies.classify = _scripted(
+        _read(proposed_times=["12pm tuesday the 21st"], ambiguity_note="the 21st is a Saturday",
+              best_guess_start=guess.isoformat()),
+        _read(intent="confirms_time", chosen_slot_index=0, proposed_times=[]))
+    SENT.clear(); BODIES.clear(); CRM.clear()
+    s = meeting.run(ctx(do_send=True), ["can we do 12pm tuesday the 21st", "yes"])
+    assert s.outcome == "booked" and s.booked_slot == guess.isoformat(), (s.outcome, s.trace)
+    assert "Just to check: the 21st is a Saturday" in BODIES[0] and "Did you mean" in BODIES[0], BODIES[0]
+    assert [a for _, a in SENT] == [False, True], SENT    # the question, then the invite
+
+
+def test_busy_proposed_time_is_acknowledged_before_alternatives():
+    when = _future_noon()
+    config.CALENDAR_BUSY_FILE = make_busy([[when.isoformat(), (when + dt.timedelta(hours=1)).isoformat()]])
+    replies.classify = _scripted(_read(proposed_start=when.isoformat()))
+    SENT.clear(); BODIES.clear(); CRM.clear()
+    meeting.run(ctx(do_send=True), ["can we do tuesday 12pm?"])
+    assert "isn't free on my side" in BODIES[0] and "suit you instead" in BODIES[0], BODIES[0]
+
+
+def test_time_we_cannot_pin_down_is_acknowledged():
+    config.CALENDAR_BUSY_FILE = make_busy([])
+    replies.classify = _scripted(_read(proposed_times=["sometime after the offsite"]))
+    SENT.clear(); BODIES.clear(); CRM.clear()
+    meeting.run(ctx(do_send=True), ["sometime after the offsite?"])
+    assert 'pin down "sometime after the offsite"' in BODIES[0], BODIES[0]

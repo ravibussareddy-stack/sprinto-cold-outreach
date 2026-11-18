@@ -96,12 +96,27 @@ class Sched(TypedDict):
     intent: str
     chosen_index: int | None
     proposed_start: str | None            # a specific time the prospect named (ISO), if any
+    guess_start: str | None               # their time was contradictory: our best guess, to confirm
+    ambiguity_note: str | None            # why it was contradictory, e.g. "the 21st is a Saturday"
+    ack_note: str | None                  # one sentence answering their time, used in the next email
     trace: Annotated[list, operator.add]
 
 
 def _fmt(iso: str) -> str:
-    d = dt.datetime.fromisoformat(iso)
-    return d.strftime("%a %d %b %Y, %H:%M ") + d.tzname()
+    """'Tue 24 Nov, 12:00 IST' - always shown in SLOT_TIMEZONE."""
+    d = dt.datetime.fromisoformat(iso).astimezone(ZoneInfo(config.SLOT_TIMEZONE))
+    return d.strftime("%a %d %b, %H:%M ") + (d.tzname() or "")
+
+
+def _iso(value: str | None) -> str | None:
+    """Normalise a model-written ISO time; None if missing or unreadable."""
+    if not value:
+        return None
+    try:
+        d = dt.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return (d if d.tzinfo else d.replace(tzinfo=ZoneInfo(config.SLOT_TIMEZONE))).isoformat()
 
 
 def _attempt(name: str, fn, attempts: int = 3):
@@ -150,13 +165,23 @@ def _sign_off(sender_name: str) -> str:
     return "Kind regards,\n" + sender_name.replace(", ", "\n")
 
 
-def _propose_body(first: str, slots: list[str], sender_name: str) -> str:
-    lines = [writer.greeting(first), "", "Thank you for coming back to me. Would any of these times "
-             "suit you for a 20-minute call?", ""]
+def _propose_body(first: str, slots: list[str], sender_name: str, ack: str | None = None) -> str:
+    """`ack` answers the time they asked for (e.g. 'Unfortunately Tue 24 Nov, 12:00 IST isn't
+    free on my side.') before the alternatives, so the reply never ignores what they said."""
+    intro = ("Thank you for coming back to me. " + ack + " Would any of these times suit you instead?"
+             if ack else "Thank you for coming back to me. Would any of these times suit you for a 20-minute call?")
+    lines = [writer.greeting(first), "", intro, ""]
     lines += [f"- {_fmt(s)}" for s in slots]
     lines += ["", "Just reply with the one that works best, or suggest another time.", "",
               _sign_off(sender_name)]
     return "\n".join(lines)
+
+
+def _clarify_body(first: str, iso: str, note: str, sender_name: str) -> str:
+    return (f"{writer.greeting(first)}\n\nThank you for coming back to me. Just to check: "
+            f"{note.rstrip('.')}. Did you mean {_fmt(iso)}? That time is free on my side.\n\n"
+            f"If so, just reply \"yes\" and I'll send the calendar invite - or suggest another time.\n\n"
+            f"{_sign_off(sender_name)}")
 
 
 def _invite_body(first: str, slot: str, sender_name: str) -> str:
@@ -178,16 +203,48 @@ def build_graph(ctx: Ctx) -> StateGraph:
 
     def read(s):
         if s["last_reply"] is None:
-            return {"intent": "silence", "chosen_index": None, "proposed_start": None}
+            return {"intent": "silence", "chosen_index": None, "proposed_start": None,
+                    "guess_start": None, "ambiguity_note": None, "ack_note": None}
         r = replies.classify(s["last_reply"], s["times_proposed"])
-        proposed = None
-        if r.proposed_start:
-            try:
-                d = dt.datetime.fromisoformat(r.proposed_start)
-                proposed = (d if d.tzinfo else d.replace(tzinfo=ZoneInfo(config.SLOT_TIMEZONE))).isoformat()
-            except ValueError:
-                proposed = None          # unreadable time: fall back to offering slots
-        return {"intent": r.intent, "chosen_index": r.chosen_slot_index, "proposed_start": proposed}
+        proposed = _iso(r.proposed_start)
+        guess = _iso(r.best_guess_start) if (r.ambiguity_note and not proposed) else None
+        ack = None
+        if not proposed and not guess and r.proposed_times:
+            # They named a time we could not pin down: say so instead of ignoring it.
+            why = f" ({r.ambiguity_note.rstrip('.')})" if r.ambiguity_note else ""
+            ack = (f'I wasn\'t quite able to pin down "{r.proposed_times[0]}"{why}, '
+                   f"so here are a few times that work on my side.")
+        return {"intent": r.intent, "chosen_index": r.chosen_slot_index, "proposed_start": proposed,
+                "guess_start": guess, "ambiguity_note": r.ambiguity_note, "ack_note": ack}
+
+    def clarify(s):
+        """Their time was contradictory ('Tuesday the 21st'): ask them to confirm our best guess."""
+        iso, note = s["guess_start"], s.get("ambiguity_note") or "I wasn't sure which day you meant"
+        now = dt.datetime.now(dt.timezone.utc)
+        ok, res, line = _attempt("check_calendar",
+                                 lambda: calendar_tool.slot_free(dt.datetime.fromisoformat(iso), now))
+        base = {"scheduling": True, "reply_status": "interested"}
+        if not (ok and res["status"] == "free"):
+            why = res["status"] if ok else "calendar error"
+            ctx.log(f"  their time is unclear and the best guess {_fmt(iso)} is not possible ({why})")
+            return base | {"calendar_checked": False, "chosen_index": None,
+                           "rejected_slots": s["rejected_slots"] + [iso],
+                           "ack_note": (f"Just to check: {note.rstrip('.')}. If you meant {_fmt(iso)}, "
+                                        f"unfortunately that isn't free on my side."),
+                           "trace": [f"{line}; best guess {iso}: {why}"]}
+        ctx.log(f"  their time is unclear ({note}) -> asking them to confirm {_fmt(iso)}")
+        upd = base | {"calendar_checked": True, "times_proposed": [iso], "chosen_index": None,
+                      "meeting_status": "pending_confirmation"}
+        if not ctx.do_send:
+            return upd | {"trace": [line, "send_email: dry run, not sent"]}
+        subject = f"Re: {ctx.subject}" if ctx.subject else "Re: call times"
+        sent, err, sline = _attempt("send_email", lambda: sender.send(
+            subject, _clarify_body(first, iso, note, ctx.sender_name), ctx.contact_name,
+            ctx.contact_email, in_reply_to=ctx.in_reply_to))
+        if not sent:
+            return {"outcome": "escalated_to_growth_lead", "escalation": f"send_email failed: {err}",
+                    "trace": [line, sline]}
+        return upd | {"trace": [line, sline]}
 
     def try_proposed(s):
         """The prospect named a time: book it if the calendar is free, else offer alternatives."""
@@ -202,8 +259,11 @@ def build_graph(ctx: Ctx) -> StateGraph:
                            "trace": [f"{line}; their proposed time {iso} is free"]}
         why = res["status"] if ok else f"calendar error: {res}"
         ctx.log(f"  their time {_fmt(iso)} not possible ({why}) -> offering alternatives")
+        ack = {"busy": f"Unfortunately {_fmt(iso)} isn't free on my side.",
+               "out-of-range": f"{_fmt(iso)} is a little outside the window I can book."}.get(
+                   res["status"] if ok else "", f"I wasn't able to confirm {_fmt(iso)} just now.")
         return base | {"calendar_checked": False, "chosen_index": None,
-                       "rejected_slots": s["rejected_slots"] + [iso],
+                       "rejected_slots": s["rejected_slots"] + [iso], "ack_note": ack,
                        "trace": [f"{line}; their proposed time {iso}: {why}"]}
 
     def start_scheduling(s):
@@ -251,15 +311,16 @@ def build_graph(ctx: Ctx) -> StateGraph:
         slots = s["times_proposed"]
         ctx.log(f"  proposed: {', '.join(_fmt(x) for x in slots)}")
         if not ctx.do_send:
-            return {"meeting_status": "pending_confirmation", "trace": ["send_email: dry run, not sent"]}
+            return {"meeting_status": "pending_confirmation", "ack_note": None,
+                    "trace": ["send_email: dry run, not sent"]}
         subject = f"Re: {ctx.subject}" if ctx.subject else "Re: call times"
         ok, err, line = _attempt("send_email", lambda: sender.send(
-            subject, _propose_body(first, slots, ctx.sender_name), ctx.contact_name, ctx.contact_email,
+            subject, _propose_body(first, slots, ctx.sender_name, s.get("ack_note")), ctx.contact_name, ctx.contact_email,
             in_reply_to=ctx.in_reply_to))
         if not ok:
             return {"outcome": "escalated_to_growth_lead",
                     "escalation": f"send_email failed: {err}", "trace": [line]}
-        return {"meeting_status": "pending_confirmation", "trace": [line]}
+        return {"meeting_status": "pending_confirmation", "ack_note": None, "trace": [line]}
 
     def book(s):
         slot = s["times_proposed"][s["chosen_index"]]
@@ -303,6 +364,9 @@ def build_graph(ctx: Ctx) -> StateGraph:
         if s.get("proposed_start") and not picked_offered and \
                 intent in ("interested", "counter_proposes", "confirms_time"):
             return "try_proposed"
+        if s.get("guess_start") and not picked_offered and \
+                intent in ("interested", "counter_proposes", "confirms_time"):
+            return "clarify"
         if not s["scheduling"]:
             if intent == "not_interested":
                 return "not_interested"
@@ -321,7 +385,7 @@ def build_graph(ctx: Ctx) -> StateGraph:
         return lambda s: "finish" if s["outcome"] else next_node
 
     g = StateGraph(Sched)
-    for name, fn in [("await_reply", await_reply), ("read", read), ("try_proposed", try_proposed),
+    for name, fn in [("await_reply", await_reply), ("read", read), ("try_proposed", try_proposed), ("clarify", clarify),
                      ("start_scheduling", start_scheduling),
                      ("not_interested", not_interested), ("no_reply", no_reply), ("silent", silent),
                      ("unclear", unclear), ("counter", counter), ("check_calendar", check_calendar),
@@ -333,7 +397,11 @@ def build_graph(ctx: Ctx) -> StateGraph:
     g.add_conditional_edges("read", route_read, {
         "silent": "silent", "no_reply": "no_reply", "not_interested": "not_interested",
         "unclear": "unclear", "start_scheduling": "start_scheduling", "book": "book", "counter": "counter",
-        "try_proposed": "try_proposed"})
+        "try_proposed": "try_proposed", "clarify": "clarify"})
+    # Best guess is free -> we asked them to confirm, wait for the answer; otherwise offer alternatives.
+    g.add_conditional_edges("clarify", lambda s: "finish" if s["outcome"] else
+                            ("await_reply" if s["calendar_checked"] else "counter"),
+                            {"finish": "finish", "await_reply": "await_reply", "counter": "counter"})
     # Their time is free -> book it; otherwise offer alternatives (counts as a counter round).
     g.add_conditional_edges("try_proposed", lambda s: "book" if s["chosen_index"] == 0 else "counter",
                             {"book": "book", "counter": "counter"})
@@ -359,7 +427,8 @@ def _initial() -> dict:
     return {"reply_status": "no_reply", "calendar_checked": False, "times_proposed": [],
             "rejected_slots": [], "reply_round": 0, "meeting_status": "unscheduled", "crm_logged": False,
             "outcome": "", "escalation": "", "booked_slot": None, "scheduling": False,
-            "last_reply": None, "intent": "", "chosen_index": None, "proposed_start": None, "trace": []}
+            "last_reply": None, "intent": "", "chosen_index": None, "proposed_start": None,
+            "guess_start": None, "ambiguity_note": None, "ack_note": None, "trace": []}
 
 
 @contextmanager
