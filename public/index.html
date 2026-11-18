@@ -14,64 +14,119 @@
     <div class="brand">
       <div class="logo">S</div>
       <div>
-        <h1>Sprinto outreach</h1>
-        <div class="muted small">Build 1: every email goes to your inbox. Updated <span id="updated">-</span></div>
+        <h1 id="page-title">Overview</h1>
+        <div class="muted small">Sprinto outreach &middot; build 1: every email goes to your inbox &middot; updated <span id="updated">-</span></div>
       </div>
     </div>
-    <div class="actions">
-      <a class="btn" href="test.html">Run a test case</a>
-      <a class="btn" href="settings.html">Filters &amp; rubric</a>
-      <button class="btn" id="refresh">Refresh</button>
-    </div>
+    <div class="actions"><button class="btn" id="refresh">Refresh</button></div>
   </header>
+  <nav class="glass nav" id="nav"></nav>
   <div id="error" class="error"></div>
 
-  <!-- KPI tiles -->
-  <section class="tiles" id="tiles"></section>
-
-  <!-- Review queue -->
-  <section class="glass card section" id="review-card">
-    <div class="row-head"><h2>Needs review <span class="muted small" id="review-rule"></span></h2>
-      <span class="muted small">Mark each one so it leaves the queue (this also feeds the rewrite rate)</span></div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>When</th><th>Company</th><th>Disagreement</th><th>Why</th><th>Subject</th><th></th></tr></thead>
-        <tbody id="review-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
-      </table>
+  <!-- ===== Overview ===== -->
+  <div class="page" data-page="overview">
+    <section class="tiles" id="tiles"></section>
+    <div class="grid-2">
+      <section class="glass card">
+        <div class="row-head"><h2>To-do</h2><span class="muted small" id="todo-count"></span></div>
+        <div class="todo" id="todo"></div>
+      </section>
+      <section class="glass card">
+        <div class="row-head"><h2>This week</h2><span class="muted small">last 7 days vs the 7 before</span></div>
+        <ul class="highlights" id="highlights"></ul>
+        <div class="chips" id="dormant-certs" style="margin-top:10px"></div>
+      </section>
     </div>
-  </section>
+    <section class="glass card section">
+      <h2>Weekly trends</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Metric</th><th>This week</th><th>Last week</th><th>Change</th></tr></thead>
+          <tbody id="trend-rows"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 
-  <!-- Pipeline -->
-  <section class="glass card section">
-    <div class="row-head"><h2>Companies in the pipeline</h2><span class="muted small" id="pipe-count"></span></div>
-    <div class="chips" id="stage-chips"></div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Company</th><th>Stage</th><th>Decision</th><th>Fit score</th><th>Last activity</th></tr></thead>
-        <tbody id="pipe-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-  </section>
+  <!-- ===== Pipeline ===== -->
+  <div class="page" data-page="pipeline">
+    <section class="glass card section">
+      <div class="row-head"><h2>Companies in the pipeline</h2><span class="muted small" id="pipe-count"></span></div>
+      <div class="chips" id="stage-chips"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Company</th><th>Stage</th><th>Why</th><th>Fit score</th><th>Last activity</th></tr></thead>
+          <tbody id="pipe-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 
-  <!-- Contacts -->
-  <section class="glass card section">
-    <div class="row-head"><h2>Contacts</h2><input type="search" id="contact-search" placeholder="Search name, company, status"></div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Contact</th><th>Company</th><th>Role</th><th>Status</th><th>Follow-ups</th><th>Last outcome</th><th>Updated</th></tr></thead>
-        <tbody id="contact-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-  </section>
+  <!-- ===== Contacts ===== -->
+  <div class="page" data-page="contacts">
+    <section class="glass card section">
+      <div class="row-head"><h2>Contacts</h2><input type="search" id="contact-search" placeholder="Search name, company, status"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Contact</th><th>Company</th><th>Role</th><th>Status</th><th>Follow-ups</th><th>Last outcome</th><th>Updated</th></tr></thead>
+          <tbody id="contact-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
 
-  <div class="grid-2">
-    <!-- Emails by type -->
-    <section class="glass card">
+  <!-- ===== Review ===== -->
+  <div class="page" data-page="review">
+    <section class="glass card section" id="review-card">
+      <div class="row-head"><h2>Needs review <span class="muted small" id="review-rule"></span></h2>
+        <span class="muted small">Mark each one so it leaves the queue (this also feeds the rewrite rate)</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>Company</th><th>Disagreement</th><th>Why</th><th>Subject</th><th></th></tr></thead>
+          <tbody id="review-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== Emails ===== -->
+  <div class="page" data-page="emails">
+    <section class="glass card section">
       <h2>Emails sent, by type</h2>
       <div class="hbars" id="email-kinds"></div>
     </section>
-    <!-- Tokens -->
-    <section class="glass card">
+    <section class="glass card section">
+      <h2>Recent drafts and runs</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>Company</th><th>Decision</th><th>Fit</th><th>Disagreement</th><th>Subject</th><th>Status</th></tr></thead>
+          <tbody id="run-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== Learning ===== -->
+  <div class="page" data-page="learning">
+    <section class="glass card section">
+      <div class="row-head"><h2>Feedback repo</h2>
+        <span class="muted small">Ranked as the writer sees it: higher outcome score wins when two conflict</span></div>
+      <div class="lessons" id="lessons"></div>
+    </section>
+    <section class="glass card section">
+      <h2>Winning emails used as examples</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Company</th><th>Role</th><th>Subject</th><th>Outcome</th><th>Score</th></tr></thead>
+          <tbody id="exemplar-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== Costs ===== -->
+  <div class="page" data-page="costs">
+    <section class="glass card section">
       <div class="row-head"><h2>Token use and cost</h2><span class="muted small" id="price-note"></span></div>
       <div class="table-wrap">
         <table>
@@ -81,31 +136,6 @@
       </div>
     </section>
   </div>
-
-  <!-- Feedback repo -->
-  <section class="glass card section">
-    <div class="row-head"><h2>Feedback repo</h2>
-      <span class="muted small">Ranked as the writer sees it: higher outcome score wins when two conflict</span></div>
-    <div class="lessons" id="lessons"></div>
-    <h2 style="margin-top:18px">Winning emails used as examples</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Company</th><th>Role</th><th>Subject</th><th>Outcome</th><th>Score</th></tr></thead>
-        <tbody id="exemplar-rows"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- Recent runs -->
-  <section class="glass card section">
-    <h2>Recent drafts and runs</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>When</th><th>Company</th><th>Decision</th><th>Fit</th><th>Disagreement</th><th>Subject</th><th>Status</th></tr></thead>
-        <tbody id="run-rows"><tr><td colspan="7" class="empty">Loading…</td></tr></tbody>
-      </table>
-    </div>
-  </section>
 </main>
 
 <script src="app.js"></script>
@@ -204,7 +234,7 @@
     var rt = tile("Needs review", rq, intFmt, "drafts above " + ((m.disagreement || {}).threshold || 20) + " not yet reviewed");
     if (rq > 0) rt.classList.add("alert");
     rt.style.cursor = "pointer";
-    rt.addEventListener("click", function () { document.getElementById("review-card").scrollIntoView({ behavior: "smooth" }); });
+    rt.addEventListener("click", function () { location.hash = "#review"; });
     box.appendChild(rt);
     box.appendChild(tile("Tokens used", (t.input || 0) + (t.output || 0), intFmt,
       "est. $" + (t.est_cost_usd || 0).toFixed(4) + " (" + intFmt(t.input) + " in / " + intFmt(t.output) + " out)"));
@@ -223,7 +253,7 @@
     var rows = pipelineRows.filter(function (r) { return stageFilter === "All" || r.stage === stageFilter; });
     document.getElementById("pipe-rows").innerHTML = rows.length ? rows.map(function (r) {
       return "<tr><td><b>" + E(r.company) + '</b><div class="muted small">' + E(r.domain) + "</div></td><td>" +
-        pill(r.stage, STAGE_PILL[r.stage]) + "</td><td>" + E(r.decision || "-") + "</td><td>" + E(r.fit_score == null ? "-" : r.fit_score) +
+        pill(r.stage, STAGE_PILL[r.stage]) + "</td><td class='small'>" + E(r.reason || r.decision || "-") + "</td><td>" + E(r.fit_score == null ? "-" : r.fit_score) +
         "</td><td class='muted'>" + E(dash.when(r.last_activity)) + "</td></tr>";
     }).join("") : '<tr><td colspan="5" class="empty">No companies at this stage.</td></tr>';
   }
@@ -287,10 +317,51 @@
     }).join("") : '<tr><td colspan="7" class="empty">No runs yet.</td></tr>';
   }
 
+  var PAGES = { overview: "Overview", pipeline: "Pipeline", contacts: "Contacts", review: "Review",
+                emails: "Emails", learning: "Learning", costs: "Costs" };
+  function route() {
+    var p = (location.hash || "#overview").slice(1);
+    if (!PAGES[p]) p = "overview";
+    document.querySelectorAll(".page").forEach(function (el) { el.hidden = el.dataset.page !== p; });
+    document.getElementById("page-title").textContent = PAGES[p];
+    dash.nav(p);
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
+
+  function fmtTrend(v, fmt) {
+    if (v == null) return "-";
+    if (fmt === "pct") return Math.round(v * 100) + "%";
+    if (fmt === "score") return Math.round(v) + "/100";
+    if (fmt === "usd") return "$" + Number(v).toFixed(4);
+    return Math.round(v).toLocaleString("en-GB");
+  }
+
+  function renderOverview(ins) {
+    var todo = ins.todo || [];
+    document.getElementById("todo-count").textContent = todo.length ? todo.length + " item(s)" : "";
+    document.getElementById("todo").innerHTML = todo.length ? todo.map(function (t) {
+      return '<a class="todo-item ' + E(t.severity) + '" href="' + E(t.link || "#") + '"><span class="sev"></span><div><b>' + E(t.title) +
+        '</b><div class="muted small">' + E(t.detail || "") + "</div></div></a>";
+    }).join("") : '<div class="empty">Nothing needs you right now.</div>';
+    document.getElementById("highlights").innerHTML = (ins.highlights || []).map(function (h) { return "<li>" + E(h) + "</li>"; }).join("") ||
+      '<li class="muted">No activity in the last 7 days.</li>';
+    document.getElementById("dormant-certs").innerHTML = (ins.dormant_certs || []).length ?
+      '<span class="muted small" style="align-self:center">Why companies are dormant:</span>' + ins.dormant_certs.map(function (c) {
+        return '<span class="pill soft">' + E(c.cert) + " &middot; " + E(c.n) + "</span>"; }).join("") : "";
+    document.getElementById("trend-rows").innerHTML = (ins.trends || []).map(function (t) {
+      var change = t.delta == null ? '<span class="muted">-</span>' : (t.delta === 0 ? '<span class="muted">no change</span>' :
+        '<span class="' + (t.better ? "up" : "down") + '">' + (t.delta > 0 ? "&#9650; " : "&#9660; ") +
+        E(fmtTrend(Math.abs(t.delta), t.fmt)) + "</span>");
+      return "<tr><td>" + E(t.label) + "</td><td><b>" + E(fmtTrend(t.current, t.fmt)) + "</b></td><td class='muted'>" +
+        E(fmtTrend(t.previous, t.fmt)) + "</td><td>" + change + "</td></tr>";
+    }).join("");
+  }
+
   function load() {
     document.getElementById("error").textContent = "";
     Promise.all([dash.api("/api/metrics"), dash.api("/api/contacts"), dash.api("/api/feedback"), dash.api("/api/runs"),
-                 dash.api("/api/review")])
+                 dash.api("/api/review"), dash.api("/api/insights")])
       .then(function (r) {
         var m = r[0];
         renderTiles(m);
@@ -303,6 +374,8 @@
         renderFeedback(r[2]);
         renderRuns(r[3]);
         renderReview(r[4]);
+        renderOverview(r[5]);
+        dash.navBadge("review", (r[4].items || []).length);
         document.getElementById("updated").textContent = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
       })
       .catch(function (e) { document.getElementById("error").textContent = e.message; });
@@ -324,6 +397,7 @@
       .then(load).catch(function (e) { document.getElementById("error").textContent = e.message; b.disabled = false; });
   });
   document.getElementById("refresh").addEventListener("click", load);
+  route();
   load();
   setInterval(load, 60000);
 })();

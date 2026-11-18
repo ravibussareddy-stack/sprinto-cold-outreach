@@ -42,5 +42,30 @@
     el.style.setProperty("--my", (ev.clientY - r.top) + "px");
   });
 
-  window.dash = { api: api, esc: esc, pct: pct, num: num, when: when, countUp: countUp };
+  // Navigation shared by every page. Dashboard sections are hash pages inside index.html.
+  var NAV = [["overview", "Overview", "index.html#overview"], ["pipeline", "Pipeline", "index.html#pipeline"],
+             ["contacts", "Contacts", "index.html#contacts"], ["review", "Review", "index.html#review"],
+             ["emails", "Emails", "index.html#emails"], ["learning", "Learning", "index.html#learning"],
+             ["costs", "Costs", "index.html#costs"], ["rubric", "Filters & rubric", "settings.html"],
+             ["test", "Run a test case", "test.html"]];
+  var badges = {};
+  function nav(active) {
+    var el = document.getElementById("nav");
+    if (!el) return;
+    el.innerHTML = NAV.map(function (n) {
+      var badge = badges[n[0]] ? '<span class="badge">' + badges[n[0]] + "</span>" : "";
+      return '<a href="' + n[2] + '" class="' + (n[0] === active ? "on" : "") + '" data-key="' + n[0] + '">' + esc(n[1]) + badge + "</a>";
+    }).join("");
+  }
+  function navBadge(key, n) {
+    badges[key] = n || 0;
+    var a = document.querySelector('#nav a[data-key="' + key + '"]');
+    if (!a) return;
+    var b = a.querySelector(".badge");
+    if (!n) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement("span"); b.className = "badge"; a.appendChild(b); }
+    b.textContent = n;
+  }
+
+  window.dash = { api: api, esc: esc, pct: pct, num: num, when: when, countUp: countUp, nav: nav, navBadge: navBadge };
 })();

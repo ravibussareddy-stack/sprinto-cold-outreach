@@ -39,8 +39,8 @@
         <div class="muted small">How companies are qualified and when a draft goes to review. Changes apply from the next run.
           <span id="status"></span></div></div>
     </div>
-    <div class="actions"><a class="btn" href="index.html">&larr; Dashboard</a></div>
   </header>
+  <nav class="glass nav" id="nav"></nav>
   <div id="error" class="error"></div>
 
   <section class="glass card section preview" id="preview"></section>
@@ -55,6 +55,7 @@
 </main>
 <script src="app.js"></script>
 <script>
+dash.nav("rubric");
 (function () {
   var E = dash.esc;
   // Section and field labels. Order here is the order on the page.

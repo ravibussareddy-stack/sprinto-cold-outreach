@@ -10,12 +10,13 @@
 </head>
 <body>
 <main style="max-width:900px">
-  <a href="index.html" class="small">&larr; Dashboard</a>
+  <nav class="glass nav" id="nav" style="margin-top:0"></nav>
   <div id="error" class="error"></div>
   <div id="content"></div>
 </main>
 <script src="app.js"></script>
 <script>
+dash.nav("emails");
 (function () {
   var E = dash.esc;
   var CHECK_NAMES = { greeting: "Time-of-day greeting", wellbeing_line: "“Hope you're doing well”",

@@ -173,6 +173,8 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
             rec["status"] += " | awaiting_reply"
             log(f"  waiting for a reply in Gmail (thread {thread_id})")
         else:
+            if do_send:                          # log the cold email here too (Gmail mode logs it with its thread)
+                db.log_email(None, domain, "cold", draft.subject, draft.body, quality)
             state = meeting.run(ctx, replies.load_replies(domain))
             rec["meeting"] = asdict(state)
             rec["outcome"] = state.outcome

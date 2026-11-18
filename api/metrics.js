@@ -71,7 +71,8 @@ module.exports = async (req, res) => {
 
     const latest = await safe(pool, `
       SELECT DISTINCT ON (domain) domain, decision, status, score, created_at,
-             record->'profile'->>'company_name' AS company
+             record->'profile'->>'company_name' AS company,
+             record->'qualification'->>'reason' AS reason, record->>'error' AS error
       FROM runs ORDER BY domain, created_at DESC`, []);
     const contacts = await safe(pool, `SELECT domain, status FROM contacts`, []);
     const contactByDomain = {};
@@ -80,9 +81,10 @@ module.exports = async (req, res) => {
     const pipeline = latest.map((r) => {
       let stage = contactByDomain[r.domain] ? STAGE_BY_CONTACT[contactByDomain[r.domain]] : null;
       if (!stage) stage = (r.status || "").startsWith("NO_POC") ? "Qualified - no contact"
-        : (r.status || "").startsWith("ERROR") ? "Error" : (STAGE_BY_DECISION[r.decision] || r.decision || "Researched");
+        : (r.status || "").startsWith("ERROR") ? "Error"
+        : r.decision === "FAILED" ? "Site unreachable" : (STAGE_BY_DECISION[r.decision] || r.decision || "Researched");
       return { domain: r.domain, company: r.company || r.domain, stage, decision: r.decision,
-               fit_score: r.score, last_activity: r.created_at };
+               fit_score: r.score, last_activity: r.created_at, reason: r.reason || r.error || null };
     });
     const stageCounts = {};
     pipeline.forEach((p) => { stageCounts[p.stage] = (stageCounts[p.stage] || 0) + 1; });

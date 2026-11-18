@@ -30,8 +30,8 @@
   <header class="glass top">
     <div class="brand"><div class="logo">S</div>
       <div><h1>Run a test case</h1><div class="muted small">Sends one company through the whole pipeline: scrape, qualify, contact, pain points, email.</div></div></div>
-    <div class="actions"><a class="btn" href="index.html">&larr; Dashboard</a></div>
   </header>
+  <nav class="glass nav" id="nav"></nav>
 
   <section class="glass card section">
     <h2>Input</h2>
@@ -70,6 +70,7 @@
 </main>
 <script src="app.js"></script>
 <script>
+dash.nav("test");
 (function () {
   var E = dash.esc;
   function show(id, on) { document.getElementById(id).style.display = on ? "" : "none"; }
