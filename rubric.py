@@ -1,6 +1,6 @@
 """The qualification rubric: every filter and point value in one place.
 
-Defaults live in web/lib/rubric_defaults.json (the dashboard reads the same file).
+Defaults live in lib/rubric_defaults.json (the dashboard reads the same file).
 Edits made on the dashboard's "Filters & rubric" page are stored in Neon (settings table,
 key "rubric") and override the defaults from the next run on. Unknown keys and bad values
 are ignored, so a broken edit can never stop a run - the default is used instead.
@@ -14,7 +14,7 @@ import os
 
 import db
 
-DEFAULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web", "lib", "rubric_defaults.json")
+DEFAULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib", "rubric_defaults.json")
 DORMANT_RULES = ("any_named_cert", "soc2_and_iso", "off")
 _active: dict | None = None
 

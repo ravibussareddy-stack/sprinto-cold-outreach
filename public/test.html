@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run a test case</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .form input[type=text], .form input[type=email] { width: 100%; padding: 9px 12px; border-radius: 12px; font: inherit; font-size: 14px;
+      border: 1px solid var(--glass-border); background: var(--glass-strong); color: var(--ink); outline: none; }
+  .form input:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
+  .btn.primary { background: var(--blue-700); color: #fff; border-color: var(--blue-700); padding: 9px 18px; font-size: 14px; }
+  .btn.primary:hover { background: var(--blue-900); }
+  pre.json { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; max-height: 520px; overflow: auto; margin: 0; }
+  .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 14px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--blue-300); border-top-color: var(--blue-700);
+             border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  code { font-size: 12.5px; }
+</style>
+</head>
+<body>
+<main style="max-width:1000px">
+  <header class="glass top">
+    <div class="brand"><div class="logo">S</div>
+      <div><h1>Run a test case</h1><div class="muted small">Sends one company through the whole pipeline: scrape, qualify, contact, pain points, email.</div></div></div>
+    <div class="actions"><a class="btn" href="index.html">&larr; Dashboard</a></div>
+  </header>
+
+  <section class="glass card section">
+    <h2>Input</h2>
+    <form id="f" class="form">
+      <div><label for="domain">Company domain *</label><input id="domain" type="text" placeholder="atlan.com" required></div>
+      <div><label for="first">Contact first name</label><input id="first" type="text" placeholder="Priya"></div>
+      <div><label for="last">Contact last name</label><input id="last" type="text" placeholder="Sharma"></div>
+      <div><label for="email">Contact email</label><input id="email" type="email" placeholder="priya@atlan.com"></div>
+      <div><label for="title">Contact title</label><input id="title" type="text" placeholder="CTO"></div>
+      <div style="display:flex;align-items:end;gap:10px;flex-wrap:wrap">
+        <label style="display:flex;gap:6px;align-items:center;font-weight:500"><input id="send" type="checkbox" checked> Email the draft to the inbox</label>
+      </div>
+    </form>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
+      <button class="btn primary" id="run">Run case</button>
+      <span class="muted small" id="state">Takes about 1-2 minutes.</span>
+    </div>
+    <p class="muted small" style="margin-top:14px">Automated tests: <code>POST /api/run_case</code> with
+      <code>{"domain": "atlan.com", "contact": {"first_name": "Priya", "email": "priya@atlan.com", "title": "CTO"}, "send": true}</code>.
+      <code>GET /api/run_case</code> returns the format.</p>
+  </section>
+
+  <section class="glass card section" id="summary-card" style="display:none">
+    <h2>Result</h2>
+    <dl class="kv" id="summary"></dl>
+  </section>
+  <section class="glass card section" id="email-card" style="display:none">
+    <h2>Email</h2>
+    <p><b id="subject"></b></p>
+    <pre class="body" id="body"></pre>
+  </section>
+  <section class="glass card section" id="json-card" style="display:none">
+    <h2>Full response <span class="muted small" id="http"></span></h2>
+    <pre class="json" id="json"></pre>
+  </section>
+</main>
+<script src="app.js"></script>
+<script>
+(function () {
+  var E = dash.esc;
+  function show(id, on) { document.getElementById(id).style.display = on ? "" : "none"; }
+
+  document.getElementById("run").addEventListener("click", function () {
+    var v = function (id) { return document.getElementById(id).value.trim(); };
+    var body = { domain: v("domain"), send: document.getElementById("send").checked };
+    if (v("first") || v("email")) body.contact = { first_name: v("first"), last_name: v("last"), email: v("email"), title: v("title") };
+    var btn = this;
+    btn.disabled = true;
+    document.getElementById("state").innerHTML = '<span class="spinner"></span>Running the pipeline...';
+    ["summary-card", "email-card", "json-card"].forEach(function (i) { show(i, false); });
+    var started = Date.now(), code;
+    fetch("/api/run_case", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { code = r.status; return r.json(); })
+      .then(function (out) {
+        document.getElementById("state").textContent = "Finished in " + Math.round((Date.now() - started) / 1000) + "s.";
+        document.getElementById("http").textContent = "HTTP " + code;
+        document.getElementById("json").textContent = JSON.stringify(out, null, 2);
+        show("json-card", true);
+        if (out.error && !out.domain) {                       // request rejected (400)
+          document.getElementById("summary").innerHTML = "<dt>Error</dt><dd>" + E(out.error.code) + ": " + E(out.error.message) + "</dd>";
+          show("summary-card", true);
+          return;
+        }
+        var rows = [["Status", out.status], ["Decision", out.decision], ["Fit score", out.company && out.company.fit_score],
+                    ["Reason", out.company && out.company.reason],
+                    ["Contact", out.contact ? (out.contact.first_name + " " + (out.contact.last_name || "") + " - " + (out.contact.title || "")) : "none"],
+                    ["Pain points", (out.pain_points || []).map(function (p) { return p.title; }).join("; ") || "-"],
+                    ["Quality", out.quality ? out.quality.passed + "/" + out.quality.total + " checks" : "-"],
+                    ["Disagreement", out.disagreement ? out.disagreement.score + "/100" + (out.disagreement.needs_review ? " (needs review)" : "") : "-"],
+                    ["Sent", out.email ? (out.email.sent ? "yes, to " + out.email.sent_to : "no") : "-"],
+                    ["Error", out.error ? out.error.code + ": " + out.error.message : "none"]];
+        document.getElementById("summary").innerHTML = rows.map(function (r) { return "<dt>" + E(r[0]) + "</dt><dd>" + E(r[1] == null ? "-" : r[1]) + "</dd>"; }).join("");
+        show("summary-card", true);
+        if (out.email) {
+          document.getElementById("subject").textContent = out.email.subject;
+          document.getElementById("body").textContent = out.email.body;
+          show("email-card", true);
+        }
+      })
+      .catch(function (e) { document.getElementById("state").textContent = "Request failed: " + e.message; })
+      .then(function () { btn.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>

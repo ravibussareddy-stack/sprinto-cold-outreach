@@ -173,19 +173,21 @@ def put_cached_page(url: str, record: dict):
         print(f"  [db] cache write skipped: {e}")
 
 
-def save_run(rec: dict):
+def save_run(rec: dict) -> int | None:
+    """Store one run; returns its id (None without a database)."""
     if not enabled():
-        return
+        return None
     try:
         _init()
         q = rec.get("qualification", {})
         with _conn() as c:
-            c.execute(
-                "INSERT INTO runs (domain, decision, score, status, record) VALUES (%s,%s,%s,%s,%s)",
+            return c.execute(
+                "INSERT INTO runs (domain, decision, score, status, record) VALUES (%s,%s,%s,%s,%s) RETURNING id",
                 (rec["domain"], q.get("decision"), q.get("score"), rec.get("status"),
-                 Json(json.loads(json.dumps(rec, default=str)))))
+                 Json(json.loads(json.dumps(rec, default=str))))).fetchone()[0]
     except psycopg.Error as e:
         print(f"  [db] run save skipped: {e}")
+        return None
 
 
 def save_crm_outcome(domain: str, contact: str, outcome: str, record: dict):

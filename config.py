@@ -87,4 +87,5 @@ MAX_FOLLOWUPS = 3                  # then the contact becomes non_respondent; no
 MAX_REPLY_ROUNDS = 2               # counter-proposals before escalating
 
 # LangGraph checkpoints for Sequence 2 (pause at await_reply, resume on the next reply)
-CHECKPOINT_DB = os.getenv("CHECKPOINT_DB", "checkpoints.sqlite")
+# On Vercel only /tmp is writable.
+CHECKPOINT_DB = os.getenv("CHECKPOINT_DB") or ("/tmp/checkpoints.sqlite" if os.getenv("VERCEL") else "checkpoints.sqlite")

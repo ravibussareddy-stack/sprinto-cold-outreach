@@ -10,3 +10,5 @@ checkpoints.sqlite
 !.env.example
 *.env.txt
 *.env
+node_modules/
+.vercel/

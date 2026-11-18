@@ -154,8 +154,23 @@ Pages are cleaned and capped at ~1,500 words before reaching the model. Each com
 - **Replies** (`check_replies.py`, Gmail mode): positive -> book automatically; negative -> a thank-you email and the contact becomes a *cold lead*; no reply -> up to 3 follow-ups 48h apart, each with a new value proposition and a different ask, then *non-respondent* and no more emails.
 - **Feedback repo** (`feedback.py`, Neon `feedback` table): guidance scoped global / role / industry with an outcome score. The writer gets the relevant items ranked best-first and follows the higher-ranked one when two conflict. Add your own with `python feedback.py add "..." --scope role:cto`.
 - **Self-reinforcement** (`learn.py`): when a conversation ends, the emails and replies are analysed into lessons scored by outcome (booked 1.0, positive 0.8, negative 0.3, no reply 0.1); emails that earned a positive reply are saved as examples for that role.
-- **Dashboard** (`web/`, Vercel): engagement rate (any reply / conversations), booking rate (booked / positive replies), pipeline by stage, contacts, emails by type, token use and estimated cost (`GEMINI_PRICE_INPUT_PER_M` / `GEMINI_PRICE_OUTPUT_PER_M`), and the feedback repo.
+- **Dashboard** (`public/`, `api/`, Vercel): engagement rate (any reply / conversations), booking rate (booked / positive replies), pipeline by stage, contacts, emails by type, token use and estimated cost (`GEMINI_PRICE_INPUT_PER_M` / `GEMINI_PRICE_OUTPUT_PER_M`), and the feedback repo.
 
 ## Filters and rubric (editable)
 
-Every qualification filter and point value lives in `web/lib/rubric_defaults.json`. The dashboard's **Filters & rubric** page (`settings.html`) edits them: decision thresholds, company size, the dormant rule (any named certification / only SOC 2 + ISO 27001 / never), which names do not count as certifications, stage and compliance points, the certification gap, evidence-loop fetch limits, and the disagreement score that sends a draft to review. Saved values go to Neon (`settings` table) and apply from the next run; invalid values are rejected with a reason, and `rubric.py` falls back to the default for anything broken. Set `SETTINGS_EDIT_KEY` in Vercel if saving should need a key (viewing never does).
+Every qualification filter and point value lives in `lib/rubric_defaults.json`. The dashboard's **Filters & rubric** page (`settings.html`) edits them: decision thresholds, company size, the dormant rule (any named certification / only SOC 2 + ISO 27001 / never), which names do not count as certifications, stage and compliance points, the certification gap, evidence-loop fetch limits, and the disagreement score that sends a draft to review. Saved values go to Neon (`settings` table) and apply from the next run; invalid values are rejected with a reason, and `rubric.py` falls back to the default for anything broken. Set `SETTINGS_EDIT_KEY` in Vercel if saving should need a key (viewing never does).
+
+## Test-case API (live on Vercel)
+
+`POST /api/run_case` runs one company through the whole pipeline (scrape -> extract -> qualify with the agent loop -> contact -> two pain points -> personalised email -> send to your own inbox) and returns one JSON result. `GET /api/run_case` returns the input format. The **Run a test case** page (`test.html`) does the same from the dashboard.
+
+```json
+{"domain": "atlan.com",
+ "contact": {"first_name": "Priya", "last_name": "Sharma", "email": "priya@atlan.com", "title": "CTO"},
+ "send": true}
+```
+
+- `domain` is required (a URL also works; aliases `website`, `url`, `company_domain`). `contact` is optional (`name` may replace first/last; alias `poc`); without it the pipeline looks the contact up. `send` defaults to true. Several cases: `{"cases": [...]}` (up to 3).
+- Response: `status`, `decision`, `qualified`, `company` (fit score, reason, score reasons, flags, pages read), `contact`, `pain_points`, `email` (subject, body, addressed_to, hook, sent, sent_to, intended_recipient), `quality`, `disagreement`, `run_id`, `seconds`, `warnings`, `error`.
+- Errors: invalid requests return **400** with `error.code` (`empty_body`, `invalid_json`, `missing_domain`, `invalid_domain`, `invalid_contact`, `invalid_send`, `too_many_cases`, ...) and nothing runs; wrong method **405**. Companies that cannot be processed still return **200** with a reason: `site_unreachable`, `no_contact_found`, `draft_failed_checks`, `pipeline_error`, or a `DISQUALIFIED` / `DORMANT` decision. The service never crashes on an input.
+- A run takes about 1-2 minutes (`maxDuration` 300s in `vercel.json`). Needs these Vercel env vars: `GEMINI_API_KEY1`(-3), `NEON_DATABASE_URL` (or `DATABASE_URL`), `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `SEND_TO`, `SENDER_NAME`.

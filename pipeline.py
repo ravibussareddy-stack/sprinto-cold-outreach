@@ -35,14 +35,14 @@ def log(msg):
     print(msg, flush=True)
 
 
-def process(domain: str, do_send: bool, sender_name: str) -> dict:
+def process(domain: str, do_send: bool, sender_name: str, contact: dict | None = None) -> dict:
     """Run one company. Any unexpected error is recorded on the company and the
     batch carries on (degrade gracefully: log the reason, move on)."""
     t0 = time.time()
     rec = {"domain": domain, "status": None}
     log(f"\n=== {domain} ===")
     try:
-        return _process(domain, do_send, sender_name, rec, t0)
+        return _process(domain, do_send, sender_name, rec, t0, contact)
     except Exception as e:
         log(f"  ERROR: {e}")
         rec.update(status="ERROR", error=f"{type(e).__name__}: {e}",
@@ -50,17 +50,17 @@ def process(domain: str, do_send: bool, sender_name: str) -> dict:
         return rec
 
 
-def _process(domain, do_send, sender_name, rec, t0):
+def _process(domain, do_send, sender_name, rec, t0, contact=None):
     llm.context["domain"] = domain               # token use is recorded per company
     tokens_before = (llm.usage_log["input_tokens"], llm.usage_log["output_tokens"])
     try:
-        return _process_inner(domain, do_send, sender_name, rec, t0)
+        return _process_inner(domain, do_send, sender_name, rec, t0, contact)
     finally:
         rec["usage"] = {"input_tokens": llm.usage_log["input_tokens"] - tokens_before[0],
                         "output_tokens": llm.usage_log["output_tokens"] - tokens_before[1]}
 
 
-def _process_inner(domain, do_send, sender_name, rec, t0):
+def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
 
     # Steps 1-3: scrape, extract, qualify (with loop)
     try:
@@ -86,7 +86,9 @@ def _process_inner(domain, do_send, sender_name, rec, t0):
 
     # Step 4: PoC
     profile = q["profile"]
-    contact = poc_mod.find_poc(domain, profile.employee_estimate)
+    # A contact supplied with the case (API / test input) wins over the lookup.
+    contact = dict(given_contact, source="provided with the case") if given_contact else \
+        poc_mod.find_poc(domain, profile.employee_estimate)
     rec["poc"] = contact
     if "error" in contact:
         log(f"  PoC: {contact['error']}")
