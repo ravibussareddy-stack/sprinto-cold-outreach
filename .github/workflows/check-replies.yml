@@ -5,7 +5,9 @@ name: Check replies
 # only to YOUR OWN inbox (SEND_TO).
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes (GitHub may start it a few minutes late)
+    # Every 30 minutes, off the hour: GitHub delays or drops scheduled runs at :00 and :30
+    # under load. Runs can still start late; use "Run workflow" for an immediate check.
+    - cron: "17,47 * * * *"
   workflow_dispatch:
 
 permissions:
