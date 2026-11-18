@@ -51,6 +51,9 @@ MIN_EMPLOYEES, MAX_EMPLOYEES = 10, 1000
 # --- Sequence 2: scheduling (L5 workflow) ----------------------------------
 # Meeting slots are offered in this timezone (business hours only).
 SLOT_TIMEZONE = os.getenv("SLOT_TIMEZONE", "Asia/Kolkata")
+# "Good morning / afternoon / evening" in drafts is chosen by the local time here
+# when the draft is written (the recipient's own timezone is not known).
+GREETING_TIMEZONE = os.getenv("GREETING_TIMEZONE") or SLOT_TIMEZONE
 SLOT_HOURS = (10, 15)              # 10:00 and 15:00 local
 SLOTS_TO_OFFER = 3                 # "2-3 specific times"
 SLOT_LOOKAHEAD_DAYS = 7
