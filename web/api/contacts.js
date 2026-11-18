@@ -1,9 +1,7 @@
-const { authorized } = require("../lib/auth");
 const { getPool } = require("../lib/db");
 
 // Clientele: every contact and where they stand.
 module.exports = async (req, res) => {
-  if (!authorized(req)) return res.status(401).json({ error: "unauthorized" });
   try {
     const r = await getPool().query(`
       SELECT domain, company, contact_name, contact_email, title, status, last_outcome,

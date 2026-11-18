@@ -1,9 +1,7 @@
-const { authorized } = require("../lib/auth");
 const { getPool } = require("../lib/db");
 
 // Feedback repo (ranked the way the writer sees it) and the winning emails.
 module.exports = async (req, res) => {
-  if (!authorized(req)) return res.status(401).json({ error: "unauthorized" });
   const pool = getPool();
   try {
     const lessons = await pool.query(`

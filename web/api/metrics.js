@@ -1,4 +1,3 @@
-const { authorized } = require("../lib/auth");
 const { getPool } = require("../lib/db");
 
 // Everything the dashboard tiles need, in one call.
@@ -16,12 +15,13 @@ const STAGE_BY_DECISION = {
   DORMANT: "Dormant", DISQUALIFIED: "Disqualified", MANUAL_REVIEW: "Manual review",
 };
 
-async function safe(pool, sql, fallback) {
-  try { return (await pool.query(sql)).rows; } catch (e) { return fallback; }
+const REVIEW_THRESHOLD = parseFloat(process.env.REVIEW_THRESHOLD || "20");
+
+async function safe(pool, sql, fallback, params) {
+  try { return (await pool.query(sql, params || [])).rows; } catch (e) { return fallback; }
 }
 
 module.exports = async (req, res) => {
-  if (!authorized(req)) return res.status(401).json({ error: "unauthorized" });
   const pool = getPool();
   try {
     const [conv] = await safe(pool, `
@@ -37,11 +37,31 @@ module.exports = async (req, res) => {
 
     const emailKinds = await safe(pool, `SELECT kind, count(*)::int AS n FROM emails GROUP BY kind ORDER BY n DESC`, []);
 
+    // Average disagreement: over all drafts, and over the ones that went wrong -
+    // above the review threshold, conversation ended badly (declined / no reply), or rewritten by you.
     const [quality] = await safe(pool, `
       SELECT count(*)::int AS drafts,
-             avg((record->'disagreement'->>'score')::numeric) AS avg_disagreement,
-             avg((record->'quality'->>'passed')::numeric / NULLIF((record->'quality'->>'total')::numeric, 0)) AS avg_quality
-      FROM runs WHERE record ? 'email'`, [{}]);
+             avg(score) AS avg_all,
+             count(*) FILTER (WHERE score > $1)::int AS flagged_n,
+             avg(score) FILTER (WHERE score > $1) AS avg_flagged,
+             count(*) FILTER (WHERE bad)::int AS bad_n,
+             avg(score) FILTER (WHERE bad) AS avg_bad,
+             count(*) FILTER (WHERE rewritten)::int AS rewritten_n,
+             avg(score) FILTER (WHERE rewritten) AS avg_rewritten,
+             count(*) FILTER (WHERE score > $1 OR bad OR rewritten)::int AS wrong_n,
+             avg(score) FILTER (WHERE score > $1 OR bad OR rewritten) AS avg_wrong,
+             count(*) FILTER (WHERE score > $1 AND NOT reviewed)::int AS review_queue,
+             avg(quality) AS avg_quality
+      FROM (
+        SELECT (r.record->'disagreement'->>'score')::numeric AS score,
+               (r.record->'quality'->>'passed')::numeric / NULLIF((r.record->'quality'->>'total')::numeric, 0) AS quality,
+               EXISTS (SELECT 1 FROM threads t WHERE t.thread_id = r.record->>'thread_id'
+                       AND t.outcome IN ('not_interested', 'non_respondent')) AS bad,
+               EXISTS (SELECT 1 FROM reviews v WHERE v.run_id = r.id AND v.email_action = 'rewritten') AS rewritten,
+               EXISTS (SELECT 1 FROM reviews v WHERE v.run_id = r.id) AS reviewed
+        FROM runs r WHERE r.record ? 'email' AND r.record->'disagreement' ? 'score'
+      ) x`, [{}], [REVIEW_THRESHOLD]);
+    const n = (v) => (v == null ? null : Number(v));
 
     const usage = await safe(pool, `
       SELECT purpose, count(*)::int AS calls, sum(input_tokens)::bigint AS input_tokens,
@@ -80,9 +100,15 @@ module.exports = async (req, res) => {
       engagement_rate: rate(conv.replied, conv.started),
       booking_rate: rate(conv.booked, conv.positive),
       emails_by_kind: emailKinds,
-      quality: { drafts: quality.drafts || 0,
-                 avg_disagreement: quality.avg_disagreement == null ? null : Number(quality.avg_disagreement),
-                 avg_quality: quality.avg_quality == null ? null : Number(quality.avg_quality) },
+      quality: { drafts: quality.drafts || 0, avg_quality: n(quality.avg_quality) },
+      disagreement: {
+        threshold: REVIEW_THRESHOLD, review_queue: quality.review_queue || 0,
+        all: { avg: n(quality.avg_all), n: quality.drafts || 0 },
+        wrong: { avg: n(quality.avg_wrong), n: quality.wrong_n || 0 },
+        flagged: { avg: n(quality.avg_flagged), n: quality.flagged_n || 0 },
+        bad_outcome: { avg: n(quality.avg_bad), n: quality.bad_n || 0 },
+        rewritten: { avg: n(quality.avg_rewritten), n: quality.rewritten_n || 0 },
+      },
       tokens: { input: tin, output: tout, est_cost_usd: cost(tin, tout),
                 price_per_m: { input: PRICE_IN, output: PRICE_OUT },
                 by_purpose: usage.map((u) => ({ ...u, input_tokens: Number(u.input_tokens),

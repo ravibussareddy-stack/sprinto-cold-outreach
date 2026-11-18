@@ -34,7 +34,9 @@
   }
 
   var id = new URLSearchParams(location.search).get("id");
-  dash.api("/api/run?id=" + encodeURIComponent(id)).then(function (r) {
+  Promise.all([dash.api("/api/run?id=" + encodeURIComponent(id)), dash.api("/api/review")]).then(function (both) {
+    var r = both[0], queue = both[1];
+    var inQueue = (queue.items || []).some(function (x) { return String(x.id) === String(id); });
     var rec = r.record || {}, q = rec.qualification || {}, email = rec.email || {}, d = rec.disagreement || {}, qual = rec.quality;
     var parts = d.parts || {};
     var hasScore = typeof d.score === "number";
@@ -52,6 +54,8 @@
         E(dash.when(r.created_at)) + " &middot; " + E(r.decision || "-") + " &middot; fit " + E(q.score == null ? "-" : q.score) +
         " &middot; contact " + E(rec.poc && rec.poc.email ? rec.poc.email : "none") + "</div></div>" +
         '<span class="pill strong">' + E((rec.status || "-").split(" (")[0]) + "</span></header>" +
+      (inQueue ? '<div class="banner section" id="review-banner">Needs review: disagreement ' + E(d.score) + " is above " +
+        E(queue.threshold) + '. <button class="btn" data-action="kept">Kept</button> <button class="btn" data-action="rewritten">Rewritten</button></div>' : "") +
 
       '<div class="grid-2">' +
         '<section class="glass lift card"><h2>Disagreement score</h2>' +
@@ -79,6 +83,15 @@
           "</p></section>" +
       "</div>";
   }).catch(function (e) { document.getElementById("error").textContent = e.message; });
+
+  document.getElementById("content").addEventListener("click", function (ev) {
+    var b = ev.target.closest("#review-banner button");
+    if (!b) return;
+    dash.api("/api/review", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ run_id: Number(id), action: b.dataset.action }) })
+      .then(function () { document.getElementById("review-banner").textContent = "Reviewed: marked " + b.dataset.action + "."; })
+      .catch(function (e) { document.getElementById("error").textContent = e.message; });
+  });
 })();
 </script>
 </body>

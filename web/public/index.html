@@ -27,6 +27,18 @@
   <!-- KPI tiles -->
   <section class="tiles" id="tiles"></section>
 
+  <!-- Review queue -->
+  <section class="glass card section" id="review-card">
+    <div class="row-head"><h2>Needs review <span class="muted small" id="review-rule"></span></h2>
+      <span class="muted small">Mark each one so it leaves the queue (this also feeds the rewrite rate)</span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>When</th><th>Company</th><th>Disagreement</th><th>Why</th><th>Subject</th><th></th></tr></thead>
+        <tbody id="review-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
   <!-- Pipeline -->
   <section class="glass card section">
     <div class="row-head"><h2>Companies in the pipeline</h2><span class="muted small" id="pipe-count"></span></div>
@@ -123,6 +135,56 @@
     return el;
   }
 
+  var disagreementView = "all";
+  var DIS_VIEWS = [["all", "All"], ["wrong", "Gone wrong"], ["flagged", "Above threshold"],
+                   ["bad_outcome", "Declined / no reply"], ["rewritten", "Rewritten"]];
+  var DIS_HELP = { all: "every draft", wrong: "above threshold, declined / no reply, or rewritten",
+                   flagged: "drafts above the review threshold", bad_outcome: "conversation ended declined or with no reply",
+                   rewritten: "drafts you marked as rewritten" };
+  try { disagreementView = sessionStorage.getItem("disView") || "all"; } catch (e) {}
+
+  function disagreementTile(d) {
+    var el = document.createElement("div");
+    el.className = "glass lift tile";
+    function draw(animate) {
+      var v = d[disagreementView] || {};
+      el.innerHTML = '<div class="label">Average disagreement</div><div class="value">-</div><div class="sub">' +
+        E(v.n ? v.n + " draft(s): " + DIS_HELP[disagreementView] : "no drafts in this group yet") + " (lower is better)</div>" +
+        '<div class="bar"><span></span></div><div class="seg">' + DIS_VIEWS.map(function (o) {
+          return '<button data-v="' + o[0] + '" class="' + (o[0] === disagreementView ? "on" : "") + '">' + E(o[1]) + "</button>";
+        }).join("") + "</div>";
+      var fmt = function (x) { return x == null ? "-" : Math.round(x) + "/100"; };
+      if (animate) dash.countUp(el.querySelector(".value"), v.avg, fmt); else el.querySelector(".value").textContent = fmt(v.avg);
+      setTimeout(function () { el.querySelector(".bar span").style.width = (v.avg == null ? 0 : Math.round(v.avg)) + "%"; }, 30);
+    }
+    el.addEventListener("click", function (ev) {
+      var b = ev.target.closest(".seg button");
+      if (!b) return;
+      disagreementView = b.dataset.v;
+      try { sessionStorage.setItem("disView", disagreementView); } catch (e) {}
+      draw(true);
+    });
+    draw(true);
+    return el;
+  }
+
+  function renderReview(r) {
+    document.getElementById("review-rule").textContent = "(disagreement above " + r.threshold + ")";
+    var rows = r.items || [];
+    document.getElementById("review-rows").innerHTML = rows.length ? rows.map(function (x) {
+      var p = x.parts || {};
+      var why = [];
+      if ((p.structure || p.rules) > 0) why.push("structure " + (p.structure != null ? p.structure : p.rules));
+      if ((p.wrong_info || p.claims) > 0) why.push("wrong info " + (p.wrong_info != null ? p.wrong_info : p.claims));
+      if (p.judge > 0) why.push("judge " + p.judge);
+      var failed = (x.failed_checks || []).length ? '<div class="muted small">failed: ' + E(x.failed_checks.join(", ")) + "</div>" : "";
+      return "<tr><td class='muted'>" + E(dash.when(x.created_at)) + '</td><td><a href="draft.html?id=' + E(x.id) + '">' + E(x.domain) +
+        "</a></td><td>" + pill(Math.round(x.score) + "/100", "warn") + "</td><td class='small'>" + E(why.join(", ") || "-") + failed +
+        "</td><td>" + E(x.subject || "-") + '</td><td style="white-space:nowrap"><button class="btn" data-run="' + E(x.id) +
+        '" data-action="kept">Kept</button> <button class="btn" data-run="' + E(x.id) + '" data-action="rewritten">Rewritten</button></td></tr>';
+    }).join("") : '<tr><td colspan="6" class="empty">Nothing to review - every draft is at or below ' + E(r.threshold) + ".</td></tr>";
+  }
+
   function renderTiles(m) {
     var c = m.conversations || {}, q = m.quality || {}, t = m.tokens || {};
     var box = document.getElementById("tiles");
@@ -135,8 +197,13 @@
     box.appendChild(tile("Replies", (c.positive || 0) + (c.negative || 0), intFmt, (c.positive || 0) + " positive, " + (c.negative || 0) + " negative"));
     box.appendChild(tile("No reply", c.non_respondent || 0, intFmt, (c.followups || 0) + " follow-ups sent in total"));
     box.appendChild(tile("Email quality", q.avg_quality, pctFmt, "average structure checks passed", q.avg_quality || 0));
-    box.appendChild(tile("Disagreement", q.avg_disagreement, function (x) { return x == null ? "-" : Math.round(x) + "/100"; },
-      "average over " + (q.drafts || 0) + " drafts (lower is better)", q.avg_disagreement == null ? null : q.avg_disagreement / 100));
+    box.appendChild(disagreementTile(m.disagreement || {}));
+    var rq = (m.disagreement || {}).review_queue || 0;
+    var rt = tile("Needs review", rq, intFmt, "drafts above " + ((m.disagreement || {}).threshold || 20) + " not yet reviewed");
+    if (rq > 0) rt.classList.add("alert");
+    rt.style.cursor = "pointer";
+    rt.addEventListener("click", function () { document.getElementById("review-card").scrollIntoView({ behavior: "smooth" }); });
+    box.appendChild(rt);
     box.appendChild(tile("Tokens used", (t.input || 0) + (t.output || 0), intFmt,
       "est. $" + (t.est_cost_usd || 0).toFixed(4) + " (" + intFmt(t.input) + " in / " + intFmt(t.output) + " out)"));
     box.appendChild(tile("Pipeline", (m.pipeline || {}).companies || 0, intFmt, (m.contacts || 0) + " contact(s), " + ((m.feedback || {}).lessons || 0) + " lessons learnt"));
@@ -220,7 +287,8 @@
 
   function load() {
     document.getElementById("error").textContent = "";
-    Promise.all([dash.api("/api/metrics"), dash.api("/api/contacts"), dash.api("/api/feedback"), dash.api("/api/runs")])
+    Promise.all([dash.api("/api/metrics"), dash.api("/api/contacts"), dash.api("/api/feedback"), dash.api("/api/runs"),
+                 dash.api("/api/review")])
       .then(function (r) {
         var m = r[0];
         renderTiles(m);
@@ -232,6 +300,7 @@
         renderTokens(m.tokens);
         renderFeedback(r[2]);
         renderRuns(r[3]);
+        renderReview(r[4]);
         document.getElementById("updated").textContent = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
       })
       .catch(function (e) { document.getElementById("error").textContent = e.message; });
@@ -244,6 +313,14 @@
     renderPipeline();
   });
   document.getElementById("contact-search").addEventListener("input", renderContacts);
+  document.getElementById("review-rows").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-run]");
+    if (!b) return;
+    b.disabled = true;
+    dash.api("/api/review", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ run_id: Number(b.dataset.run), action: b.dataset.action }) })
+      .then(load).catch(function (e) { document.getElementById("error").textContent = e.message; b.disabled = false; });
+  });
   document.getElementById("refresh").addEventListener("click", load);
   load();
   setInterval(load, 60000);

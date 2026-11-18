@@ -123,6 +123,9 @@ def _process_inner(domain, do_send, sender_name, rec, t0):
         structure_failures = quality["failed"] + [p for p in problems if p not in quality["failed"]]
         rec["disagreement"] = disagreement.assess(draft.body, profile.model_dump_json(), structure_failures)
         log(f"  disagreement: {rec['disagreement']['score']}/100 {rec['disagreement']['parts']}")
+        rec["needs_review"] = rec["disagreement"]["score"] > config.REVIEW_THRESHOLD
+        if rec["needs_review"]:
+            log(f"  -> above {config.REVIEW_THRESHOLD}: added to the review queue on the dashboard")
     except Exception as e:
         rec["disagreement"] = {"error": f"{type(e).__name__}: {e}"}
         log(f"  disagreement: not computed ({e})")
