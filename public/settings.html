@@ -43,6 +43,16 @@
   <nav class="glass nav" id="nav"></nav>
   <div id="error" class="error"></div>
 
+  <section class="glass card section" id="changes">
+    <div class="row-head"><h2>How the rubric has changed</h2>
+      <div style="display:flex;gap:8px;align-items:center"><span class="muted small" id="tune-status"></span>
+        <button class="btn" id="tune-now">Check now</button></div></div>
+    <p class="muted small" style="margin-top:-6px">The rubric tunes itself once a day from real outcomes (replies, meetings, your reviews),
+      in small steps and only with enough evidence. Every change is listed here with the reason. Undo any of them; the tuner then
+      leaves that setting alone for 14 days.</p>
+    <div class="lessons" id="change-log"></div>
+    <div class="small muted" id="tune-notes" style="margin-top:10px"></div>
+  </section>
   <section class="glass card section preview" id="preview"></section>
   <div id="sections"></div>
 
@@ -101,6 +111,10 @@ dash.nav("rubric");
       min_sends_to_learn: ["Sends needed before learning", "Below this, the window above is used."] }],
     ["budget", "Budget", "Model spend this calendar month. At the limit, research and replies pause until it is raised or the month ends.", {
       monthly_inr: ["Monthly budget (INR)", "0 means no limit."] }],
+    ["auto_tune", "Auto-tuning", "How the rubric learns from outcomes.", {
+      mode: ["Mode", "auto: adjust daily from outcomes; off: only you change it."],
+      min_outcomes: ["Results needed before a change", "Fewer results than this and nothing changes."],
+      max_step: ["Largest change per step (points)", "A single change never moves a value further than this."] }],
   ];
   var RULE_LABELS = { any_named_cert: "Any named certification (lecturer's rule)",
     soc2_and_iso: "Only if it holds both SOC 2 and ISO 27001",
@@ -132,8 +146,10 @@ dash.nav("rubric");
         '<div class="fields">' + Object.keys(fields).map(function (key) {
           var id = name + "." + key, v = state.saved[name][key], d = state.defaults[name][key], input;
           if (key === "mode") {
-            input = '<select id="' + id + '">' + ["auto", "fixed"].map(function (m) {
-              return '<option value="' + m + '"' + (m === v ? " selected" : "") + ">" + (m === "auto" ? "Auto - learn from replies" : "Fixed") + "</option>"; }).join("") + "</select>";
+            var opts = name === "auto_tune" ? [["auto", "Auto - tune daily from outcomes"], ["off", "Off"]]
+                                            : [["auto", "Auto - learn from replies"], ["fixed", "Fixed"]];
+            input = '<select id="' + id + '">' + opts.map(function (o) {
+              return '<option value="' + o[0] + '"' + (o[0] === v ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>";
           } else if (key === "dormant_rule") {
             input = '<select id="' + id + '">' + state.rules.map(function (r) {
               return '<option value="' + r + '"' + (r === v ? " selected" : "") + ">" + E(RULE_LABELS[r] || r) + "</option>"; }).join("") + "</select>";
@@ -205,9 +221,42 @@ dash.nav("rubric");
       state.saved = s.rubric; state.defaults = s.defaults; state.ranges = s.ranges; state.rules = s.dormant_rules;
       document.getElementById("status").textContent = s.custom ? "Custom rubric, saved " + dash.when(s.updated_at) + "." : "Using the defaults.";
       render();
+      renderChanges(s.changes || [], s.tuning);
       note("", "");
     }).catch(function (e) { document.getElementById("error").textContent = e.message; });
   }
+
+  function labelFor(section, key) {
+    for (var i = 0; i < LAYOUT.length; i++) if (LAYOUT[i][0] === section && LAYOUT[i][3][key]) return LAYOUT[i][1] + ": " + LAYOUT[i][3][key][0];
+    return section + "." + key;
+  }
+  function show(v) { return Array.isArray(v) ? v.join(", ") : (RULE_LABELS[v] || String(v)); }
+  function renderChanges(changes, tuning) {
+    var WHO = { auto: ["Auto-tuned", "strong"], you: ["You", "mid"], undo: ["Undone by you", "soft"] };
+    document.getElementById("tune-status").textContent = tuning ? "Last checked " + dash.when(tuning.last_run) + " - " + tuning.summary : "Not checked yet";
+    document.getElementById("tune-notes").innerHTML = tuning && tuning.notes && tuning.notes.length ?
+      "<b>What it is waiting for:</b> " + tuning.notes.map(E).join(" ") : "";
+    document.getElementById("change-log").innerHTML = changes.length ? changes.map(function (c) {
+      var who = WHO[c.source] || [c.source, "soft"];
+      return '<div class="lesson"><div class="meta">' + '<span class="pill ' + who[1] + '">' + E(who[0]) + "</span>" +
+        "<b>" + E(labelFor(c.section, c.key)) + "</b><span>" + E(show(c.old_value)) + " \u2192 " + E(show(c.new_value)) + "</span>" +
+        '<span class="muted">' + E(dash.when(c.created_at)) + "</span>" + (c.reverted ? '<span class="pill soft">undone</span>' : "") +
+        (c.source === "auto" && !c.reverted ? '<button class="btn" data-undo="' + E(c.id) + '">Undo</button>' : "") + "</div>" + E(c.reason) + "</div>";
+    }).join("") : '<div class="empty">No changes yet. The first automatic change will appear once there are enough outcomes.</div>';
+  }
+  document.getElementById("change-log").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-undo]");
+    if (!b || !window.confirm("Undo this change?")) return;
+    post({ undo: Number(b.dataset.undo) }).then(function () { load(); note("Change undone.", "ok"); }).catch(function (e) { note(e.message, "bad"); });
+  });
+  document.getElementById("tune-now").addEventListener("click", function () {
+    var b = this;
+    b.disabled = true;
+    document.getElementById("tune-status").textContent = "Checking outcomes...";
+    dash.api("/api/cron_check_replies?tune=1").then(function (r) { load(); note(r.summary || r.reason || "Checked.", "ok"); })
+      .catch(function (e) { note("Check failed: " + e.message, "bad"); })
+      .then(function () { b.disabled = false; });
+  });
 
   document.getElementById("sections").addEventListener("input", refresh);
   document.getElementById("discard").addEventListener("click", render);

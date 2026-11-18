@@ -55,6 +55,8 @@ def merge(base: dict, override: dict | None) -> dict:
         out["decision"] = copy.deepcopy(base["decision"])       # inconsistent thresholds: use defaults
     if out["size"]["min_employees"] > out["size"]["max_employees"]:
         out["size"] = copy.deepcopy(base["size"])
+    if out["auto_tune"]["mode"] not in ("auto", "off") or out["auto_tune"]["max_step"] > 20:
+        out["auto_tune"] = copy.deepcopy(base["auto_tune"])
     sw = out["send_window"]
     days = [x for x in sw["days"] if x in WEEKDAYS]
     if sw["mode"] not in SEND_MODES or not days or not (0 <= sw["start_hour"] < sw["end_hour"] <= 24):

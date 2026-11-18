@@ -29,6 +29,7 @@ import llm
 import meeting
 import rubric
 import sendtime
+import tune
 
 
 def log(msg: str):
@@ -130,7 +131,13 @@ def main(trigger: str = "github") -> dict:
                 r = f"ERROR {type(e).__name__}: {e} (will retry next run)"
             log(f"  -> {r}")
             results.append({"domain": t["domain"], "thread_id": t["thread_id"], "result": r})
-        return {"ran": True, "trigger": trigger, "window": sendtime.describe(window), "threads": results}
+        try:
+            tuning = tune.run(log=log)             # at most once a day: adjust the rubric from outcomes
+        except Exception as e:                    # tuning must never block the reply flow
+            tuning = {"ran": False, "reason": f"{type(e).__name__}: {e}"}
+            log(f"auto-tune skipped: {tuning['reason']}")
+        return {"ran": True, "trigger": trigger, "window": sendtime.describe(window), "threads": results,
+                "tuning": {k: tuning.get(k) for k in ("ran", "summary", "reason")}}
     finally:
         try:
             lock.execute("SELECT pg_advisory_unlock(%s)", (LOCK_ID,))

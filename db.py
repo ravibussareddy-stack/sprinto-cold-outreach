@@ -113,6 +113,19 @@ CREATE TABLE IF NOT EXISTS settings (
     value JSONB NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Every rubric change: by the auto-tuner, by you on the rubric page, or an undo.
+CREATE TABLE IF NOT EXISTS rubric_changes (
+    id BIGSERIAL PRIMARY KEY,
+    section TEXT NOT NULL,
+    key TEXT NOT NULL,
+    old_value JSONB,
+    new_value JSONB,
+    reason TEXT NOT NULL,          -- plain language
+    evidence JSONB,
+    source TEXT NOT NULL,          -- auto | you | undo
+    reverted BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 -- Token use per model call.
 CREATE TABLE IF NOT EXISTS llm_usage (
     id BIGSERIAL PRIMARY KEY,
@@ -412,3 +425,18 @@ def add_run_review(run_id: int, domain: str, action: str, note: str):
     with _conn() as c:
         c.execute("INSERT INTO reviews (run_id, domain, email_action, note) VALUES (%s,%s,%s,%s)",
                   (run_id, domain, action, note))
+
+
+@_safe
+def put_setting(key: str, value):
+    with _conn() as c:
+        c.execute("INSERT INTO settings (key, value, updated_at) VALUES (%s, %s, now()) "
+                  "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()", (key, Json(value)))
+
+
+@_safe
+def log_rubric_change(section: str, key: str, old, new, reason: str, evidence: dict | None, source: str):
+    with _conn() as c:
+        c.execute("INSERT INTO rubric_changes (section, key, old_value, new_value, reason, evidence, source) "
+                  "VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                  (section, key, Json(old), Json(new), reason, Json(evidence) if evidence else None, source))

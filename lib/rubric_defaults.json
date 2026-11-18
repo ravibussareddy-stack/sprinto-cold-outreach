@@ -63,5 +63,10 @@
   },
   "budget": {
     "monthly_inr": 500
+  },
+  "auto_tune": {
+    "mode": "auto",
+    "min_outcomes": 8,
+    "max_step": 5
   }
 }

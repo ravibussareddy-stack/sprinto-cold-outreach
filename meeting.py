@@ -402,9 +402,10 @@ def build_graph(ctx: Ctx) -> StateGraph:
                     "trace": ["book_meeting: dry run, invite not sent"]}
         trace = []
         if config.CALENDLY_BOOKING and config.CALENDLY_TOKEN:
-            # Build 1: the Calendly invitee is your own inbox (SEND_TO), never the prospect.
+            # Build 1: the Calendly invitee is your own Gmail (CALENDLY_INVITEE_EMAIL), never the prospect;
+            # Calendly emails it the invitation, so the meeting lands on that Google Calendar too.
             ok, res, line = _attempt("calendly_booking", lambda: calendar_tool.book_calendly(
-                slot, ctx.contact_name, config.SEND_TO))
+                slot, ctx.contact_name, config.CALENDLY_INVITEE_EMAIL or config.SEND_TO))
             trace.append(line)
             if ok:
                 ok2, err, line2 = _attempt("send_email", lambda: _send(

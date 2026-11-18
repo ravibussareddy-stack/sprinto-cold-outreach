@@ -289,7 +289,7 @@ def _with_calendly(book):
 def test_calendly_booking_confirms_without_ics():
     booked = []
     when, s = _with_calendly(lambda slot, name, email: booked.append((slot, email)) or {"event": "uri"})
-    assert s.outcome == "booked" and booked == [(when.isoformat(), config.SEND_TO)], (s.trace, booked)
+    assert s.outcome == "booked" and booked == [(when.isoformat(), config.CALENDLY_INVITEE_EMAIL or config.SEND_TO)], (s.trace, booked)
     assert [a for _, a in SENT] == [False], SENT            # confirmation only; Calendly sends the invite
     assert "from Calendly" in BODIES[0] and any("calendly_booking: ok" in t for t in s.trace)
 

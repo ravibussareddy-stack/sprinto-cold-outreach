@@ -75,6 +75,9 @@ CALENDLY_TOKEN = os.getenv("CALENDLY_TOKEN", "")
 # with a Meet link). Build 1: the Calendly invitee is SEND_TO, never the prospect.
 CALENDLY_BOOKING = os.getenv("CALENDLY_BOOKING", "0") == "1"
 CALENDLY_EVENT_TYPE = os.getenv("CALENDLY_EVENT_TYPE", "")   # event type URI; blank = first active one
+# Who Calendly books as the invitee: Calendly emails them the invitation, so it lands on that calendar.
+# Build 1: your own Gmail (default GMAIL_ADDRESS), never the prospect. Build 2: the prospect's email.
+CALENDLY_INVITEE_EMAIL = os.getenv("CALENDLY_INVITEE_EMAIL") or os.getenv("GMAIL_ADDRESS", "")
 # Prospect replies are read from REPLIES_DIR/<domain>.txt, one reply per block,
 # blocks separated by a line containing only ---.
 REPLIES_DIR = os.getenv("REPLIES_DIR", "replies")

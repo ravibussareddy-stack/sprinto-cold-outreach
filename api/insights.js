@@ -106,6 +106,11 @@ module.exports = async (req, res) => {
       detail: `Spent \u20b9${spentMonth.toFixed(2)} of \u20b9${limit}. Raise the budget on Filters & rubric to resume.`, link: "settings.html" });
     else if (limit && spentMonth >= 0.8 * limit) todo.push({ severity: "medium", title: `${Math.round(spentMonth / limit * 100)}% of this month's budget used`,
       detail: `\u20b9${spentMonth.toFixed(2)} of \u20b9${limit}; everything pauses at the limit.`, link: "index.html#costs" });
+    const autoChanges = await rows(pool, `SELECT section, key, old_value, new_value FROM rubric_changes
+                                          WHERE source = 'auto' AND NOT reverted AND created_at > now() - interval '7 days' ORDER BY created_at DESC`);
+    if (autoChanges.length) todo.push({ severity: "medium", title: `The rubric tuned itself ${autoChanges.length} time(s) this week`,
+      detail: autoChanges.slice(0, 3).map((c) => `${c.key.replace(/_/g, " ")}: ${c.old_value} \u2192 ${c.new_value}`).join("; ") + ". See why, or undo.",
+      link: "settings.html#changes" });
     if (latest.length && dormant.length / latest.length > 0.5) todo.push({ severity: "low",
       title: `${dormant.length} of ${latest.length} companies are dormant`,
       detail: "Most already hold SOC 2. If SOC 2-only companies should be expansion leads, change the dormant rule.",
