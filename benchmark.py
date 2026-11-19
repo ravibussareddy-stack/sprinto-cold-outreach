@@ -28,7 +28,7 @@ CASES = [
              "Expectation set after a local qualification check."},
     {"name": "Already chose a compliance platform (Hanko: ISO 27001 in progress with Comp AI)",
      "body": {"domain": "hanko.io", "contact": STAND_IN, "send": False},
-     "expect_decision": {"DISQUALIFIED", "QUALIFIED_FLAGGED"}, "expect_http": 200, "right_action": "no email",
+     "expect_decision": {"DISQUALIFIED"}, "expect_http": 200, "right_action": "no email",
      "note": "Earlier expected a flagged draft; corrected after the audit: a company mid-audit on another platform "
              "gets no urgency points and scores 30, below the review score."},
     {"name": "Acquired company (Rows: 'Rows joined Superhuman'; its /security page is a 404)",
