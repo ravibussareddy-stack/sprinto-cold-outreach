@@ -46,10 +46,10 @@ def page_certs(pg: dict) -> dict:
     """The page's certification scan. Pages cached before mentions were attributed are re-scanned
     from their raw text; with no raw text, every mention counts (the old behaviour)."""
     c = pg.get("certs") or {}
+    if pg.get("raw_text"):                         # always re-scan: cheap, and cached pages get today's rules
+        return scraper.detect_certifications(pg["raw_text"])
     if "self_claimed" in c:
         return c
-    if pg.get("raw_text"):
-        return scraper.detect_certifications(pg["raw_text"])
     return {**c, "self_claimed": list(c.get("mentioned", [])), "unclear": [], "evidence": [], "tools": []}
 
 

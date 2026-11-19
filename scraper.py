@@ -122,8 +122,13 @@ def detect_certifications(raw_text: str) -> dict:
                 self_claimed.add(name)
             elif who == "unclear":
                 unclear.add(name)
-            if len(evidence) < 6 and not any(e["cert"] == name and e["who"] == who for e in evidence):
-                evidence.append({"cert": name, "who": who, "sentence": f"{pre}{hit}{post}".strip()[:240]})
+            sentence = f"{pre}{hit}{post}".strip()[:240]
+            clear = bool(re.search(r"\b(is|are|we're|we are)\b[^.]{0,30}\b(certified|compliant|audited|attested)\b", sentence, re.I))
+            same = next((e for e in evidence if e["cert"] == name and e["who"] == who), None)
+            if same is None and len(evidence) < 6:
+                evidence.append({"cert": name, "who": who, "sentence": sentence, "_clear": clear})
+            elif same is not None and clear and not same["_clear"]:      # keep the plainest statement of the claim
+                same.update(sentence=sentence, _clear=True)
     tools = []
     for tool in COMPLIANCE_TOOLS:
         for m in re.finditer(rf"\b{re.escape(tool)}\b", text):
@@ -133,6 +138,8 @@ def detect_certifications(raw_text: str) -> dict:
                 tools.append({"tool": tool, "sentence": f"{pre}{hit}{post}".strip()[:240]})
                 break
     in_progress = bool(re.search(IN_PROGRESS_PATTERN, text, re.I))
+    for e in evidence:
+        e.pop("_clear", None)
     return {"mentioned": found, "self_claimed": sorted(self_claimed), "unclear": sorted(unclear - self_claimed),
             "in_progress": in_progress, "evidence": evidence, "tools": tools}
 

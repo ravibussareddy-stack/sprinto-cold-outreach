@@ -87,3 +87,8 @@ def test_a_non_compliance_standard_is_not_a_certification():
     res = run({"https://acme.io": "Passkeys for developers", "https://acme.io/security": "We encrypt data."},
               profile=PROFILE | {"certifications_claimed": ["FIDO2"]})
     assert res["decision"] != "DORMANT" and res["certification"]["held"] == []
+
+
+def test_evidence_quotes_the_plainest_statement_of_the_claim():
+    ev = scraper.detect_certifications(FIXTURE)["evidence"]
+    assert any(e["who"] == "self" and e["sentence"].startswith("PostHog is certified as SOC 2 Type 2") for e in ev), ev
