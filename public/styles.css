@@ -54,25 +54,28 @@ body::before, body::after {
 body::before { width: 520px; height: 520px; left: -140px; top: -120px; background: radial-gradient(circle, #60a5fa, transparent 70%); }
 body::after { width: 620px; height: 620px; right: -180px; bottom: -200px; background: radial-gradient(circle, #a5c8ff, transparent 70%); }
 /* slow drift: the background moves, the content never does. Off for reduced motion. */
-body::before { animation: drift-a 38s ease-in-out infinite alternate; }
-body::after { animation: drift-b 46s ease-in-out infinite alternate; }
+body::before { animation: drift-a 20s ease-in-out infinite alternate; opacity: 0.75; }
+body::after { animation: drift-b 26s ease-in-out infinite alternate; opacity: 0.7; }
+/* the base gradient breathes slowly too */
+body { background-size: 200% 200%; animation: bg-shift 30s ease-in-out infinite alternate; }
+@keyframes bg-shift { from { background-position: 0% 0%; } to { background-position: 100% 100%; } }
 html::before, html::after {
   content: ""; position: fixed; z-index: -1; border-radius: 50%; filter: blur(80px); pointer-events: none;
 }
-html::before { width: 420px; height: 420px; left: 45%; top: 30%; opacity: 0.30;
-  background: radial-gradient(circle, #93c5fd, transparent 70%); animation: drift-c 54s ease-in-out infinite alternate; }
+html::before { width: 480px; height: 480px; left: 45%; top: 30%; opacity: 0.5;
+  background: radial-gradient(circle, #818cf8, transparent 70%); animation: drift-c 24s ease-in-out infinite alternate; }
 /* faint dot grid that shimmers very slowly */
-html::after { inset: 0; border-radius: 0; filter: none; opacity: 0.35;
-  background-image: radial-gradient(rgba(59, 130, 246, 0.18) 1px, transparent 1.2px); background-size: 28px 28px;
+html::after { inset: 0; border-radius: 0; filter: none; opacity: 0.6;
+  background-image: radial-gradient(rgba(59, 130, 246, 0.28) 1px, transparent 1.2px); background-size: 28px 28px;
   -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 20%, transparent 75%);
           mask-image: radial-gradient(ellipse at 50% 40%, #000 20%, transparent 75%);
-  animation: grid-pan 90s linear infinite; }
-@keyframes drift-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(18vw, 14vh) scale(1.15); } }
-@keyframes drift-b { from { transform: translate(0, 0) scale(1); } to { transform: translate(-16vw, -12vh) scale(0.9); } }
-@keyframes drift-c { 0% { transform: translate(-10vw, -6vh); } 50% { transform: translate(8vw, 10vh) scale(1.2); } 100% { transform: translate(-4vw, 12vh); } }
+  animation: grid-pan 40s linear infinite; }
+@keyframes drift-a { from { transform: translate(0, 0) scale(1); } to { transform: translate(35vw, 30vh) scale(1.25); } }
+@keyframes drift-b { from { transform: translate(0, 0) scale(1); } to { transform: translate(-32vw, -28vh) scale(0.85); } }
+@keyframes drift-c { 0% { transform: translate(-25vw, -15vh); } 50% { transform: translate(15vw, 15vh) scale(1.3); } 100% { transform: translate(-5vw, 25vh); } }
 @keyframes grid-pan { from { background-position: 0 0; } to { background-position: 280px 140px; } }
 @media (prefers-reduced-motion: reduce) {
-  body::before, body::after, html::before, html::after { animation: none; }
+  body, body::before, body::after, html::before, html::after { animation: none; }
 }
 
 main { max-width: 1240px; margin: 0 auto; padding: 28px 16px 60px; }
