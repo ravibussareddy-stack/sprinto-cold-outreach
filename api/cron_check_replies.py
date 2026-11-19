@@ -74,7 +74,7 @@ class handler(BaseHTTPRequestHandler):
             started = time.time()
             from urllib.parse import parse_qs, urlparse
             caller = (parse_qs(urlparse(self.path or "").query).get("from") or [""])[0]
-            trigger = caller if caller in ("github", "scheduler") else "vercel-cron"
+            trigger = next((n for n in ("scheduler", "github") if caller.startswith(n)), "vercel-cron")
             with contextlib.redirect_stdout(out):
                 summary = check_replies.main(trigger=trigger)
             heartbeat(trigger, len((summary or {}).get("threads") or []))
