@@ -147,14 +147,9 @@
         target.classList.add("tour-on");
         var host = target.parentElement && target.parentElement.closest(".nav, .top");   // own stacking context: lift it too
         if (host) host.classList.add("tour-lift");
-        target.scrollIntoView({ block: "center", behavior: "smooth" });
-        setTimeout(function () {
-          var r = target.getBoundingClientRect(), cw = Math.min(360, window.innerWidth - 32);
-          var below = r.bottom + 14 + 220 < window.innerHeight;
-          card.style.width = cw + "px";
-          card.style.left = Math.max(16, Math.min(window.innerWidth - cw - 16, r.left)) + "px";
-          card.style.top = (below ? r.bottom + 14 : Math.max(16, r.top - card.offsetHeight - 14)) + "px";
-        }, 350);
+        var r0 = target.getBoundingClientRect();
+        if (r0.top < 70 || r0.bottom > window.innerHeight - 40) target.scrollIntoView({ block: "center" });
+        position();
       } else {
         card.style.width = Math.min(420, window.innerWidth - 32) + "px";
         card.style.left = (window.innerWidth - Math.min(420, window.innerWidth - 32)) / 2 + "px";
@@ -162,7 +157,17 @@
       }
       var nextBtn = card.querySelector('[data-t="next"]'); if (nextBtn) nextBtn.focus({ preventScroll: true });
     }
+    function position() {
+      var st = steps[i], target = st && st.el && document.querySelector(st.el);
+      if (!target) return;
+      var r = target.getBoundingClientRect(), cw = Math.min(360, window.innerWidth - 32);
+      card.style.width = cw + "px";
+      var h = card.offsetHeight, below = r.bottom + 14 + h < window.innerHeight;
+      card.style.left = Math.max(16, Math.min(window.innerWidth - cw - 16, r.left)) + "px";
+      card.style.top = Math.max(16, below ? r.bottom + 14 : r.top - h - 14) + "px";
+    }
     function end() {
+      window.removeEventListener("scroll", position, true); window.removeEventListener("resize", position);
       document.querySelectorAll(".tour-on, .tour-lift").forEach(function (x) { x.classList.remove("tour-on", "tour-lift"); });
       shade.remove(); card.remove(); document.removeEventListener("keydown", keys);
       try { localStorage.setItem(key || "tour-done", "1"); } catch (e) {}
@@ -179,6 +184,7 @@
     });
     shade.addEventListener("click", end);
     document.addEventListener("keydown", keys);
+    window.addEventListener("scroll", position, true); window.addEventListener("resize", position);
     place();
   }
   function tourSeen(key) { try { return localStorage.getItem(key || "tour-done") === "1"; } catch (e) { return true; } }
