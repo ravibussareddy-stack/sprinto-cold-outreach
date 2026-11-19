@@ -103,6 +103,15 @@ def score(structure_failures: list[str], claims: ClaimCheck, verdict: JudgeVerdi
     }
 
 
+def with_structure(result: dict, structure_failures: list[str]) -> dict:
+    """The same score with a different list of structure failures (e.g. the critic's verdict arrived later)."""
+    parts = dict(result["parts"])
+    parts["structure"] = round(WEIGHTS["structure"] * min(len(structure_failures), STRUCTURE_FULL_AT) / STRUCTURE_FULL_AT)
+    total = min(100, sum(parts.values()))
+    return result | {"parts": parts, "score": total, "structure_failures": structure_failures,
+                     "held": HOLD_THRESHOLD is not None and total >= HOLD_THRESHOLD}
+
+
 def assess(email_body: str, research_json: str, structure_failures: list[str]) -> dict:
     """structure_failures: names of failed quality checks (writer.quality_checks) plus any
     hard check failures. The claim check and the judge are independent, so they run in parallel

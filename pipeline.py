@@ -10,6 +10,7 @@ Every decision is written to runs/<timestamp>/ and, if NEON_DATABASE_URL is set,
 to the Neon `runs` table so it can be defended later.
 """
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import datetime as dt
 import json
 import os
@@ -127,7 +128,20 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
     rec["guidance_used"] = [{"id": g["id"], "scope": g["scope"], "score": g["outcome_score"]} for g in guidance]
     log(f"  subject: {draft.subject}\n" + "\n".join("    " + l for l in draft.body.splitlines()))
 
-    # Quality checks: the structure of the email, check by check
+    # The fact check and (for a rewritten draft) the critic's final review run side by side.
+    early = writer.quality_summary(writer.quality_checks(
+        draft, contact["first_name"], writer.greeting(contact["first_name"]), sender_name, profile.company_name, profile))
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        critic_job = pool.submit(writer.finish_critique, draft, profile, pains)
+        fact_job = pool.submit(disagreement.assess, draft.body, profile.model_dump_json(),
+                               early["failed"] + [p for p in problems if p not in early["failed"]])
+        critic_job.result()
+        try:
+            fact = fact_job.result()
+        except Exception as e:
+            fact = {"error": f"{type(e).__name__}: {e}"}
+    rec["email"] = draft.model_dump()
+    # Quality checks: the structure of the email, check by check (with the critic's final verdict)
     quality = writer.quality_summary(writer.quality_checks(
         draft, contact["first_name"], writer.greeting(contact["first_name"]), sender_name, profile.company_name, profile))
     rec["quality"] = quality
@@ -136,8 +150,12 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
 
     # Disagreement score (build 1: reported only; build 2 holds drafts above a threshold)
     try:
-        structure_failures = quality["failed"] + [p for p in problems if p not in quality["failed"]]
-        rec["disagreement"] = disagreement.assess(draft.body, profile.model_dump_json(), structure_failures)
+        if "error" in fact:
+            raise RuntimeError(fact["error"])
+        rec["disagreement"] = fact
+        if "not_generic" in quality["failed"] and "not_generic" not in rec["disagreement"]["structure_failures"]:
+            rec["disagreement"] = disagreement.with_structure(
+                rec["disagreement"], rec["disagreement"]["structure_failures"] + ["not_generic"])
         log(f"  disagreement: {rec['disagreement']['score']}/100 {rec['disagreement']['parts']}")
         threshold = rubric.get("review", "disagreement_threshold")
         rec["needs_review"] = rec["disagreement"]["score"] > threshold

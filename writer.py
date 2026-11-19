@@ -362,6 +362,15 @@ def critique(draft: EmailDraft, profile: CompanyProfile, pains: PainPoints) -> d
                         f"{c.sprinto_edge}/5" + (f"; generic: {c.generic_sentences[0][:80]}" if c.generic_sentences else ""))}
 
 
+def finish_critique(draft: EmailDraft, profile: CompanyProfile, pains: PainPoints) -> None:
+    """The final critic review of a rewritten draft (run in parallel with the fact check)."""
+    if draft.critique and draft.critique.get("pending"):
+        try:
+            draft.critique = critique(draft, profile, pains) | {"rewritten": True}
+        except Exception as e:
+            draft.critique = {"ok": True, "summary": f"critic unavailable ({type(e).__name__})", "rewritten": True}
+
+
 def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_name: str,
                 max_attempts: int = 2, guidance: list[dict] | None = None,
                 exemplars: list[dict] | None = None, soft_retry: bool = True,
@@ -384,6 +393,11 @@ def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_na
         problems = validate(draft, poc["first_name"], hello)
         soft = [c for c in quality_checks(draft, poc["first_name"], hello, sender_name, profile.company_name, profile)
                 if not c["ok"]]
+        if not problems and not soft and attempt > 0:
+            # A rewrite that followed the critic: its final review runs alongside the fact check
+            # (finish_critique), not here, so it costs no extra wait.
+            draft.critique = {"ok": True, "pending": True, "summary": "rewritten after the critic"}
+            return draft, []
         if not problems and not soft:
             # Well formed and specific on paper: now the critic asks "could this go to any company?"
             try:
