@@ -14,6 +14,8 @@ if ROOT not in sys.path:
 os.environ.setdefault("REPLY_MODE", "gmail")
 
 import check_replies  # noqa: E402
+import crawl  # noqa: E402
+import time  # noqa: E402
 import tune  # noqa: E402
 
 
@@ -35,14 +37,28 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True, **result})
             except Exception as e:
                 return self._send(500, {"ok": False, "error": {"code": "internal_error", "message": f"{type(e).__name__}: {e}"}})
+        if "crawl=1" in (self.path or ""):         # "Crawl now" on the dashboard: feeds + 1 company re-researched
+            out = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(out):
+                    result = crawl.run(limit=1, time_budget=150, trigger="dashboard")
+                return self._send(200, {"ok": True, **result})
+            except Exception as e:
+                return self._send(500, {"ok": False, "error": {"code": "internal_error", "message": f"{type(e).__name__}: {e}"}})
         secret = os.getenv("CRON_SECRET")
         if secret and self.headers.get("Authorization") != f"Bearer {secret}":
             return self._send(401, {"error": {"code": "unauthorized", "message": "cron secret required"}})
         out = io.StringIO()
         try:
+            started = time.time()
             with contextlib.redirect_stdout(out):
                 summary = check_replies.main(trigger="vercel-cron")
-            self._send(200, {"ok": True, **(summary or {}), "log": out.getvalue().splitlines()[-60:]})
+                try:                               # then keep company data fresh, in the time that is left
+                    left = 270 - (time.time() - started)
+                    crawled = crawl.run(time_budget=max(0, left - 60), trigger="vercel-cron") if left > 90 else {"skipped": "no time left"}
+                except Exception as e:
+                    crawled = {"error": f"{type(e).__name__}: {e}"}
+            self._send(200, {"ok": True, **(summary or {}), "crawl": crawled, "log": out.getvalue().splitlines()[-60:]})
         except SystemExit as e:
             self._send(500, {"ok": False, "error": {"code": "not_configured", "message": str(e)}})
         except Exception as e:

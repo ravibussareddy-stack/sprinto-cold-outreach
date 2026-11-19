@@ -223,6 +223,23 @@ def deep_cert_urls(homepage: dict, tried: set[str], limit: int = 4) -> list[str]
     return out[:limit]
 
 
+def funding_urls(homepage: dict, tried: set[str], limit: int = 2) -> list[str]:
+    """Funding is published in press, news, about and blog posts - not on careers or pricing pages.
+    The site's sitemap first (an announcement post), then the usual press / about addresses."""
+    u = urlparse(homepage["url"])
+    base = f"{u.scheme}://{u.netloc}"
+    found = [x for x in scraper.sitemap_urls(base, r"rais|funding|series-?[a-e]\b|seed-round|investment|investor|backed|announc", limit=6)
+             if "career" not in x and "job" not in x]
+    links = [l["url"] for l in homepage.get("links", []) if urlparse(l["url"]).netloc.replace("www.", "") == u.netloc.replace("www.", "")
+             and re.search(r"/(press|news|newsroom|media|about|about-us|company|investors?)/?$", urlparse(l["url"]).path, re.I)]
+    guesses = [base + p for p in ("/press", "/news", "/newsroom", "/about", "/about-us", "/company")]
+    out = []
+    for c in found + links + guesses:
+        if c not in tried and c.rstrip("/") not in tried and c not in out:
+            out.append(c)
+    return out[:limit]
+
+
 # ---------------------------------------------------------------- scoring
 def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
     """Deterministic score. Every point has a stated reason; every value comes from the rubric."""
@@ -329,6 +346,39 @@ def _stop(profile: CompanyProfile, pages: list[dict]) -> tuple[str, str] | None:
     return stop
 
 
+STAGE_LABEL = {"Pre-seed": "early (pre-seed / seed)", "Seed": "early (pre-seed / seed)", "Series A": "growth (Series A-C)",
+               "Series B": "growth (Series A-C)", "Series C": "growth (Series A-C)", "Series D+": "late (Series D+)",
+               "Public": "public", "Acquired": "acquired", "Bootstrapped": "bootstrapped"}
+
+
+def _band(n: int | None) -> str | None:
+    if not n:
+        return None
+    for hi, label in ((10, "1-10"), (50, "11-50"), (200, "51-200"), (500, "201-500"), (1000, "501-1,000")):
+        if n <= hi:
+            return label
+    return "1,000+"
+
+
+def firmographics(profile, pages: list[dict], trace: list[dict]) -> dict:
+    """Startup stage, funding and headcount as explicit fields, each with its quote and source page,
+    and where the run looked - so "not found" is explained, not silent."""
+    ev = {e.field: e for e in (profile.evidence or [])}
+    fund = ev.get("funding_stage") or ev.get("funding_evidence")
+    emp = ev.get("employee_estimate")
+    looked = [t["fetch"] for t in trace if t.get("ok") and (t.get("for", "").startswith("stage") or "for" not in t)]
+    return {
+        "startup_stage": STAGE_LABEL.get(profile.funding_stage) or "not found",
+        "funding": {"round": profile.funding_stage or "not found",
+                    "evidence": (fund.quote if fund else profile.funding_evidence) or None,
+                    "source": fund.source_url if fund else None},
+        "employees": {"estimate": profile.employee_estimate, "band": _band(profile.employee_estimate),
+                      "evidence": emp.quote if emp else None, "source": emp.source_url if emp else None},
+        "open_roles": profile.open_roles_count,
+        "looked_at": looked,
+    }
+
+
 def judgement(profile, pages) -> list[dict]:
     """Situations here that the rules leave to your judgement (questions.TOPICS + new ones)."""
     core = {"SOC 2", "ISO 27001"} & {family(c) for c in certs_held(profile, pages)}
@@ -353,6 +403,7 @@ def _early(stop, profile, pages, trace) -> dict:
         decision, reason = ruled
     return {"decision": decision, "reason": reason, "score": None, "score_reasons": [],
             "certs_held": sorted(named_certs(profile, pages)), "flags": _pending_flags(findings),
+            "firmographics": firmographics(profile, pages, trace),
             "certification": cert_evidence(profile, pages), "judgement": findings,
             "profile": profile, "pages": pages, "trace": trace}
 
@@ -369,11 +420,19 @@ def qualify(domain: str, log) -> dict:
 
     pages, tried = [home], {home["url"], url}
     questions.load()                                   # your standing rulings, read once for this run
+    try:                                               # funding news from the daily crawl counts as evidence
+        import crawl
+        for n in crawl.news_pages(domain):
+            pages.append(n); tried.add(n["url"])
+            trace.append({"fetch": n["url"], "for": "stage (news)", "ok": True, "method": n["method"], "error": None})
+    except Exception:
+        pass
     profile = extract_profile(domain, pages)
     log(f"  extracted from homepage; missing: {missing_facts(profile, pages) or 'nothing'}")
 
     extra = 0
     deep_done = False
+    funding_done = False
     per_question = {"stage": 0, "certs": 0, "saas": 0}
     while True:
         stop = _stop(profile, pages)
@@ -392,6 +451,11 @@ def qualify(domain: str, log) -> dict:
             nxt = pick_next_url(cand, home, tried | {u for u, _ in batch})
             if nxt:
                 batch.append((nxt, cand))
+        if "stage" in missing and not funding_done:
+            # Funding rounds are announced in press / news / about posts: look there in this same round.
+            funding_done = True
+            for u in funding_urls(home, tried | {u for u, _ in batch}):
+                batch.append((u, "stage (funding news)"))
         if "certs" in missing and per_question["certs"] >= rubric.get("evidence_loop", "certs") and not deep_done:
             # The usual security page gave nothing: research deeper in this same round (no extra wait).
             deep_done = True
@@ -407,7 +471,7 @@ def qualify(domain: str, log) -> dict:
             fetched = list(pool.map(lambda b: scraper.fetch(b[0]), batch))
         got = False
         for (u, q), pg in zip(batch, fetched):
-            extra += 0 if q.startswith("certs (deeper") else 1        # deeper research does not use the fetch budget
+            extra += 0 if "(" in q else 1        # deeper research and funding news do not use the fetch budget
             trace.append({"fetch": u, "for": q, "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
             log(f"  loop {extra}/{cap}: need {q} -> {u} ({'ok' if pg['ok'] else pg['error']})")
             if pg["ok"]:
@@ -489,5 +553,6 @@ def qualify(domain: str, log) -> dict:
     return {"decision": decision, "score": pts, "score_reasons": reasons, "judgement": findings,
             "still_missing": still_missing, "flags": flags, "reason": reason,
             "certs_held": sorted(named_certs(profile, pages)), "certification": certification,
+            "firmographics": firmographics(profile, pages, trace),
             "expansion": profile.expansion_frameworks,
             "profile": profile, "pages": pages, "trace": trace}

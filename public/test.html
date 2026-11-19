@@ -114,6 +114,23 @@ dash.nav("test");
   });
   function list(items) { return items && items.length ? "<ul class=\"tight\">" + items.join("") + "</ul>" : "-"; }
   function li(t) { return "<li>" + E(t) + "</li>"; }
+  // Stage, funding and headcount, each with its quote and source - or "not found" and where it looked.
+  function firmo(f, part) {
+    if (!f) return "-";
+    var looked = (f.looked_at || []).length ? '<div class="muted small">Looked at: ' + f.looked_at.map(function (u) { return link(u); }).join(", ") + "</div>" : "";
+    if (part === "stage") {
+      var fu = f.funding || {};
+      return "<b>" + E(f.startup_stage) + "</b>" + (fu.round && fu.round !== "not found" ? " &middot; round: " + E(fu.round) : "") +
+        (fu.evidence ? '<div class="small">\u201c' + E(fu.evidence) + "\u201d " + (fu.source ? link(fu.source) : "") + "</div>" : "") +
+        (f.startup_stage === "not found" ? looked : "");
+    }
+    var em = f.employees || {}, h = f.employees_hunter;
+    return (em.estimate ? "<b>~" + E(em.estimate) + "</b> (" + E(em.band) + ")" : "<b>not found on the site</b>") +
+      (f.open_roles ? " &middot; " + E(f.open_roles) + " open roles" : "") +
+      (em.evidence ? '<div class="small">\u201c' + E(em.evidence) + "\u201d " + (em.source ? link(em.source) : "") + "</div>" : "") +
+      (h && h.headcount ? '<div class="small">Hunter: ' + E(h.headcount) + " employees" + (h.industry ? ", " + E(h.industry) : "") + "</div>" : "") +
+      (!em.estimate ? looked : "");
+  }
   function link(u) { return '<a href="' + E(u) + '" target="_blank" rel="noopener">' + E(u.replace(/^https?:\/\//, "")) + "</a>"; }
 
   document.getElementById("run").addEventListener("click", function () {
@@ -148,6 +165,8 @@ dash.nav("test");
                     ["Reason", E(co.reason || "-")],
                     ["Score breakdown", list((co.score_reasons || []).map(li))],
                     ["Certification", certHtml],
+                    ["Stage and funding", firmo(co.firmographics, "stage")],
+                    ["Employees", firmo(co.firmographics, "employees")],
                     ["Flags", list((co.flags || []).map(li))],
                     ["Sources read", list((co.pages_read || []).map(function (u) { return "<li>" + link(u) + "</li>"; }))],
                     ["Contact", out.contact ? E(out.contact.first_name + " " + (out.contact.last_name || "") + " - " + (out.contact.title || "") + " (" + (out.contact.source || "") + ")") : "none"],

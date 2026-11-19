@@ -43,6 +43,22 @@ dash.nav("pipeline");
     thanks: ["Thank-you", "soft"], reply: ["Their reply", "warn"] };
   var STATUS = { meeting_booked: "Meeting booked", engaged: "Engaged", contacted: "Contacted", cold_lead: "Cold lead",
     non_respondent: "Non-respondent", escalated: "Needs you" };
+  function src(u) { return u ? ' <a href="' + E(u) + '" target="_blank" rel="noopener">source</a>' : ""; }
+  function firmoStage(c) {
+    var fm = c.firmographics, f = c.facts || {};
+    if (!fm) return E(f.funding_stage || "not found");
+    var fu = fm.funding || {};
+    return E(fm.startup_stage) + (fu.round && fu.round !== "not found" ? " (" + E(fu.round) + ")" : "") +
+      (fu.evidence ? '<div class="muted small">\u201c' + E(fu.evidence) + "\u201d" + src(fu.source) + "</div>" : "");
+  }
+  function firmoEmp(c) {
+    var fm = c.firmographics, f = c.facts || {}, h = c.company_size_hunter;
+    var em = (fm && fm.employees) || {};
+    var main = em.estimate ? "~" + E(em.estimate) + " (" + E(em.band) + ")" : (f.employees ? "~" + E(f.employees) : "not found on the site");
+    return main + (fm && fm.open_roles ? ", " + E(fm.open_roles) + " open roles" : "") +
+      (em.evidence ? '<div class="muted small">\u201c' + E(em.evidence) + "\u201d" + src(em.source) + "</div>" : "") +
+      (h && h.headcount ? '<div class="muted small">Hunter: ' + E(h.headcount) + " employees</div>" : "");
+  }
   function pill(t, c) { return '<span class="pill ' + (c || "") + '">' + E(t) + "</span>"; }
   function list(items) { return items && items.length ? E(items.join(", ")) : '<span class="muted">-</span>'; }
 
@@ -107,14 +123,22 @@ dash.nav("pipeline");
           "<details><summary class='small'>Pages read (" + c.pages_read.length + ")</summary><ul class='small'>" +
           c.pages_read.map(function (u) { return '<li><a href="' + E(u) + '" target="_blank" rel="noopener">' + E(u) + "</a></li>"; }).join("") + "</ul></details></section>" +
         '<section class="glass card"><h2>Facts from their website</h2><dl class="facts">' +
-          "<dt>What they do</dt><dd>" + E(f.what_they_do || "-") + "</dd><dt>Stage</dt><dd>" + E(f.funding_stage || "unknown") + "</dd>" +
-          "<dt>Employees</dt><dd>" + E(f.employees || "unknown") + "</dd><dt>Named customers</dt><dd>" + list(f.named_customers) + "</dd>" +
+          "<dt>What they do</dt><dd>" + E(f.what_they_do || "-") + "</dd><dt>Stage</dt><dd>" + firmoStage(c) + "</dd>" +
+          "<dt>Employees</dt><dd>" + firmoEmp(c) + "</dd><dt>Named customers</dt><dd>" + list(f.named_customers) + "</dd>" +
           "<dt>Certifications</dt><dd>" + list(f.certifications) + "</dd><dt>Industries</dt><dd>" + list(f.industries) + "</dd></dl></section>" +
       "</div>" +
       '<div class="grid-2">' +
         '<section class="glass card"><h2>Contact</h2>' + contacts + '<h2 style="margin-top:16px">Meetings</h2>' + meetings + "</section>" +
         '<section class="glass card"><h2>Next scheduled step</h2>' + next + "</section>" +
       "</div>" +
+      '<section class="glass card section"><div class="row-head"><h2>In the news, and re-research</h2><span class="muted small">from the daily crawl</span></div>' +
+        ((c.news || []).length ? '<ul class="tight small">' + c.news.map(function (n) {
+          return '<li><a href="' + E(n.url) + '" target="_blank" rel="noopener">' + E(n.title) + '</a> <span class="muted">(' + E(n.source) +
+            (n.published ? ", " + E(dash.when(n.published)) : "") + ")</span></li>"; }).join("") + "</ul>"
+          : '<p class="muted small">No articles about this company in the crawled sources yet.</p>') +
+        ((c.refreshes || []).length ? '<div class="small" style="margin-top:8px"><b>Re-researched:</b> ' + c.refreshes.map(function (x) {
+          return E(dash.when(x.at)) + (x.changes.length ? " (" + x.changes.map(function (ch) { return E(ch.field) + " changed"; }).join(", ") + ")" : " (no change)"); }).join("; ") + "</div>" : "") +
+      "</section>" +
       '<section class="glass card section"><div class="row-head"><h2>Every email, in and out</h2><span class="muted small">oldest first; click to read</span></div>' +
         '<div class="timeline">' + timeline + "</div></section>" +
       '<section class="glass card section"><h2>Draft versions</h2><div class="table-wrap"><table><thead><tr><th>When</th><th>Subject</th><th>Disagreement</th><th>Quality</th><th>Status</th></tr></thead><tbody>' +

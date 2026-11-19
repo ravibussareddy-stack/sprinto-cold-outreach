@@ -155,6 +155,21 @@ module.exports = async (req, res) => {
         link: "#portfolio-card" });
     }
 
+    // ---------- fresh data: the daily crawl of news feeds and stale companies ----------
+    const lastCrawl = (await rows(pool, "SELECT summary, created_at FROM crawl_log ORDER BY id DESC LIMIT 1"))[0] || null;
+    const matchedNews = await rows(pool, `SELECT n.matched_domain AS domain, n.title, n.url, n.source, n.published, n.funding_round, n.amount
+      FROM news_items n WHERE n.matched_domain IS NOT NULL ORDER BY coalesce(n.published, n.fetched_at) DESC LIMIT 10`);
+    const fundingNews = await rows(pool, `SELECT company_guess AS company, funding_round, amount, title, url, source, published
+      FROM news_items WHERE company_guess IS NOT NULL ORDER BY coalesce(published, fetched_at) DESC LIMIT 8`);
+    const newsCount = (await one(pool, "SELECT count(*)::int AS n, count(company_guess)::int AS funding FROM news_items")) || {};
+    const refreshed = await rows(pool, `SELECT domain, record->'changes' AS changes, created_at FROM runs
+      WHERE record->>'source' = 'refresh' ORDER BY id DESC LIMIT 10`);
+    const freshness = { last_crawl: lastCrawl, matched_news: matchedNews, funding_news: fundingNews,
+                        articles: newsCount.n || 0, funding_headlines: newsCount.funding || 0, refreshed,
+                        sources: require("../lib/sources.json").feeds };
+    if (matchedNews.length) todo.push({ severity: "medium", title: `${matchedNews.length} news item(s) about companies you track`,
+      detail: matchedNews.slice(0, 2).map((n) => n.title).join(" · "), link: "#fresh-card" });
+
     // ---------- weekly ----------
     const cur = await windowStats(pool, 7, 0, threshold);
     const prev = await windowStats(pool, 14, 7, threshold);
@@ -204,7 +219,10 @@ module.exports = async (req, res) => {
 
     let sendtimeInfo = null;
     try { sendtimeInfo = await sendtime.compute(pool); } catch (e) { sendtimeInfo = null; }
-    res.status(200).json({ portfolio, sendtime: sendtimeInfo, todo, trends, highlights, dormant_certs: certTop.map(([cert, n]) => ({ cert, n })),
+    if (matchedNews.length) highlights.push(`In the news: ${matchedNews.slice(0, 2).map((n) => `${n.title} (${n.source})`).join("; ")}.`);
+    const changed = refreshed.filter((r) => (r.changes || []).length);
+    if (changed.length) highlights.push(`Re-researched this week: ${changed.slice(0, 3).map((r) => `${r.domain} (${r.changes.map((c) => c.field).join(", ")} changed)`).join("; ")}.`);
+    res.status(200).json({ freshness, portfolio, sendtime: sendtimeInfo, todo, trends, highlights, dormant_certs: certTop.map(([cert, n]) => ({ cert, n })),
                            failed_checks: failedChecks, top_lessons: topLessons, this_week: cur, last_week: prev });
   } catch (e) {
     res.status(500).json({ error: "database read failed" });

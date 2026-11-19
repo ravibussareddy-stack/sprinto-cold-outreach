@@ -13,3 +13,7 @@ questions.ask = lambda *a, **k: None
 # ...and never fetch real sitemaps.
 import scraper  # noqa: E402
 scraper.sitemap_urls = lambda *a, **k: []
+
+# ...and never read crawled news from the live table.
+import crawl  # noqa: E402
+crawl.news_pages = lambda *a, **k: []

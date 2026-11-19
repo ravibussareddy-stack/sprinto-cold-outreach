@@ -112,7 +112,10 @@ def test_per_question_fetch_limits_are_respected():
             counts[t["for"]] = counts.get(t["for"], 0) + 1
     from config import FETCH_LIMITS, MAX_EXTRA_FETCHES
     assert all(counts.get(q, 0) <= FETCH_LIMITS[q] for q in FETCH_LIMITS), counts
-    assert sum(counts.values()) <= MAX_EXTRA_FETCHES, counts
+    budgeted = {q: n for q, n in counts.items() if "(" not in q}
+    assert sum(budgeted.values()) <= MAX_EXTRA_FETCHES, counts
+    # Deeper research and funding news sit outside the budget but are capped too.
+    assert counts.get("stage (funding news)", 0) <= 2 and counts.get("certs (deeper research)", 0) <= 4, counts
 
 
 if __name__ == "__main__":

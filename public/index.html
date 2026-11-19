@@ -30,6 +30,11 @@
       <div class="row-head"><h2>How companies are judged</h2><span class="muted small">the live rules, in the order they are applied</span></div>
       <div id="criteria"></div>
     </section>
+    <section class="glass card section" id="fresh-card">
+      <div class="row-head"><h2>Fresh data</h2><span class="muted small" id="fresh-sub"></span>
+        <button class="btn mini" id="crawl-now" type="button">Crawl now</button></div>
+      <div id="fresh"></div>
+    </section>
     <section class="glass card section" id="portfolio-card">
       <div class="row-head"><h2>New certifications</h2><span class="muted small">frameworks introduced recently, and who needs them &middot; <a href="offerings.html">Manage offerings</a></span></div>
       <div id="portfolio"></div>
@@ -492,6 +497,7 @@
         last = { m: r[0], runs: r[3] };
         renderOverview(r[0], r[5]);
         renderPortfolio(r[5].portfolio);
+        renderFresh(r[5].freshness);
         state.pipeline = (r[0].pipeline || {}).rows || [];
         renderPipeline();
         state.contacts = r[1];
@@ -536,6 +542,44 @@
   route();
   load();
   setInterval(load, 60000);
+
+  // ---------- fresh data: daily crawl of reputable news feeds + re-research of stale companies ----------
+  function renderFresh(f) {
+    var box = document.getElementById("fresh");
+    if (!f) { box.innerHTML = '<p class="muted small">Not available.</p>'; return; }
+    var lc = f.last_crawl;
+    document.getElementById("fresh-sub").textContent = lc ? "last crawled " + dash.when(lc.created_at) + " \u00b7 runs daily" : "runs daily; not crawled yet";
+    function art(n, who) {
+      return '<li><a href="' + E(n.url) + '" target="_blank" rel="noopener">' + E(n.title) + "</a> " +
+        '<span class="muted">(' + E(n.source) + (n.published ? ", " + E(dash.when(n.published).split(" ").slice(0, 2).join(" ")) : "") + ")</span>" +
+        (who ? ' &middot; <a href="company.html?domain=' + encodeURIComponent(who) + '">' + E(who) + "</a>" : "") + "</li>";
+    }
+    var changed = (f.refreshed || []).filter(function (r) { return (r.changes || []).length; });
+    box.innerHTML =
+      '<div class="small muted" style="margin-bottom:8px">Sources: ' + f.sources.map(function (s) { return E(s.name); }).join(", ") +
+        ". " + E(f.articles) + " articles collected, " + E(f.funding_headlines) + " funding headlines. Stale companies (7+ days) are re-researched, prospects first; no email is sent.</div>" +
+      "<div class='grid-2'><div><b class='small'>News about companies you track</b>" +
+        (f.matched_news.length ? '<ul class="tight small">' + f.matched_news.map(function (n) { return art(n, n.domain); }).join("") + "</ul>"
+          : '<p class="muted small">None yet. Matching runs every day as new articles arrive.</p>') +
+        "<b class='small'>What changed in re-research</b>" +
+        (changed.length ? '<ul class="tight small">' + changed.slice(0, 5).map(function (r) {
+            return '<li><a href="company.html?domain=' + encodeURIComponent(r.domain) + '">' + E(r.domain) + "</a>: " +
+              r.changes.map(function (c) { return E(c.field) + " " + E(JSON.stringify(c.before)) + " \u2192 " + E(JSON.stringify(c.after)); }).join("; ") + "</li>"; }).join("") + "</ul>"
+          : '<p class="muted small">' + ((f.refreshed || []).length ? "Re-researched " + f.refreshed.length + " compan" + (f.refreshed.length > 1 ? "ies" : "y") + "; nothing changed." : "Nothing re-researched yet.") + "</p>") +
+      "</div><div><b class='small'>Latest funding headlines</b>" +
+        (f.funding_news.length ? '<ul class="tight small">' + f.funding_news.map(function (n) { return art(n); }).join("") + "</ul>" : '<p class="muted small">None yet.</p>') +
+      "</div></div>";
+  }
+  document.getElementById("crawl-now").addEventListener("click", function () {
+    var b = this; b.disabled = true;
+    var sub = document.getElementById("fresh-sub"), t0 = Date.now();
+    var tick = setInterval(function () { sub.innerHTML = '<span class="spinner"></span>Crawling the feeds and re-researching one company\u2026 ' + Math.round((Date.now() - t0) / 1000) + "s"; }, 1000);
+    fetch("/api/cron_check_replies?crawl=1").then(function (r) { return r.json(); }).then(function (r) {
+      clearInterval(tick); b.disabled = false;
+      if (!r.ok) { sub.textContent = "Crawl failed: " + ((r.error && r.error.message) || "unknown error"); return; }
+      load();
+    }).catch(function (e) { clearInterval(tick); b.disabled = false; sub.textContent = "Crawl failed: " + e.message; });
+  });
 
   // ---------- portfolio: new certifications (shared component in app.js) ----------
   function renderPortfolio(p) { dash.portfolio(document.getElementById("portfolio"), p, load, true); }

@@ -146,6 +146,24 @@ CREATE TABLE IF NOT EXISTS questions (
     applied_at TIMESTAMPTZ
 );
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS examples JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- News from reputable feeds (crawl.py), funding headlines parsed and matched to tracked companies.
+CREATE TABLE IF NOT EXISTS news_items (
+    url TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    title TEXT NOT NULL,
+    summary TEXT,
+    published TIMESTAMPTZ,
+    company_guess TEXT,            -- from a funding headline: "Acme raises ..." -> Acme
+    funding_round TEXT,
+    amount TEXT,
+    matched_domain TEXT,           -- a company you track, once matched
+    fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS crawl_log (
+    id BIGSERIAL PRIMARY KEY,
+    summary JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 -- Token use per model call.
 CREATE TABLE IF NOT EXISTS llm_usage (
     id BIGSERIAL PRIMARY KEY,
@@ -517,3 +535,71 @@ def update_run(run_id: int, status: str, record: dict):
     with _conn() as c:
         c.execute("UPDATE runs SET status = %s, record = %s WHERE id = %s",
                   (status, Json(json.loads(json.dumps(record, default=str))), run_id))
+
+
+@_safe
+def add_news_items(rows: list[tuple]) -> int:
+    """One connection for a whole feed: rows of (url, source, title, summary, published, company_guess, round, amount)."""
+    if not rows:
+        return 0
+    with _conn() as c:
+        before = c.execute("SELECT count(*) FROM news_items").fetchone()[0]
+        with c.cursor() as cur:
+            cur.executemany("INSERT INTO news_items (url, source, title, summary, published, company_guess, funding_round, amount) "
+                            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (url) DO NOTHING", rows)
+        return c.execute("SELECT count(*) FROM news_items").fetchone()[0] - before
+
+
+@_safe
+def tracked_companies() -> list[dict]:
+    with _conn() as c:
+        rows = c.execute("SELECT DISTINCT ON (domain) domain, record->'profile'->>'company_name' FROM runs "
+                         "WHERE record ? 'profile' ORDER BY domain, id DESC").fetchall()
+        return [{"domain": d, "company": n} for d, n in rows if n]
+
+
+@_safe
+def unmatched_news(days: int = 60) -> list[dict]:
+    with _conn() as c:
+        cur = c.execute("SELECT url, source, title, summary, company_guess FROM news_items "
+                        "WHERE matched_domain IS NULL AND fetched_at > now() - make_interval(days => %s)", (days,))
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+@_safe
+def match_news_many(pairs: list[tuple]):
+    if pairs:
+        with _conn() as c, c.cursor() as cur:
+            cur.executemany("UPDATE news_items SET matched_domain = %s WHERE url = %s", pairs)
+
+
+@_safe
+def news_for(domain: str, months: int = 18) -> list[dict]:
+    with _conn() as c:
+        cur = c.execute("SELECT url, source, title, summary, published, funding_round, amount FROM news_items "
+                        "WHERE matched_domain = %s AND coalesce(published, fetched_at) > now() - make_interval(months => %s) "
+                        "ORDER BY coalesce(published, fetched_at) DESC LIMIT 3", (domain, months))
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+@_safe
+def stale_companies(days: int, limit: int) -> list[dict]:
+    """Companies whose latest research is `days`+ old: prospects first, then the rest, oldest first."""
+    with _conn() as c:
+        rows = c.execute("""
+            SELECT domain, decision, created_at, record FROM (
+              SELECT DISTINCT ON (domain) domain, decision, created_at, record FROM runs
+              WHERE decision IS NOT NULL AND decision <> 'FAILED' ORDER BY domain, id DESC) x
+            WHERE created_at < now() - make_interval(days => %s)
+            ORDER BY CASE WHEN decision IN ('QUALIFIED','QUALIFIED_FLAGGED','REACTIVATED','MANUAL_REVIEW') THEN 0 ELSE 1 END,
+                     created_at
+            LIMIT %s""", (days, limit)).fetchall()
+        return [{"domain": d, "decision": dec, "created_at": t, "record": r} for d, dec, t, r in rows]
+
+
+@_safe
+def log_crawl(summary: dict):
+    with _conn() as c:
+        c.execute("INSERT INTO crawl_log (summary) VALUES (%s)", (Json(json.loads(json.dumps(summary, default=str))),))

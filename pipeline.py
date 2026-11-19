@@ -103,6 +103,8 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
     # A contact supplied with the case (API / test input) wins over the lookup.
     contact = dict(given_contact, source="provided with the case") if given_contact else \
         poc_mod.find_poc(domain, profile.employee_estimate)
+    if contact.get("company_hunter"):                  # Hunter's company record: a second source for size
+        rec["company_size_hunter"] = contact.pop("company_hunter")
     rec["poc"] = contact
     if "error" in contact:
         log(f"  PoC: {contact['error']}")

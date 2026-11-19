@@ -75,7 +75,7 @@ def find_poc(domain: str, employee_estimate: int | None) -> dict:
     cache_key = f"hunter-dm://{domain}"      # decision-maker search (department + seniority filters)
     cached = db.get_cached_page(cache_key)
     if cached is not None:
-        return _choose(cached.get("emails", []), employee_estimate, cached_result=True)
+        return _with_size(_choose(cached.get("emails", []), employee_estimate, cached_result=True), cached.get("company"))
     month = dt.date.today().strftime("%Y-%m")
     usage = db.get_setting("hunter_usage") or {}
     used = usage.get("count", 0) if usage.get("month") == month else 0
@@ -104,9 +104,18 @@ def find_poc(domain: str, employee_estimate: int | None) -> dict:
     except requests.RequestException as e:
         return {"error": f"hunter unreachable after retries: {e}"}
     db.put_setting("hunter_usage", {"month": month, "count": used + 1})
-    people = r.json().get("data", {}).get("emails", [])
-    db.put_cached_page(cache_key, {"emails": people})
-    return _choose(people, employee_estimate)
+    data = r.json().get("data", {}) or {}
+    people = data.get("emails", [])
+    company = {k: data.get(k) for k in ("organization", "headcount", "industry", "company_type", "country") if data.get(k)}
+    db.put_cached_page(cache_key, {"emails": people, "company": company})
+    return _with_size(_choose(people, employee_estimate), company)
+
+
+def _with_size(contact: dict, company: dict | None) -> dict:
+    """Hunter's company record (headcount range, industry): a second source for company size."""
+    if company:
+        contact = dict(contact, company_hunter=company)
+    return contact
 
 
 def _choose(people: list[dict], employee_estimate: int | None, cached_result: bool = False) -> dict:

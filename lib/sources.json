@@ -1,0 +1,11 @@
+{
+ "note": "Reputable startup and tech news feeds crawled daily (public RSS, robots.txt checked on every fetch). Checked 19 Nov 2026: Entrackr's feed is gone (404) and VentureBeat refuses automated requests (429), so both are left out.",
+ "feeds": [
+  {"name": "TechCrunch (startups)", "url": "https://techcrunch.com/category/startups/feed/", "region": "global"},
+  {"name": "TechCrunch (venture)", "url": "https://techcrunch.com/category/venture/feed/", "region": "global"},
+  {"name": "Inc42", "url": "https://inc42.com/feed/", "region": "India"},
+  {"name": "YourStory", "url": "https://yourstory.com/feed", "region": "India"},
+  {"name": "EU-Startups", "url": "https://www.eu-startups.com/feed/", "region": "Europe"},
+  {"name": "Sifted", "url": "https://sifted.eu/feed", "region": "Europe"}
+ ]
+}

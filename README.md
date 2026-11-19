@@ -256,6 +256,25 @@ flags ("judgement call waiting for you: ..."), on the Questions page (badge in t
   handled like any other conversation. A contact whose company is dormant or not a fit is still listed, as
   **Not contacted**, with the reason.
 
+## Stage, funding, headcount - and keeping it fresh
+
+- **Explicit firmographics** in every result (`company.firmographics`): startup stage (early / growth / late /
+  public / acquired / bootstrapped), funding round with its quote and source page, employees (estimate, band, quote,
+  source), open roles, and where it looked - "not found" is stated, never left blank. Hunter's company record
+  (headcount range, industry) is kept as a second size source when a lookup runs. Shown on the test page and the
+  company page.
+- **Funding is looked for where it is published**: when the stage is unknown, the same parallel round also reads the
+  site's funding announcement (from its sitemap) or its press / news / about page.
+- **Daily crawl** (`crawl.py`, run by the daily Vercel cron after the reply check, or **Crawl now** on the overview):
+  reputable startup and tech news feeds (`lib/sources.json`: TechCrunch, Inc42, YourStory, EU-Startups, Sifted - public
+  RSS, robots.txt checked each time) go into `news_items`; funding headlines are parsed into company, round and amount
+  and matched to tracked companies (exact name of a funding headline, or the domain in the article). A matched article
+  is read as evidence on that company's next research, so its round arrives with the article as the source. Then up to
+  3 companies last researched 7+ days ago are re-researched (prospects first; no email), within the time and model
+  budgets, and what changed (decision, score, certificates, funding, headcount) is logged and shown ("Fresh data" on
+  the overview, "In the news, and re-research" on the company page, and in the highlights). Search engines, LinkedIn
+  and Crunchbase pages are not crawled: their terms do not allow it.
+
 ## Follow-up timers, send window, budget, company view
 
 - **Follow-up timers** (rubric `followups`): follow-up 1 after 3 days of silence, follow-up 2 three days later, follow-up 3 two days after that, then closed after 3 more days (non-respondent, or handed to you if they had shown interest). Applies to no reply to the cold email *and* to silence after they replied and we proposed times. A reply from them starts the count again. Editable on the Filters & rubric page.

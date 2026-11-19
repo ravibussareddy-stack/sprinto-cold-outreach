@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
       SELECT id, created_at, status, decision, score, record->>'source' AS source, (record->>'parent_run_id')::int AS parent_run_id,
              record->'email'->>'subject' AS subject, record->'email'->>'body' AS body,
              (record->'disagreement'->>'score')::numeric AS disagreement, record->'quality'->>'passed' AS q_passed,
-             record->'quality'->>'total' AS q_total
+             record->'quality'->>'total' AS q_total, record->'changes' AS changes
       FROM runs WHERE domain = $1 ORDER BY created_at DESC`, [domain]);
     if (!runs.length) return res.status(404).json({ error: "no runs for this company" });
     const latestRec = (await rows(pool, "SELECT record FROM runs WHERE domain = $1 ORDER BY created_at DESC LIMIT 1", [domain]))[0].record || {};
@@ -46,10 +46,20 @@ module.exports = async (req, res) => {
                due: new Date(new Date(t.last_outbound_at).getTime() + days * 86400000), days };
     });
 
+    let news = [];
+    try {
+      news = (await pool.query(`SELECT title, url, source, published, funding_round, amount FROM news_items
+        WHERE matched_domain = $1 ORDER BY coalesce(published, fetched_at) DESC LIMIT 10`, [domain])).rows;
+    } catch (e) { news = []; }
+    const refreshes = runs.filter((x) => x.source === "refresh").slice(0, 5)
+      .map((x) => ({ at: x.created_at, changes: x.changes || [] }));
+
     res.status(200).json({
+      news, refreshes,
       domain, company: p.company_name || domain, decision: q.decision, fit_score: q.score, reason: q.reason,
       score_reasons: q.score_reasons || [], flags: q.flags || [], pages_read: latestRec.pages_read || [],
       certification: q.certification || null,
+      firmographics: q.firmographics || null, company_size_hunter: latestRec.company_size_hunter || null,
       facts: { what_they_do: p.one_line_description, funding_stage: p.funding_stage, employees: p.employee_estimate,
                named_customers: p.named_customers || [], certifications: p.certifications_claimed || [],
                industries: p.target_industries || [] },

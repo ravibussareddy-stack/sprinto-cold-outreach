@@ -117,3 +117,21 @@ def test_the_deck_is_a_valid_pdf_with_the_portfolio():
     pdf = deck.build(["SOC 2", "ISO 27001"], [{"name": "ISO/IEC 42001", "who": "AI products", "pitch": "AI governance"}], "Acme")
     assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF")
     assert b"ISO/IEC 42001" in pdf and b"not an official Sprinto document" in pdf and b"Prepared for Acme" in pdf
+
+
+def test_firmographics_are_explicit_with_quote_and_source(monkeypatch):
+    from schemas import Evidence
+    p = PROFILE | {"funding_stage": "Series A", "funding_evidence": "We raised a $12M Series A", "employee_estimate": 40,
+                   "evidence": [Evidence(field="funding_stage", quote="We raised a $12M Series A", source_url="https://acme.io/press"),
+                                Evidence(field="employee_estimate", quote="a team of 40", source_url="https://acme.io/about")]}
+    f = run(monkeypatch, "We encrypt data.", profile=p)["firmographics"]
+    assert f["startup_stage"] == "growth (Series A-C)" and f["funding"]["round"] == "Series A"
+    assert f["funding"]["source"] == "https://acme.io/press" and f["employees"]["band"] == "11-50"
+    assert f["employees"]["evidence"] == "a team of 40" and f["looked_at"]
+
+
+def test_firmographics_say_not_found():
+    import qualify
+    from schemas import CompanyProfile
+    f = qualify.firmographics(CompanyProfile(), [], [{"fetch": "https://acme.io", "ok": True}])
+    assert f["startup_stage"] == "not found" and f["funding"]["round"] == "not found" and f["employees"]["estimate"] is None
