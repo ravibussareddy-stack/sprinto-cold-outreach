@@ -148,7 +148,8 @@
         var host = target.parentElement && target.parentElement.closest(".nav, .top");   // own stacking context: lift it too
         if (host) host.classList.add("tour-lift");
         var r0 = target.getBoundingClientRect();
-        if (r0.top < 70 || r0.bottom > window.innerHeight - 40) target.scrollIntoView({ block: "center" });
+        var pinned = target.closest(".nav");            // sticky: always on screen, scrolling would only move the page
+        if (!pinned && (r0.top < 70 || r0.bottom > window.innerHeight - 40)) target.scrollIntoView({ block: r0.height > window.innerHeight * 0.6 ? "start" : "center" });
         position();
       } else {
         card.style.width = Math.min(420, window.innerWidth - 32) + "px";
@@ -162,9 +163,14 @@
       if (!target) return;
       var r = target.getBoundingClientRect(), cw = Math.min(360, window.innerWidth - 32);
       card.style.width = cw + "px";
-      var h = card.offsetHeight, below = r.bottom + 14 + h < window.innerHeight;
+      var h = card.offsetHeight, below = r.bottom + 14 + h < window.innerHeight, above = r.top - h - 14 >= 16;
+      if (!below && !above) {                          // tall element: sit in the bottom-right corner over it
+        card.style.left = (window.innerWidth - cw - 16) + "px";
+        card.style.top = (window.innerHeight - h - 16) + "px";
+        return;
+      }
       card.style.left = Math.max(16, Math.min(window.innerWidth - cw - 16, r.left)) + "px";
-      card.style.top = Math.max(16, below ? r.bottom + 14 : r.top - h - 14) + "px";
+      card.style.top = (below ? r.bottom + 14 : r.top - h - 14) + "px";
     }
     function end() {
       window.removeEventListener("scroll", position, true); window.removeEventListener("resize", position);

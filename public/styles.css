@@ -276,7 +276,7 @@ ul.tight { margin: 0; padding-left: 18px; } ul.tight li { margin: 2px 0; }
 
 /* criteria heads-up */
 .criteria { margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 14px; }
-.criteria li b:first-child { display: block; }
+.criteria li > b { display: block; }
 .criteria li span { color: var(--muted); }
 .criteria li span b { color: var(--ink); }
 /* guided tour */
