@@ -9,11 +9,11 @@ GOOD = """Good morning Priya,
 
 Hope you're doing well.
 
-Congratulations on launching Ledgerly's Enterprise plan last month. The first large customer usually asks for a SOC 2 report before the second meeting.
+Congratulations on launching Ledgerly's Enterprise plan. Banks evaluating a payments API usually send a long security questionnaire and ask for a SOC 2 report before procurement moves.
 
-For a team your size, that often means engineers spending weeks gathering evidence instead of shipping. Sprinto connects to your cloud and identity tools, collects that evidence automatically and gets companies audit-ready in weeks rather than months.
+Sprinto connects to your cloud, code and identity tools and collects that evidence automatically, so your engineers are not rebuilding it for every bank review. It also helps answer the questionnaires themselves, and gets companies audit-ready in weeks rather than months.
 
-Would a 15-minute call next week be useful?
+For Ledgerly, that could mean bank deals that move through procurement instead of waiting on it. Would a 15-minute call next week be useful?
 
 Kind regards,
 Sarah Mitchell
@@ -33,7 +33,7 @@ def test_well_structured_email_passes_every_check():
 
 def test_structure_problems_are_named():
     bad = GOOD.replace("Hope you're doing well.\n\n", "").replace("Kind regards,", "Cheers then,") \
-              .replace("instead of shipping.", "instead of shipping. Ready to optimize?")
+              .replace("for every bank review.", "for every bank review. Ready to optimize?")
     r = checks(bad)
     assert not r["wellbeing_line"] and not r["sign_off"] and not r["one_question"] and not r["uk_spelling"]
     assert r["greeting"]
@@ -123,3 +123,18 @@ def test_sign_off_always_ends_with_the_exact_sender_lines():
 def test_sign_off_adds_the_company_when_the_sender_name_lacks_it():
     out = writer.fix_sign_off("Hi?\n\nBest regards,\nRavi", "Ravi Bussareddy")
     assert out.endswith("Best regards,\nRavi Bussareddy\nSprinto")
+
+
+
+def test_a_generic_email_fails_the_specificity_checks():
+    from schemas import CompanyProfile
+    generic = ("Good morning Priya,\n\nHope you're doing well.\n\nI saw Ledgerly is growing fast. Growth often brings "
+               "security questions.\n\nWe help with compliance.\n\nWould a 15-minute call next week be useful?\n\n"
+               "Kind regards,\nSarah Mitchell\nSprinto")
+    p = CompanyProfile(company_name="Ledgerly", target_industries=["Banking"], buyer_type="Banks and credit unions")
+    d = EmailDraft(subject="Ledgerly's enterprise plan", body=generic, hook_used="x", reasoning="x")
+    r = {c["check"]: c["ok"] for c in writer.quality_checks(d, "Priya", "Good morning Priya,", "Sarah Mitchell, Sprinto", "Ledgerly", p)}
+    assert not r["names_their_market"] and not r["sprinto_edge"]
+    good = EmailDraft(subject="Ledgerly's enterprise plan", body=GOOD, hook_used="x", reasoning="x")
+    r = {c["check"]: c["ok"] for c in writer.quality_checks(good, "Priya", "Good morning Priya,", "Sarah Mitchell, Sprinto", "Ledgerly", p)}
+    assert r["names_their_market"] and r["sprinto_edge"] and r["business_outcome"], r

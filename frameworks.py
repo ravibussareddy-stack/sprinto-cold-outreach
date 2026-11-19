@@ -17,9 +17,18 @@ CORE = CATALOGUE["core"]
 BY_ID = {f["id"]: f for f in CATALOGUE["frameworks"]}
 
 
+_raw_cache: tuple[float, dict] | None = None
+
+
 def _raw() -> dict:
+    """The portfolio setting, read at most every 30 seconds (one run asks for it several times)."""
+    global _raw_cache
+    import time
+    if _raw_cache and time.time() - _raw_cache[0] < 30:
+        return _raw_cache[1]
     s = db.get_setting("portfolio") if db.enabled() else None
-    return s if isinstance(s, dict) else {}
+    _raw_cache = (time.time(), s if isinstance(s, dict) else {})
+    return _raw_cache[1]
 
 
 def all_by_id(raw: dict | None = None) -> dict:

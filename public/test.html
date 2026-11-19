@@ -8,11 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
-  .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-  .form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
-  .form input[type=text], .form input[type=email] { width: 100%; padding: 9px 12px; border-radius: 12px; font: inherit; font-size: 14px;
-      border: 1px solid var(--glass-border); background: var(--glass-strong); color: var(--ink); outline: none; }
-  .form input:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
   .btn.primary { background: var(--blue-700); color: #fff; border-color: var(--blue-700); padding: 9px 18px; font-size: 14px; }
   .btn.primary:hover { background: var(--blue-900); }
   pre.json { white-space: pre-wrap; word-break: break-word; font-size: 12.5px; max-height: 520px; overflow: auto; margin: 0; }
@@ -34,10 +29,11 @@
   </header>
   <nav class="glass nav" id="nav"></nav>
 
-  <section class="glass card section">
+  <div class="split section">
+  <section class="glass card" id="input-card">
     <h2>Input</h2>
-    <form id="f" class="form">
-      <div><label for="domain">Company domain *</label><input id="domain" type="text" placeholder="atlan.com" required></div>
+    <form id="f" class="form two">
+      <div style="grid-column:1/-1"><label for="domain">Company domain *</label><input id="domain" type="text" placeholder="atlan.com or https://www.atlan.com" required></div>
       <div style="grid-column:1/-1">
         <label>Contact</label>
         <div class="seg" id="who" style="margin-top:6px">
@@ -47,7 +43,7 @@
       </div>
       <div class="given"><label for="first">First name *</label><input id="first" type="text" placeholder="Priya"></div>
       <div class="given"><label for="last">Last name</label><input id="last" type="text" placeholder="Sharma"></div>
-      <div class="given"><label for="email">Email *</label><input id="email" type="email" placeholder="priya@atlan.com"></div>
+      <div class="given"><label for="email">Email</label><input id="email" type="email" placeholder="optional"></div>
       <div class="given"><label for="title">Title</label><input id="title" type="text" placeholder="CTO"></div>
       <div style="grid-column:1/-1">
         <label style="display:flex;gap:6px;align-items:center;font-weight:500"><input id="send" type="checkbox">
@@ -57,17 +53,26 @@
     </form>
     <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
       <button class="btn primary" id="run">Run case</button>
-      <span class="muted small" id="state">Takes about 60-80 seconds.</span>
+      <span class="muted small" id="state">Takes about 60-90 seconds.</span>
     </div>
     <p class="muted small" style="margin-top:14px">Automated tests: <code>POST /api/run_case</code> with
       <code>{"domain": "atlan.com", "contact": {"first_name": "Priya", "email": "priya@atlan.com", "title": "CTO"}, "send": false}</code>.
       <code>GET /api/run_case</code> returns the format.</p>
   </section>
 
-  <details class="glass card section" id="criteria-card">
-    <summary><b>Heads-up: how companies are judged</b> <span class="muted small">(open to see the live rules)</span></summary>
-    <div id="criteria" style="margin-top:12px"></div>
-  </details>
+  <aside class="glass card" id="criteria-card">
+    <h2>What you will get</h2>
+    <ul class="tight small" style="margin-bottom:14px">
+      <li>The decision, and the score line by line</li>
+      <li>Certification evidence: quoted, with its source page</li>
+      <li>The contact, two pain points (fact and hypothesis)</li>
+      <li>The email, its draft checks and the critic's scores, plus the fact-check score</li>
+      <li>With send on: the email in our test inbox, with the offerings deck attached</li>
+    </ul>
+    <h2>How companies are judged</h2>
+    <div id="criteria"></div>
+  </aside>
+  </div>
 
   <section class="glass card section" id="summary-card" style="display:none">
     <h2>Result</h2>

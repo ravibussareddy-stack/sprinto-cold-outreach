@@ -104,7 +104,7 @@ def redraft(run_id: int, sender_name: str | None = None, contact: dict | None = 
             pains = writer.pain_points(profile, poc)
         draft, problems = writer.draft_email(profile, poc, pains, sender_name, guidance=guidance, exemplars=examples)
         quality = writer.quality_summary(writer.quality_checks(
-            draft, poc["first_name"], writer.greeting(poc["first_name"]), sender_name, profile.company_name))
+            draft, poc["first_name"], writer.greeting(poc["first_name"]), sender_name, profile.company_name, profile))
         structure = quality["failed"] + [p for p in problems if p not in quality["failed"]]
         dis = disagreement.assess(draft.body, profile.model_dump_json(), structure)
     finally:

@@ -129,7 +129,7 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
 
     # Quality checks: the structure of the email, check by check
     quality = writer.quality_summary(writer.quality_checks(
-        draft, contact["first_name"], writer.greeting(contact["first_name"]), sender_name, profile.company_name))
+        draft, contact["first_name"], writer.greeting(contact["first_name"]), sender_name, profile.company_name, profile))
     rec["quality"] = quality
     log(f"  quality: {quality['passed']}/{quality['total']} checks passed"
         + (f" (failed: {', '.join(quality['failed'])})" if quality["failed"] else ""))

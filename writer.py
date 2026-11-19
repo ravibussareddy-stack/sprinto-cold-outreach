@@ -25,8 +25,11 @@ Given a researched company profile and the contact's role, name the TWO most
 likely pain points this specific person feels about security compliance right
 now. Each must be grounded in a concrete fact from the profile (quote it in
 evidence_from_research). Prefer role-specific pains (a CTO loses engineering
-weeks to evidence collection; a CEO loses deals stuck in security review; a
+time to evidence collection; a CEO loses deals stuck in security review; a
 security lead drowns in questionnaires and spreadsheets). No generic pains.
+For each pain, also say who THEIR customers or buyers are (named customers,
+industries, buyer type from the research) and what those customers will expect
+(customer_angle), and what fixing it does for their business (business_outcome).
 
 Separate fact from hypothesis:
 - evidence_from_research: a fact the profile actually states, quoted closely, with
@@ -41,77 +44,72 @@ Separate fact from hypothesis:
 - If certification_status is "unknown", nobody knows whether they hold SOC 2 or ISO 27001:
   frame pain point #1 as what enterprise buyers will ask for, never as "you lack it"."""
 
-EMAIL_EXAMPLES = """Example 1 (CTO, Series A fintech; hook: new enterprise plan)
-Subject: Ledgerly's first enterprise SOC 2 review
+SPRINTO_EDGE = """Sprinto's edge (use the one or two that fit THIS company; never more than the description says):
+- connects to their cloud, HR, code and identity tools, so evidence is collected automatically, not in spreadsheets
+- monitors controls continuously, so they stay compliant between audits ("always on")
+- ready-made policies and security training, so a small team is not writing them from scratch
+- audit-ready in weeks rather than months, with far less engineering time
+- helps answer security questionnaires, so procurement reviews stop stalling deals
+- several frameworks (SOC 2, ISO 27001, GDPR, HIPAA and more) from one place"""
+
+EMAIL_EXAMPLES = """Example 1 (CTO, Series A fintech API; hook: new enterprise plan; sells to banks)
+Subject: Ledgerly's enterprise plan and bank security reviews
 
 Good morning Priya,
 
 Hope you're doing well.
 
-Congratulations on launching Ledgerly's Enterprise plan last month. The first large customer usually asks for a SOC 2 report before the second meeting.
+Congratulations on launching Ledgerly's Enterprise plan. Banks evaluating a payments API usually send a long security questionnaire and ask for a SOC 2 report before procurement moves.
 
-For a team your size, that often means engineers gathering evidence instead of shipping. Sprinto connects to your cloud and identity tools, collects that evidence automatically and gets companies audit-ready in weeks rather than months.
+Sprinto connects to your cloud, code and identity tools and collects that evidence automatically, so your engineers are not rebuilding it for every bank review. It also helps answer the questionnaires themselves, and gets companies audit-ready in weeks rather than months.
 
-Would a 15-minute call next week be useful?
+For Ledgerly, that could mean bank deals that move through procurement instead of waiting on it. Would a 15-minute call next week be useful?
 
 Kind regards,
 Sarah Mitchell
 Sprinto
 
-Example 2 (Head of Security, Series B health-tech; hook: open compliance role)
-Subject: Fernwood Health's new compliance hire
+Example 2 (Head of Security, Series B health-tech; hook: open compliance role; sells to hospitals)
+Subject: Fernwood Health's compliance hire and hospital buyers
 
 Good afternoon Tom,
 
 Hope you're doing well.
 
-I noticed Fernwood Health is hiring its first Compliance Manager, which usually means the security questionnaires have started to pile up.
+I noticed Fernwood Health is hiring its first Compliance Manager. Hospital buyers tend to expect HIPAA-ready controls and a clean audit trail before they sign.
 
-Whoever takes the role could spend their first months in spreadsheets, chasing evidence across teams. Sprinto monitors your controls continuously and keeps audit evidence ready, so they can focus on the programme rather than the paperwork.
+Sprinto gives that hire a head start: ready-made policies and security training, continuous monitoring of your controls, and evidence kept audit-ready across HIPAA and SOC 2 from one place, rather than in spreadsheets.
 
-Might it be worth a brief conversation before they start?
+That way the role can focus on the hospital programme, not the paperwork. Might it be worth a brief conversation before they start?
 
 Best wishes,
-Sarah Mitchell
-Sprinto
-
-Example 3 (CEO, Series A logistics SaaS; hook: named customer win)
-Subject: Northgate, Brightmere and the security review
-
-Good morning Aisha,
-
-Hope you're doing well.
-
-Congratulations on Northgate's partnership with Brightmere Retail. Contracts of that size tend to arrive with a lengthy security review attached.
-
-Reviews like that can add weeks to every deal. Sprinto gets you audit-ready for SOC 2 or ISO 27001 in weeks and helps answer security questionnaires, so procurement stops being the slowest part of the sale.
-
-Would you be open to a short call on Thursday or Friday?
-
-Kind regards,
 Sarah Mitchell
 Sprinto"""
 
 EMAIL_SYSTEM = f"""You write cold emails for Sprinto's Growth Lead that real
 people answer. {SPRINTO_CONTEXT}
 
-Style: UK business English - polite, warm, brief and to the point. UK spelling
-(organisation, prioritise, programme). Catchy but never pushy.
+{SPRINTO_EDGE}
 
-Rules:
-- Open with exactly the greeting line you are given (e.g. "Good morning Priya,"),
+Style: UK business English - polite, warm, specific and to the point. UK spelling
+(organisation, prioritise, programme). Confident, never pushy.
+
+Structure (exactly this, three short body paragraphs, 90-140 words in all):
+- Line 1: exactly the greeting line you are given (e.g. "Good morning Priya,"),
   then a blank line, then "Hope you're doing well." on its own line.
-- The next line is the hook: a specific, true observation about THEIR company
-  from the research (a funding round, an enterprise tier, a named customer, an
-  open security role, an award or industry recognition). State the fact, then at
-  most one general truth about what it tends to bring. Never guess about their
-  team's workload ("I imagine your team...").
-- Connect the hook to pain point #1 in one sentence; mention Sprinto's
-  outcome concretely (e.g. audit-ready in weeks, fewer engineering hours).
-- One soft, low-friction question as the CTA, UK style (e.g. "Would a
-  15-minute call next week be useful?", "Might it be worth a brief conversation?").
-- 75-125 words including the greeting. Plain text. No bullet lists, no emojis,
-  no buzzwords ("synergy", "leverage", "revolutionise"), no fake familiarity.
+- Paragraph 1 - THEIR world: a specific, true fact about the company from the
+  research (a named customer, product, market, funding, open role), then what
+  THEIR customers or buyers (name the segment or industry they sell to) will
+  expect from them on security or compliance. Use the pain point's customer_angle.
+- Paragraph 2 - Sprinto's edge: the one or two Sprinto capabilities that fit
+  this company's situation, said concretely and tied to their stack or team.
+- Paragraph 3 - their business outcome (the pain point's business_outcome: e.g.
+  deals with those customers moving through security reviews faster), then ONE
+  soft question as the CTA, UK style ("Would a 15-minute call next week be useful?").
+- The swap test: if a sentence would fit any other company unchanged, rewrite it
+  with their name, their customers or their product.
+- Plain text. No bullet lists, no emojis, no buzzwords ("synergy", "leverage",
+  "revolutionise"), no fake familiarity, no one-sentence filler paragraphs.
 - If certification_status is "unknown" (no certification information found), this is a
   discovery email: never say or imply they lack SOC 2 / ISO 27001. Make the single question
   ask whether it is on their roadmap, e.g. "If SOC 2 or ISO 27001 is on your roadmap this
@@ -123,9 +121,8 @@ Rules:
 - Never invent facts, numbers or customer names not in the research. Never state
   how long something takes them or how much effort it costs ("weeks of manual
   work") unless the research says so; hedge or ask instead.
-- Describe Sprinto only with what the Sprinto description above says (e.g.
-  "audit-ready in weeks rather than months"). No new numbers, time savings or
-  claims such as "weeks to hours".
+- Describe Sprinto only with what the Sprinto description above says. No new
+  numbers, time savings or claims such as "weeks to hours".
 - Sign off with "Kind regards," on its own line (unless the sender's standing
   instructions name another sign-off), then the sender name given.
 - Subject: 3-8 words, sentence case (capital first letter), names the company
@@ -160,7 +157,7 @@ def _portfolio_note() -> str:
 def pain_points(profile: CompanyProfile, poc: dict) -> PainPoints:
     user = (f"Contact: {poc['first_name']} {poc.get('last_name','')}, {poc.get('title')}\n\n"
             f"Company profile (JSON):\n{profile.model_dump_json(indent=1)}")
-    return ask(PainPoints, PAIN_SYSTEM + _portfolio_note(), user)
+    return ask(PainPoints, PAIN_SYSTEM + _portfolio_note(), user, thinking="low")   # the critic polices the email
 
 
 def validate(draft: EmailDraft, first_name: str, greeting_line: str | None = None) -> list[str]:
@@ -172,8 +169,8 @@ def validate(draft: EmailDraft, first_name: str, greeting_line: str | None = Non
         problems.append(f'does not open with "{greeting_line}"')
     if greeting_line and "hope you're doing well" not in draft.body.lower().replace("’", "'"):
         problems.append('missing "Hope you\'re doing well." line')
-    if not 60 <= words <= 140:
-        problems.append(f"length {words} words (want 75-125)")
+    if not 70 <= words <= 170:
+        problems.append(f"length {words} words (want 90-140)")
     if BANNED.search(draft.body + draft.subject):
         problems.append("contains banned phrase or placeholder bracket")
     if draft.body.count("?") < 1:
@@ -229,8 +226,28 @@ def _paragraphs(body: str) -> list[str]:
     return [p.strip() for p in re.split(r"\n\s*\n", body.strip()) if p.strip()]
 
 
+CAPABILITY = re.compile(r"\b(cloud|identity|hr|code|monitor\w*|evidence|polic(y|ies)|training|questionnaire\w*|"
+                        r"audit-ready|always on|continuous\w*|frameworks?)\b", re.I)
+OUTCOME = re.compile(r"\b(deals?|procurement|sales cycle|close|closing|win|buyers?|customers?|clients?|contracts?|"
+                     r"reviews?|enterprise|trust|onboard\w*|renewals?)\b", re.I)
+STOP = {"the", "and", "for", "with", "teams", "team", "companies", "company", "businesses", "business", "software",
+        "services", "service", "platform", "solutions", "mid-size", "small", "large", "their", "other"}
+
+
+def market_terms(profile) -> set[str]:
+    """Words that name THIS company's market: industries, buyer type, named customers."""
+    if profile is None:
+        return set()
+    words = set()
+    for t in list(profile.target_industries or []) + list(profile.named_customers or [])[:6] + [profile.buyer_type or ""]:
+        for w in re.findall(r"[A-Za-z][A-Za-z.&-]{3,}", t or ""):
+            if w.lower() not in STOP:
+                words.add(w.lower())
+    return words
+
+
 def quality_checks(draft: EmailDraft, first_name: str, greeting_line: str | None = None,
-                   sender_name: str | None = None, company: str | None = None) -> list[dict]:
+                   sender_name: str | None = None, company: str | None = None, profile=None) -> list[dict]:
     """Named structure checks for one email, each {"check", "ok", "detail"}.
     Expected structure: greeting / Hope you're doing well / hook naming the company /
     pain + Sprinto outcome / one question / sign-off with the sender's name."""
@@ -267,7 +284,19 @@ def quality_checks(draft: EmailDraft, first_name: str, greeting_line: str | None
         if company:
             add("subject_names_company", company.split()[0].lower().strip(",.") in subj.lower(),
                 "the subject names the company")
-    add("length", 75 <= words <= 125, f"{words} words (target 75-125)")
+    add("length", 90 <= words <= 150, f"{words} words (target 90-140)")
+    if company or profile is not None:                  # specific and persuasive, not just well formed
+        terms = market_terms(profile)
+        hits = sorted({t for t in terms if re.search(rf"\b{re.escape(t)}\b", norm, re.I)})
+        add("names_their_market", not terms or bool(hits),
+            f"mentions {', '.join(hits[:3])}" if hits else "say who they sell to (their industry, buyers or named customers)")
+        caps = {m.group(0).lower() for m in CAPABILITY.finditer(norm)}
+        add("sprinto_edge", len(caps) >= 2, f"names {len(caps)} Sprinto capabilities (want 2+)")
+        add("business_outcome", bool(OUTCOME.search(paras[-2] if len(paras) > 2 else norm)) if paras else False,
+            "the last paragraph says what it means for their deals or customers")
+    if draft.critique:
+        c = draft.critique
+        add("not_generic", c.get("ok", True), c.get("summary", ""))
     us = sorted({m.group(0) for m in US_SPELLINGS.finditer(body)})
     add("uk_spelling", not us, f"US spellings: {', '.join(us)}" if us else "")
     add("no_placeholders_or_banned", not BANNED.search(body + draft.subject), "")
@@ -301,6 +330,38 @@ def _guidance_block(guidance: list[dict] | None, exemplars: list[dict] | None) -
     return out
 
 
+class Critique(BaseModel):
+    specific: int = Field(description="1-5: how specific to THIS company (5 = could not be sent to anyone else)")
+    customer_value: int = Field(description="1-5: how clearly it says what this means for their customers or deals")
+    sprinto_edge: int = Field(description="1-5: how clearly it shows why Sprinto, tied to their situation")
+    generic_sentences: list[str] = Field([], description="Sentences that would fit any company unchanged (verbatim)")
+    fix: str = Field(description="One or two concrete instructions to make it specific and persuasive; empty if fine")
+
+
+CRITIC_SYSTEM = """You are a demanding sales manager reviewing one cold email before it goes out.
+Judge only specificity and value, not grammar. An email that names the company but could otherwise
+be sent to anyone is generic. Use the research to suggest what to say instead.
+Ignore the required lines - the greeting, "Hope you're doing well.", the sign-off, a one-line
+mention of an attached overview, and the closing question: they are fixed by house style. A
+factual description of what Sprinto does is fine when it is tied to this company's situation."""
+
+
+def critique(draft: EmailDraft, profile: CompanyProfile, pains: PainPoints) -> dict:
+    """Quick critic (low thinking): is it specific to the company, and does it say why Sprinto helps
+    THEIR customers and business? ok = all three scores 4+ and no generic sentences."""
+    c = ask(Critique, CRITIC_SYSTEM, f"Research:\n{profile.model_dump_json()}\n\nPain points:\n"
+            f"{json.dumps(pains.model_dump())}\n\nEmail:\nSubject: {draft.subject}\n{draft.body}",
+            thinking="low", temperature=0.0, max_output_tokens=1500)
+    required = re.compile(r"hope you're doing well|attached|roadmap|15-minute|call next week|brief conversation|regards|wishes", re.I)
+    generic = [g for g in c.generic_sentences if not required.search(g.replace("\u2019", "'"))]
+    ok = c.specific >= 4 and c.customer_value >= 4 and c.sprinto_edge >= 3 and len(generic) <= 1
+    c.generic_sentences = generic
+    return {"ok": ok, "scores": {"specific": c.specific, "customer_value": c.customer_value, "sprinto_edge": c.sprinto_edge},
+            "generic_sentences": c.generic_sentences, "fix": c.fix,
+            "summary": (f"specific {c.specific}/5, value for their customers {c.customer_value}/5, Sprinto's edge "
+                        f"{c.sprinto_edge}/5" + (f"; generic: {c.generic_sentences[0][:80]}" if c.generic_sentences else ""))}
+
+
 def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_name: str,
                 max_attempts: int = 2, guidance: list[dict] | None = None,
                 exemplars: list[dict] | None = None, soft_retry: bool = True,
@@ -316,18 +377,31 @@ def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_na
     system = EMAIL_SYSTEM + _portfolio_note() + instructions_block(guidance)
     feedback = ""
     for attempt in range(max_attempts):
-        draft = ask(EmailDraft, system, base + feedback)
+        # The first draft thinks fully; a rewrite follows an explicit critique, so the quick setting is enough.
+        draft = ask(EmailDraft, system, base + feedback, thinking="low" if attempt else None)
         draft.subject = fix_subject(draft.subject)
         draft.body = fix_sign_off(draft.body, sender_name)
         problems = validate(draft, poc["first_name"], hello)
-        soft = [c for c in quality_checks(draft, poc["first_name"], hello, sender_name, profile.company_name)
+        soft = [c for c in quality_checks(draft, poc["first_name"], hello, sender_name, profile.company_name, profile)
                 if not c["ok"]]
+        if not problems and not soft:
+            # Well formed and specific on paper: now the critic asks "could this go to any company?"
+            try:
+                draft.critique = critique(draft, profile, pains)
+            except Exception as e:                       # the critic must never block a draft
+                draft.critique = {"ok": True, "summary": f"critic unavailable ({type(e).__name__})"}
+            if draft.critique["ok"]:
+                return draft, []
+            soft = [{"check": "not_generic", "detail": draft.critique["summary"] + ". " + draft.critique.get("fix", "")}]
         if not problems and (not soft or not soft_retry):
             return draft, []
         if attempt + 1 < max_attempts:
             fix = problems + [f"{c['check']}: {c['detail']}" for c in soft]
-            feedback = f"\n\nYour previous draft failed these checks, fix them: {fix}\nPrevious draft:\n{draft.body}"
-    return draft, problems          # only hard failures block sending; soft ones are reported
+            generic = (draft.critique or {}).get("generic_sentences") or []
+            feedback = (f"\n\nYour previous draft failed these checks, fix them: {fix}"
+                        + (f"\nRewrite these generic sentences with this company's specifics: {generic}" if generic else "")
+                        + f"\nPrevious draft:\n{draft.body}")
+    return draft, problems          # only hard failures block sending; soft ones (and the critic) are reported
 
 
 # ---- follow-ups when there is no reply (Gmail mode) ---------------------------

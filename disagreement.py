@@ -71,12 +71,12 @@ def _portfolio_note() -> str:
 
 def check_claims(email_body: str, research_json: str) -> ClaimCheck:
     user = f"Research (JSON):\n{research_json}\n\nEmail:\n{email_body}"
-    return ask(ClaimCheck, CLAIM_SYSTEM + _portfolio_note(), user, temperature=0.0)
+    return ask(ClaimCheck, CLAIM_SYSTEM + _portfolio_note(), user, temperature=0.0, thinking="low")
 
 
 def judge(email_body: str, research_json: str) -> JudgeVerdict:
     user = f"Research (JSON):\n{research_json}\n\nEmail:\n{email_body}"
-    return ask(JudgeVerdict, JUDGE_SYSTEM + _portfolio_note(), user, temperature=0.0)
+    return ask(JudgeVerdict, JUDGE_SYSTEM + _portfolio_note(), user, temperature=0.0, thinking="low")
 
 
 def score(structure_failures: list[str], claims: ClaimCheck, verdict: JudgeVerdict) -> dict:

@@ -373,6 +373,7 @@ def qualify(domain: str, log) -> dict:
     log(f"  extracted from homepage; missing: {missing_facts(profile, pages) or 'nothing'}")
 
     extra = 0
+    deep_done = False
     per_question = {"stage": 0, "certs": 0, "saas": 0}
     while True:
         stop = _stop(profile, pages)
@@ -391,15 +392,22 @@ def qualify(domain: str, log) -> dict:
             nxt = pick_next_url(cand, home, tried | {u for u, _ in batch})
             if nxt:
                 batch.append((nxt, cand))
+        if "certs" in missing and per_question["certs"] >= rubric.get("evidence_loop", "certs") and not deep_done:
+            # The usual security page gave nothing: research deeper in this same round (no extra wait).
+            deep_done = True
+            for u in deep_cert_urls(home, tried | {u for u, _ in batch}, limit=3):
+                batch.append((u, "certs (deeper research)"))
         if not batch:
             break
         for u, q in batch:
-            tried.add(u); per_question[q] += 1
+            tried.add(u)
+            if q in per_question:
+                per_question[q] += 1
         with ThreadPoolExecutor(max_workers=len(batch)) as pool:
             fetched = list(pool.map(lambda b: scraper.fetch(b[0]), batch))
         got = False
         for (u, q), pg in zip(batch, fetched):
-            extra += 1
+            extra += 0 if q.startswith("certs (deeper") else 1        # deeper research does not use the fetch budget
             trace.append({"fetch": u, "for": q, "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
             log(f"  loop {extra}/{cap}: need {q} -> {u} ({'ok' if pg['ok'] else pg['error']})")
             if pg["ok"]:
@@ -408,7 +416,7 @@ def qualify(domain: str, log) -> dict:
             profile = extract_profile(domain, pages)
 
     # Certification still unknown: research harder (sitemap, trust pages) rather than ask anyone.
-    if "certs" in missing_facts(profile, pages):
+    if "certs" in missing_facts(profile, pages) and not deep_done:
         deep = deep_cert_urls(home, tried)
         if deep:
             for u in deep:

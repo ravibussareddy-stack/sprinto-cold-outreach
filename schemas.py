@@ -1,7 +1,7 @@
 """Structured outputs. The model fills NAMED FIELDS; code (not the model)
 checks which fields are filled to decide whether we know enough."""
 from typing import Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 
 class Evidence(BaseModel):
@@ -58,6 +58,10 @@ class PainPoint(BaseModel):
     evidence_from_research: str = Field(description="The specific fact from the company profile this pain point is grounded in")
     source_url: Optional[str] = Field(None, description="Page the evidence came from, if the profile's evidence names one")
     sprinto_angle: str = Field(description="How Sprinto specifically relieves it")
+    customer_angle: str = Field("", description="Who THEIR customers or buyers are (from the research) and what those "
+                                "customers will expect from them on security or compliance")
+    business_outcome: str = Field("", description="What fixing it does for their business: e.g. shorter security reviews, "
+                                  "closing larger or regulated customers, fewer stalled deals - grounded in who they sell to")
 
 
 class PainPoints(BaseModel):
@@ -67,6 +71,21 @@ class PainPoints(BaseModel):
 class EmailDraft(BaseModel):
     subject: str = Field(description="3-8 words, sentence case (capital first letter), names the company or the "
                                      "specific researched hook and fits their industry; no clickbait, no emojis")
-    body: str = Field(description="Plain text, greets the person by first name, 70-120 words, one question CTA, signed by the sender name provided")
+    body: str = Field(description="Plain text, greets the person by first name, 90-140 words, three short body paragraphs, one question CTA, signed by the sender name provided")
     hook_used: str = Field(description="The specific researched fact the opening line is built on")
     reasoning: str = Field(description="One or two sentences: why this angle for this person")
+    _critique: Optional[dict] = PrivateAttr(default=None)      # set by writer.critique(), never sent to the model
+
+    @property
+    def critique(self) -> Optional[dict]:
+        return self._critique
+
+    @critique.setter
+    def critique(self, value):
+        self._critique = value
+
+    def model_dump(self, *a, **k):                             # keep the critique in saved records
+        d = super().model_dump(*a, **k)
+        if self._critique is not None:
+            d["critique"] = self._critique
+        return d

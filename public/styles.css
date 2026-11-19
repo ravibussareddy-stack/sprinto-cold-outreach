@@ -299,3 +299,16 @@ ul.tight { margin: 0; padding-left: 18px; } ul.tight li { margin: 2px 0; }
 /* success / error messages */
 .note.ok, span.ok, .small.ok { color: var(--blue-700); font-weight: 500; }
 .note.bad, span.bad, .small.bad { color: var(--warn); font-weight: 500; }
+
+/* forms, shared by every page (test case, add a contact, add your own framework, recipient) */
+.form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.form label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.form input[type=text], .form input[type=email], .form input:not([type]), .form select, .form textarea {
+  width: 100%; padding: 9px 12px; border-radius: 12px; font: inherit; font-size: 14px;
+  border: 1px solid var(--glass-border); background: var(--glass-strong); color: var(--ink); outline: none; }
+.form input:focus, .form select:focus, .form textarea:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(59,130,246,.18); }
+/* two-column page sections (test page) */
+.split { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+.form.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 600px) { .form.two { grid-template-columns: 1fr; } }
