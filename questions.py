@@ -130,7 +130,8 @@ def detect(profile, evidence: list[dict], core_held: set[str], tools: list[dict]
             out.append({"topic": topic, **hit})
     if tools and not core_held:
         t = tools[0]
-        out.append({"topic": "uses_platform", "finding": f"uses {t['tool']}, no certificate yet", "quote": t.get("sentence"), "url": t.get("url")})
+        quote = t.get("sentence") if t.get("url") else None        # the model's own note is not a quote from the site
+        out.append({"topic": "uses_platform", "finding": f"uses {t['tool']}, no certificate yet", "quote": quote, "url": t.get("url")})
     if profile.acquired_by or profile.funding_stage == "Acquired":
         out.append({"topic": "acquired", "finding": f"now part of {profile.acquired_by or 'another company'}", "quote": None, "url": None})
     what = " ".join([profile.one_line_description or "", profile.buyer_type or ""] + profile.target_industries)
