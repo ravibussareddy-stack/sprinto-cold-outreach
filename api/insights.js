@@ -119,13 +119,14 @@ module.exports = async (req, res) => {
 
     // ---------- new certifications: what is new, who needs it, who it would re-open ----------
     const pstate = await fw.loadState(pool);
+    const r_size = r.size.max_employees;
     const latestFull = await rows(pool, `
       SELECT DISTINCT ON (domain) domain, decision, record->'profile' AS profile,
              record->'qualification'->'certs_held' AS certs, record->'qualification'->'expansion' AS expansion
       FROM runs ORDER BY domain, created_at DESC`);
     const describe = (f) => {
       const seen = latestFull.filter((r) => fw.families(r.certs || []).includes(f.family)).map((r) => (r.profile || {}).company_name || r.domain);
-      const fits = latestFull.filter((r) => r.decision === "DORMANT").map((r) => {
+      const fits = latestFull.filter((r) => r.decision === "DORMANT" && fw.eligible(r.profile, r_size)).map((r) => {
         const why = fw.fit(f, r.profile || {}, r.certs || []);
         return why ? { domain: r.domain, company: (r.profile || {}).company_name || r.domain, reason: why } : null;
       }).filter(Boolean);

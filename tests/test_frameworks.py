@@ -5,7 +5,7 @@ import scraper
 from schemas import CompanyProfile
 
 AI_CO = dict(is_b2b_saas=True, buyer_type="Data teams", company_name="Acme",
-             one_line_description="An AI copilot for data teams", funding_stage="Series B",
+             one_line_description="AI agents and an AI copilot for data teams", funding_stage="Series B",
              named_customers=["A", "B"], handles_sensitive_data=True, geographic_markets=["US", "Europe"])
 
 
@@ -43,3 +43,14 @@ def test_certified_company_stays_dormant_until_a_fitting_framework_is_accepted(m
 
 def test_a_framework_that_does_not_fit_leaves_it_dormant(monkeypatch):
     assert run(AI_CO, monkeypatch, ["cmmc"])["decision"] == "DORMANT"
+
+
+def test_an_ai_feature_is_not_an_ai_product():
+    fw = frameworks.BY_ID["iso_42001"]
+    assert frameworks.fit(fw, {"one_line_description": "An AI-powered CRM for sales teams"}, []) is None
+    assert frameworks.fit(fw, {"one_line_description": "AI agents that resolve support tickets"}, []) is not None
+
+
+def test_a_public_company_is_never_re_opened(monkeypatch):
+    res = run(AI_CO | {"funding_stage": "Public"}, monkeypatch, ["iso_42001"])
+    assert res["decision"] == "DISQUALIFIED", res["decision"]

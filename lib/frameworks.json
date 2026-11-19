@@ -19,21 +19,31 @@
    "pitch": "an ISO 42001 AI management system, built on the SOC 2 / ISO 27001 controls they already run",
    "fit": {
     "keywords": [
-     "ai",
-     "artificial intelligence",
-     "machine learning",
-     "ml",
+     "ai platform",
+     "ai-native",
+     "ai native",
+     "ai agent",
+     "ai agents",
+     "agentic",
      "llm",
+     "llms",
      "large language model",
-     "generative",
+     "generative ai",
      "genai",
      "gen ai",
-     "ai agent",
-     "agents",
-     "copilot",
-     "chatbot",
+     "machine learning",
+     "ml platform",
+     "artificial intelligence",
+     "ai model",
+     "ai models",
+     "ai copilot",
+     "ai assistant",
+     "ai assistants",
      "computer vision",
-     "nlp"
+     "conversational ai",
+     "ai company",
+     "ai-first",
+     "ai first"
     ]
    }
   },
@@ -152,21 +162,31 @@
    "pitch": "EU AI Act readiness alongside the security controls they already have",
    "fit": {
     "keywords": [
-     "ai",
-     "artificial intelligence",
-     "machine learning",
-     "ml",
+     "ai platform",
+     "ai-native",
+     "ai native",
+     "ai agent",
+     "ai agents",
+     "agentic",
      "llm",
+     "llms",
      "large language model",
-     "generative",
+     "generative ai",
      "genai",
      "gen ai",
-     "ai agent",
-     "agents",
-     "copilot",
-     "chatbot",
+     "machine learning",
+     "ml platform",
+     "artificial intelligence",
+     "ai model",
+     "ai models",
+     "ai copilot",
+     "ai assistant",
+     "ai assistants",
      "computer vision",
-     "nlp"
+     "conversational ai",
+     "ai company",
+     "ai-first",
+     "ai first"
     ],
     "markets": [
      "europe",
@@ -285,5 +305,6 @@
    "gdpr",
    "GDPR"
   ]
- ]
+ ],
+ "fit_note": "AI frameworks need the product itself to be AI (LLMs, agents, ML), not an 'AI-powered' feature."
 }

@@ -153,6 +153,14 @@ def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | Non
         return ("DORMANT",
                 f"Already certified ({', '.join(sorted(certs))}). Dormant: re-engage only if a new "
                 f"relevant certificate appears.")
+    stop = ineligible(p)
+    if stop:
+        return stop
+    return None
+
+
+def ineligible(p: CompanyProfile) -> tuple[str, str] | None:
+    """Rules that hold whatever the certificates say: acquired, public or too big."""
     if p.acquired_by or p.funding_stage == "Acquired":
         return ("DISQUALIFIED", f"Now part of {p.acquired_by or 'another company'}: compliance is usually decided "
                                 f"by the parent company's security team, so this is not an independent buyer.")
@@ -301,7 +309,7 @@ def qualify(domain: str, log) -> dict:
             exp = frameworks.expansions(profile.model_dump(), sorted(named_certs(profile, pages)))
             profile.expansion_frameworks = [f"{e['name']} ({e['reason']})" for e in exp]
             if exp:
-                stop = None
+                stop = ineligible(profile)          # an expansion still has to be a company Sprinto can sell to
         if stop:
             decision, reason = stop
             return {"decision": decision, "reason": reason, "score": None, "score_reasons": [],

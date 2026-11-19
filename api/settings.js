@@ -32,11 +32,12 @@ async function portfolioAction(pool, action, id) {
                    [JSON.stringify({ accepted: [...acc], dismissed: [...dis] })]);
   const changed = [];
   if (action === "add" || action === "remove") {
+    const maxEmployees = (await load(pool)).rubric.size.max_employees;
     const latest = (await pool.query(`SELECT DISTINCT ON (domain) id, domain, decision, record FROM runs
                                       ORDER BY domain, created_at DESC`)).rows;
     for (const r of latest) {
       const rec = r.record || {}, q = rec.qualification || {}, p = rec.profile || {};
-      if (action === "add" && r.decision === "DORMANT") {
+      if (action === "add" && r.decision === "DORMANT" && fw.eligible(p, maxEmployees)) {
         const why = fw.fit(f, p, q.certs_held || []);
         if (!why) continue;
         const reason = `Re-opened: already certified (${(q.certs_held || []).join(", ")}), but needs ${f.name} (${why}), now in your portfolio. Run it again to research and draft.`;

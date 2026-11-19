@@ -60,7 +60,7 @@ def fit(fw: dict, profile: dict, held: list[str]) -> str | None:
         mk = _hit(rule["markets"], markets)
         if not mk:
             return None
-        return f'"{kw}" in what they do, and they sell in {mk.upper() if len(mk) <= 4 else mk.title()}'
+        return f'"{kw}" in what they do, and they sell in {mk.upper() if len(mk) <= 4 else mk.title().replace("Eu ", "EU ")}'
     return f'"{kw}" in what they do'
 
 
