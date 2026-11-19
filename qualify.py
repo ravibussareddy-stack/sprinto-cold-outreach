@@ -151,6 +151,9 @@ def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | Non
         return ("DORMANT",
                 f"Already certified ({', '.join(sorted(certs))}). Dormant: re-engage only if a new "
                 f"relevant certificate appears.")
+    if p.acquired_by or p.funding_stage == "Acquired":
+        return ("DISQUALIFIED", f"Now part of {p.acquired_by or 'another company'}: compliance is usually decided "
+                                f"by the parent company's security team, so this is not an independent buyer.")
     if p.funding_stage in ("Public",) or (p.employee_estimate or 0) > rubric.get("size", "max_employees"):
         return "DISQUALIFIED", "Too large/public - typically runs an in-house GRC team or enterprise GRC tool."
     return None
@@ -256,6 +259,8 @@ def explain_fetch_error(code: str | None) -> str:
         text = "The website returned a server error"
     elif c == "disallowed_by_robots_txt":
         text = "The website's robots.txt does not allow automated reading"
+    elif c == "not_found_page":
+        text = "The homepage is a 'page not found' page"
     elif c == "no_usable_text":
         text = "The homepage loaded but had too little readable text"
     else:

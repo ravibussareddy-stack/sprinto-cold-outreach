@@ -104,3 +104,15 @@ def test_an_acquisition_is_not_a_buying_trigger():
     res = run({"https://acme.io": "HR software", "https://acme.io/security": "We encrypt data."},
               profile=PROFILE | {"recent_triggers": ["Acquired by MYND"]})
     assert not any("recent trigger" in r for r in res["score_reasons"]), res["score_reasons"]
+
+
+def test_a_not_found_page_is_not_a_security_page():
+    soft404 = "Rows joined Superhuman. Error 404. Oops! Seems like we have an empty cell. Sorry, it looks like this page doesn’t exist."
+    assert scraper.is_not_found_page(soft404 + " word" * 40)
+    assert not scraper.is_not_found_page("Security at Acme. We encrypt data at rest. " * 40)
+
+
+def test_an_acquired_company_is_not_an_independent_buyer():
+    res = run({"https://acme.io": "Spreadsheets", "https://acme.io/security": "We encrypt data."},
+              profile=PROFILE | {"acquired_by": "Superhuman"})
+    assert res["decision"] == "DISQUALIFIED" and "Superhuman" in res["reason"]

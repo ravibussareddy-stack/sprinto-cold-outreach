@@ -28,6 +28,8 @@ class CompanyProfile(BaseModel):
     named_customers: list[str] = Field([], description="Customer logos/names mentioned, especially large or enterprise brands")
     certifications_claimed: list[str] = Field([], description="Certifications the company says IT holds (SOC 2, ISO 27001, HIPAA...). Exclude mentions about customers or partners.")
     certification_in_progress: Optional[bool] = None
+    acquired_by: Optional[str] = Field(None, description="If the site says the company has been acquired by, "
+        "has joined, or is now part of another company, that company's name. null otherwise.")
     compliance_tool_used: Optional[str] = Field(None, description="Compliance automation platform the company ITSELF uses "
         "(e.g. a trust centre 'powered by Vanta', 'we use Drata'). null if not stated. Not tools it integrates with or sells.")
     geographic_markets: list[str] = []

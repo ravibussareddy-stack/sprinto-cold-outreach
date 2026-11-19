@@ -144,6 +144,17 @@ def detect_certifications(raw_text: str) -> dict:
             "in_progress": in_progress, "evidence": evidence, "tools": tools}
 
 
+NOT_FOUND = re.compile(r"\b(error\s*404|404\s*(error|page|not found)|page (not found|does ?n[o'\u2019]?t exist|could not be found)|"
+                       r"this page (does ?n[o'\u2019]?t|doesn['\u2019]t) exist|we can['\u2019]?t find (that|the|this) page|nothing (was )?found here)", re.I)
+
+
+def is_not_found_page(text: str) -> bool:
+    """A 'soft 404': the site answers 200 (or the reader renders) its own not-found page. Short page plus
+    not-found wording = not found; a long page that merely links to a 404 help article is not."""
+    words = len((text or "").split())
+    return bool(NOT_FOUND.search(text or "")) and words < 400
+
+
 def clean_html(html: str) -> str:
     """Rules from L4: drop nav/footer/cookie banners, drop lines under eight
     words (except headings), drop duplicates, cap length."""
@@ -193,7 +204,7 @@ def _jina(url: str) -> str | None:
 def fetch(url: str) -> dict:
     """Returns {url, ok, error, text, raw_text, certs, links, method}."""
     cached = db.get_cached_page(url)
-    if cached:
+    if cached and not is_not_found_page(cached.get("text", "")):     # pages cached before soft-404 checks are re-fetched
         return cached
 
     result = {"url": url, "ok": False, "error": None, "text": "", "raw_text": "",
@@ -223,8 +234,10 @@ def fetch(url: str) -> dict:
         result["links"] = extract_links(html, result["url"])
         result["method"] = "request"
 
-    # Thin page (JS shell) or blocked (403 from Cloudflare etc.) -> Jina Reader.
-    if config.USE_JINA_FALLBACK and len(result["text"].split()) < config.THIN_PAGE_WORDS:
+    # Thin page (JS shell) or blocked (403 from Cloudflare etc.) -> Jina Reader. Never for a page that
+    # does not exist (404/410): the reader would return the site's "not found" page as if it were content.
+    gone = result["error"] in ("http_404", "http_410")
+    if config.USE_JINA_FALLBACK and not gone and len(result["text"].split()) < config.THIN_PAGE_WORDS:
         jt = _jina(url)
         if jt:
             result["raw_text"] = (result["raw_text"] + " " + jt).strip()
@@ -241,6 +254,8 @@ def fetch(url: str) -> dict:
             result["error"] = None
 
     result["ok"] = len(result["text"].split()) >= 30
+    if result["ok"] and is_not_found_page(result["text"]):
+        result["ok"], result["error"] = False, "not_found_page"      # a "soft 404": served as 200
     if not result["ok"] and not result["error"]:
         result["error"] = "no_usable_text"
     result["certs"] = detect_certifications(result["raw_text"])
