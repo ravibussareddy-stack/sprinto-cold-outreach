@@ -21,7 +21,7 @@ CASES = [
     {"name": "Certified company (PostHog: SOC 2 Type 2 on its security page, uses Drata)",
      "body": {"domain": "posthog.com", "contact": STAND_IN, "send": False},
      "expect_decision": {"DORMANT"}, "expect_http": 200, "right_action": "no email"},
-    {"name": "Compliance work under way with another platform, contact supplied (Hanko: SOC 2 in progress on its trust page)",
+    {"name": "Compliance work under way with another platform, contact supplied (Hanko: ISO 27001 in progress on its trust page, powered by Comp AI)",
      "body": {"domain": "hanko.io", "contact": STAND_IN, "send": False, "mode": "full"},
      "expect_decision": {"QUALIFIED_FLAGGED"}, "expect_http": 200,
      "right_action": "draft an email",
@@ -85,8 +85,8 @@ def main():
         print(json.dumps(res))
     passed = sum(r["pass"] for r in rows)
     lines = [f"# Benchmark on fresh and edge-case companies",
-             f"Run {dt.datetime.now().strftime('%Y-%m-%d %H:%M')} against `{BASE}/api/run_case` (fast mode, `send: false`). "
-             f"Expected outcomes were written in `benchmark.py` before the run.\n",
+             f"Run {dt.datetime.now().strftime('%Y-%m-%d %H:%M')} against `{BASE}/api/run_case` (fast mode unless the case says full, `send: false`). "
+             f"Expected outcomes are written in `benchmark.py`; two were set or corrected after a check, as each case notes.\n",
              f"**{passed}/{len(rows)} as expected.**\n",
              "| Case | Expected | Actual | Certification | Time | Right action? |", "|---|---|---|---|---|---|"]
     for r in rows:
