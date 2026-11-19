@@ -30,6 +30,7 @@
   <header class="glass top">
     <div class="brand"><div class="logo">S</div>
       <div><h1>Run a test case</h1><div class="muted small">Sends one company through the whole pipeline: scrape, qualify, contact, pain points, email.</div></div></div>
+    <div class="actions"><button class="btn" id="tour-btn" type="button">Take the tour</button></div>
   </header>
   <nav class="glass nav" id="nav"></nav>
 
@@ -63,6 +64,11 @@
       <code>GET /api/run_case</code> returns the format.</p>
   </section>
 
+  <details class="glass card section" id="criteria-card">
+    <summary><b>Heads-up: how companies are judged</b> <span class="muted small">(open to see the live rules)</span></summary>
+    <div id="criteria" style="margin-top:12px"></div>
+  </details>
+
   <section class="glass card section" id="summary-card" style="display:none">
     <h2>Result</h2>
     <dl class="kv" id="summary"></dl>
@@ -83,6 +89,15 @@ dash.nav("test");
 (function () {
   var E = dash.esc;
   function show(id, on) { document.getElementById(id).style.display = on ? "" : "none"; }
+  dash.criteria(document.getElementById("criteria"));
+  var TOUR = [
+    { el: "#domain", title: "1. The company", text: "A domain or any URL on the site. Try one you know, e.g. a small B2B SaaS company." },
+    { el: "#who", title: "2. Who to write to", text: "Supply a contact, or let it find a decision-maker with Hunter. It only looks once the company qualifies, to save searches." },
+    { el: "#send", title: "3. Draft or send", text: "Off by default: you get the draft only. On: it is emailed to our own test inbox, never the prospect, and replies are then handled automatically." },
+    { el: "#criteria-card", title: "4. What to expect", text: "The live rules. Certified companies stop as Dormant with the evidence shown, so a short answer is often the right one." },
+    { el: "#run", title: "5. Run it", text: "About 30-60 seconds. The result shows the decision, the score line by line, the certification evidence with sources, the contact, the pain points and the email, plus the raw JSON." }];
+  document.getElementById("tour-btn").addEventListener("click", function () { dash.tour(TOUR, "tour-test"); });
+  if (!dash.tourSeen("tour-test")) setTimeout(function () { dash.tour(TOUR, "tour-test"); }, 900);
   var who = "given";
   document.getElementById("who").addEventListener("click", function (ev) {
     var b = ev.target.closest("button"); if (!b) return;

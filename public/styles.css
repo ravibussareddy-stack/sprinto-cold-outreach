@@ -273,3 +273,23 @@ ul.tight { margin: 0; padding-left: 18px; } ul.tight li { margin: 2px 0; }
 .lesson.off { opacity: 0.55; }
 .lesson .meta .btn.mini { margin-left: auto; }
 .btn.mini { padding: 3px 10px; font-size: 12px; }
+
+/* criteria heads-up */
+.criteria { margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 14px; }
+.criteria li b:first-child { display: block; }
+.criteria li span { color: var(--muted); }
+.criteria li span b { color: var(--ink); }
+/* guided tour */
+.tour-shade { position: fixed; inset: 0; z-index: 90; background: rgba(8, 20, 50, 0.38); }
+.tour-on { position: relative; z-index: 95 !important; box-shadow: 0 0 0 4px var(--blue-500), 0 0 0 9999px rgba(8, 20, 50, 0.0) !important;
+           border-radius: 14px; background-color: var(--glass-strong); }
+.tour-card { position: fixed; z-index: 100; padding: 16px 18px; border-radius: 18px; background: var(--glass-strong);
+             -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); transition: top .25s ease, left .25s ease; }
+.tour-card h3 { margin: 4px 0 6px; font-size: 16px; }
+.tour-card p { margin: 0 0 12px; font-size: 14px; color: var(--ink); }
+.tour-step { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.tour-btns { display: flex; gap: 8px; align-items: center; }
+.tour-btns span { flex: 1; }
+@media (prefers-reduced-motion: reduce) { .tour-card { transition: none; } }
+.tour-lift { z-index: 96 !important; position: relative; }
+.nav.tour-lift { position: sticky; }

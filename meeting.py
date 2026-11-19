@@ -109,6 +109,7 @@ class Sched(TypedDict):
     guess_start: str | None               # their time was contradictory: our best guess, to confirm
     ambiguity_note: str | None            # why it was contradictory, e.g. "the 21st is a Saturday"
     ack_note: str | None                  # one sentence answering their time, used in the next email
+    not_before: str | None                # "next week": offer no time before this date (YYYY-MM-DD)
     followups_sent: int
     followups_total: int
     replied: bool
@@ -181,6 +182,13 @@ def _guidance(title=None, industries=None) -> list[dict]:
         return feedback.relevant(title, industries)
     except Exception:
         return []
+
+
+def _fmt_day(iso_date: str) -> str:
+    try:
+        return dt.date.fromisoformat(iso_date[:10]).strftime("%A %d %B").replace(" 0", " ")
+    except ValueError:
+        return iso_date
 
 
 def _sign_off(sender_name: str) -> str:
@@ -262,7 +270,9 @@ def build_graph(ctx: Ctx) -> StateGraph:
                      "not_interested": "negative"}.get(r.intent, "unclear")
         if sentiment == "unclear" and s.get("sentiment") == "positive":
             sentiment = "positive"          # an unclear later reply does not undo earlier interest
-        return {"intent": r.intent, "chosen_index": r.chosen_slot_index, "proposed_start": proposed,
+        if r.not_before and not proposed:
+            ack = ack or f"Here are a few times from {_fmt_day(r.not_before)}, as you suggested."
+        return {"not_before": r.not_before, "intent": r.intent, "chosen_index": r.chosen_slot_index, "proposed_start": proposed,
                 "guess_start": guess, "ambiguity_note": r.ambiguity_note, "ack_note": ack,
                 "replied": True, "sentiment": sentiment, "followups_sent": 0}   # a reply starts a fresh silence count
 
@@ -382,7 +392,14 @@ def build_graph(ctx: Ctx) -> StateGraph:
     def check_calendar(s):
         now = dt.datetime.now(dt.timezone.utc)
         excluded = set(s["rejected_slots"])
-        ok, res, line = _attempt("check_calendar", lambda: calendar_tool.check_calendar(now, excluded))
+        start = now
+        if s.get("not_before"):                 # they asked for "next week": start the search there
+            try:
+                nb = dt.datetime.fromisoformat(s["not_before"]).replace(tzinfo=ZoneInfo(config.SLOT_TIMEZONE))
+                start = max(now, nb.astimezone(dt.timezone.utc) - dt.timedelta(hours=2))
+            except ValueError:
+                pass
+        ok, res, line = _attempt("check_calendar", lambda: calendar_tool.check_calendar(start, excluded))
         if not ok:
             return {"outcome": "escalated_to_growth_lead",
                     "escalation": f"check_calendar failed: {res}", "trace": [line]}
@@ -530,7 +547,7 @@ def _initial() -> dict:
             "rejected_slots": [], "reply_round": 0, "meeting_status": "unscheduled", "crm_logged": False,
             "outcome": "", "escalation": "", "booked_slot": None, "scheduling": False,
             "last_reply": None, "intent": "", "chosen_index": None, "proposed_start": None,
-            "guess_start": None, "ambiguity_note": None, "ack_note": None,
+            "guess_start": None, "ambiguity_note": None, "ack_note": None, "not_before": None,
             "followups_sent": 0, "followups_total": 0, "replied": False, "sentiment": None, "trace": []}
 
 

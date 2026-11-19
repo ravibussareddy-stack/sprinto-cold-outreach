@@ -18,7 +18,7 @@
         <div class="muted small" id="page-sub">Sprinto outreach</div>
       </div>
     </div>
-    <div class="actions"><a class="btn primary" href="test.html">Run a test case</a><span class="muted small">updated <span id="updated">-</span></span><button class="btn" id="refresh">Refresh</button></div>
+    <div class="actions"><button class="btn" id="tour-btn" type="button">Take the tour</button><a class="btn primary" href="test.html" id="run-test-btn">Run a test case</a><span class="muted small">updated <span id="updated">-</span></span><button class="btn" id="refresh">Refresh</button></div>
   </header>
   <nav class="glass nav" id="nav"></nav>
   <div id="error" class="error"></div>
@@ -26,8 +26,12 @@
   <!-- ===== Overview ===== -->
   <div class="page" data-page="overview">
     <section class="tiles" id="tiles"></section>
+    <section class="glass card section" id="criteria-card">
+      <div class="row-head"><h2>How companies are judged</h2><span class="muted small">the live rules, in the order they are applied</span></div>
+      <div id="criteria"></div>
+    </section>
     <div class="grid-2">
-      <section class="glass card">
+      <section class="glass card" id="todo-card">
         <div class="row-head"><h2>To-do</h2><span class="muted small" id="todo-count"></span></div>
         <div class="todo" id="todo"></div>
       </section>
@@ -481,6 +485,31 @@
   route();
   load();
   setInterval(load, 60000);
+
+  // ---------- criteria heads-up and guided tour ----------
+  dash.criteria(document.getElementById("criteria"));
+  function navStep(key, title, text) { return { el: '#nav a[data-key="' + key + '"]', title: title, text: text }; }
+  var TOUR = [
+    { title: "Welcome", text: "This dashboard runs Sprinto's cold outreach: it researches a company, decides whether it is worth an email, " +
+      "finds the right person, writes the email and handles the replies. Two minutes, eleven stops. Use the arrow keys or the buttons." },
+    { el: "#run-test-btn", title: "Try one company", text: "The quickest way in: give it a domain and watch every step, with the evidence behind each decision." },
+    { el: "#tiles", title: "The headline numbers", text: "Replies, meetings, drafts waiting for review, disagreement, emails and cost. Each tile opens the page behind it." },
+    { el: "#criteria-card", title: "How companies are judged", text: "The live rules, in order. Heads-up: most well-known SaaS companies already hold SOC 2, so they come back Dormant. That is deliberate." },
+    { el: "#todo-card", title: "What needs you", text: "Upcoming meetings, drafts to review and anything stuck. Empty means nothing is waiting." },
+    navStep("pipeline", "Pipeline", "Every company researched, where it stands and why. Click one for the full story: evidence, contact, emails and next step."),
+    navStep("emails", "Emails", "Every email written. Open a draft to see its checks, its disagreement score, and to give feedback and redraft it."),
+    navStep("review", "Review", "Drafts whose disagreement score is above the threshold wait here for you to keep or rewrite."),
+    navStep("learning", "Learning", "The feedback repo the writer follows. Add a lesson, or turn one off if it was a mistake."),
+    navStep("rubric", "Rubric", "Change any rule or point value. The rubric also tunes itself from outcomes, with every change explained and undoable."),
+    navStep("how", "How it works", "Where each piece of data comes from, step by step."),
+    { el: "#tour-btn", title: "That's it", text: "Replay the tour any time from here." }];
+  document.getElementById("tour-btn").addEventListener("click", function () {
+    if (location.hash && location.hash !== "#overview") location.hash = "#overview";
+    setTimeout(function () { dash.tour(TOUR, "tour-overview"); }, 150);
+  });
+  if (!dash.tourSeen("tour-overview") && (!location.hash || location.hash === "#overview")) {
+    setTimeout(function () { dash.tour(TOUR, "tour-overview"); }, 1200);
+  }
 })();
 </script>
 </body>

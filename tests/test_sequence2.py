@@ -381,3 +381,16 @@ def test_silence_after_interest_gets_three_scheduling_nudges_then_hands_off():
     assert angles == [(1, "scheduling"), (2, "scheduling"), (3, "scheduling")], angles
     assert s.outcome == "escalated_to_growth_lead" and "after 3 follow-up" in s.escalation, (s.outcome, s.escalation)
     assert s.followups_total == 3 and [a for _, a in SENT] == [False] * 4      # the proposal, then three nudges
+
+
+def test_next_week_reply_offers_no_time_before_that_date():
+    """'What times do you have next week?' -> every offered time is on or after that date, and the
+    email says so."""
+    config.CALENDAR_BUSY_FILE = make_busy([])
+    config.CALENDLY_BOOKING = False
+    nb = (dt.date.today() + dt.timedelta(days=7 - dt.date.today().weekday())).isoformat()   # next Monday
+    replies.classify = _scripted(_read(intent="interested", proposed_times=[], not_before=nb))
+    SENT.clear(); BODIES.clear()
+    s = meeting.run(ctx(do_send=True), ["Yes, relevant. What times do you have next week?"])
+    assert s.times_proposed and all(t[:10] >= nb for t in s.times_proposed), (nb, s.times_proposed)
+    assert any("as you suggested" in b for b in BODIES), BODIES

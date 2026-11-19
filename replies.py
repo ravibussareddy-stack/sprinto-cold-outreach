@@ -30,6 +30,10 @@ class ReplyRead(BaseModel):
     ambiguity_note: Optional[str] = Field(None, description=(
         "If they named a time but it is contradictory or unclear, one short plain sentence saying "
         "why, written to them, e.g. 'the 21st is a Saturday'. Else null."))
+    not_before: Optional[str] = Field(None, description=(
+        "If they say WHEN in general but not a specific time ('next week', 'after the 25th', 'in "
+        "December', 'from Monday'): the earliest acceptable date as YYYY-MM-DD, resolved against "
+        "today's date. Else null."))
     best_guess_start: Optional[str] = Field(None, description=(
         "Only when ambiguity_note is set: the most likely intended start as ISO 8601 with UTC "
         "offset (prefer the named weekday on the date nearest to the one they wrote). Else null."))

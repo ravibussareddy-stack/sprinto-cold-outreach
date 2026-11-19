@@ -64,3 +64,4 @@ def test_zero_budget_means_no_limit(monkeypatch):
     rubric.use({"budget": {"monthly_inr": 0}})
     monkeypatch.setattr(budget, "spent_this_month_inr", lambda: 10_000.0)
     assert budget.status()["paused"] is False
+
