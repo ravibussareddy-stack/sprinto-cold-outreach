@@ -125,3 +125,18 @@ if __name__ == "__main__":
             failed += 1; print("FAIL", t.__name__, "-", repr(e))
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     raise SystemExit(1 if failed else 0)
+
+
+def test_a_renamed_badge_does_not_wake_a_dormant_company():
+    import pipeline_rules
+    prev = {"qualification": {"decision": "DORMANT", "certs_held": ["SOC 2"]}}
+    assert pipeline_rules.reactivation(prev, ["SOC 2 Type II", "SOC-2"]) == "DORMANT"
+    assert pipeline_rules.reactivation({"qualification": {"decision": "DORMANT", "certs_held": ["ISO 27001"]}},
+                                       ["ISO/IEC 27001:2022"]) == "DORMANT"
+    assert pipeline_rules.reactivation(prev, ["SOC 2", "HIPAA"]) == "REACTIVATED"
+
+
+def test_certificates_seen_last_time_still_count():
+    import pipeline_rules
+    prev = {"qualification": {"decision": "DORMANT", "certs_held": ["SOC 2", "ISO 27001"]}}
+    assert pipeline_rules.reactivation(prev, ["SOC 2", "Cyber Essentials"]) == "DORMANT"

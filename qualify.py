@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 import rubric
 import scraper
 from extract import extract_profile
+from pipeline_rules import family
 from schemas import CompanyProfile
 
 # Which page answers which question, in priority order. Careers is rung one
@@ -133,7 +134,8 @@ def named_certs(p: CompanyProfile, pages: list[dict]) -> set[str]:
     """Certifications that count for the dormant rule: security-compliance certificates only, minus
     rubric certifications.not_certifications (default: GDPR - a regulation, not a certification)."""
     excluded = {x.lower() for x in rubric.get("certifications", "not_certifications")}
-    return {c for c in certs_held(p, pages) if c.lower() not in excluded and COMPLIANCE_CERT.search(c)}
+    return {family(c) for c in certs_held(p, pages)
+            if c.lower() not in excluded and family(c).lower() not in excluded and COMPLIANCE_CERT.search(c)}
 
 
 def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | None:

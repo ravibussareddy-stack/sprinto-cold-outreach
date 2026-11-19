@@ -86,6 +86,7 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
             q["decision"] = "REACTIVATED"
             q["reason"] = f"new certificate since last run: {', '.join(new_certs)}. Review before outreach."
             q["flags"] = q.get("flags", []) + [q["reason"]]
+            rec["qualification"] = {k: v for k, v in q.items() if k not in ("profile", "pages")}   # record what was decided
     if q["decision"] not in ("QUALIFIED", "QUALIFIED_FLAGGED", "REACTIVATED"):
         rec["status"] = q["decision"]
         return rec
