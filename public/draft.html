@@ -203,7 +203,9 @@ dash.nav("emails");
     }).then(function (r) {
       var verdict = r.change == null ? "" : r.change < 0 ? "Disagreement down " + Math.abs(r.change) + " points." :
                     r.change === 0 ? "Disagreement unchanged." : "Disagreement up " + r.change + " points.";
-      say(verdict + " Used " + r.guidance_used.length + " piece(s) of feedback" + (r.seconds ? " Took " + r.seconds + "s" : "") + (r.needs_review ? "; still above " + r.threshold + ", so it stays in review." : "."), r.improved ? "ok" : "");
+      say(verdict + " Used " + r.guidance_used.length + " piece(s) of feedback." +
+          (r.needs_review ? " Still above " + r.threshold + ", so it stays in review." : "") +
+          (r.seconds ? " Took " + r.seconds + "s." : ""), r.improved ? "ok" : "");
       document.getElementById("compare").innerHTML = '<div class="compare">' + side("Before", r.before, false) + side("After (redrafted)", r.after, r.improved) + "</div>" +
         (r.guidance_used.length ? '<div class="small muted" style="margin-top:10px">Feedback used, best first: ' +
           r.guidance_used.map(function (g) { return "#" + g.id + " (" + g.scope + ", " + Number(g.score).toFixed(1) + ")"; }).join(", ") + "</div>" : "");
