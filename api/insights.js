@@ -117,6 +117,11 @@ module.exports = async (req, res) => {
       detail: "Most already hold SOC 2 or ISO 27001. New certifications in your portfolio can re-open the ones that need them.",
       link: "settings.html" });
 
+    const openQ = await rows(pool, "SELECT kind, domain FROM questions WHERE status = 'open'");
+    if (openQ.length) todo.unshift({ severity: "high", title: `${openQ.length} question(s) for you`,
+      detail: "The system was unsure and asked: " + [...new Set(openQ.map((q) => q.domain).filter(Boolean))].slice(0, 4).join(", ") +
+        ". Answers are used on the next run.", link: "questions.html" });
+
     // ---------- new certifications: what is new, who needs it, who it would re-open ----------
     const pstate = await fw.loadState(pool);
     const r_size = r.size.max_employees;
@@ -137,9 +142,9 @@ module.exports = async (req, res) => {
     };
     const portfolio = {
       core: fw.CAT.core,
-      accepted: pstate.accepted.map((id) => describe(fw.BY_ID[id])),
+      accepted: pstate.accepted.map((id) => ({ ...describe(pstate.byId[id]), custom: !!pstate.byId[id].custom })),
       candidates: fw.CAT.frameworks.filter((f) => !pstate.accepted.includes(f.id) && !pstate.dismissed.includes(f.id)).map(describe),
-      dismissed: pstate.dismissed.map((id) => ({ id, name: fw.BY_ID[id].name })),
+      dismissed: pstate.dismissed.map((id) => ({ id, name: pstate.byId[id].name })),
     };
     if (portfolio.candidates.length) {
       const fitting = portfolio.candidates.reduce((n, c) => n + c.fits_dormant.length, 0);

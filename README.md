@@ -216,6 +216,24 @@ certified company that fits an accepted framework qualifies as an **expansion pr
 current portfolio, so a claim that Sprinto covers an accepted framework is supported. **Remove** puts the companies it
 re-opened back to dormant.
 
+**Offerings page** (`offerings.html`): the portfolio, the suggested certifications, and **Add your own** - a name,
+keywords describing who needs it, optional markets and a one-line pitch. **Preview who it fits** checks every researched
+company without saving; adding it puts it in the portfolio and re-opens the dormant companies it fits.
+
+## Questions: the system asks when it is unsure
+
+`questions.py` + `/api/questions` + `questions.html`. Instead of guessing, a run asks you (once per company and topic):
+
+| Question | Asked when | Your answer does |
+|---|---|---|
+| Is it a B2B SaaS company? | the website does not say (manual review) | yes: scored; no: disqualified - next run |
+| Does it hold SOC 2 or ISO 27001? | no security or trust page was found | yes: dormant; neither: greenfield points - next run (it enters the evidence as `answer://you/security`) |
+| Who should we email? | no suitable decision-maker found | that contact is used - next run |
+| How should we handle this conversation? | a reply could not be handled automatically | applied at once: yours, or closed as a cold lead |
+
+Open questions show as a badge on **Questions** in every page's nav and as the first to-do item. Each answer records
+what it will do, and once a run uses it, when and with what result. **Not now** and **Change answer** are always there.
+
 ## Follow-up timers, send window, budget, company view
 
 - **Follow-up timers** (rubric `followups`): follow-up 1 after 3 days of silence, follow-up 2 three days later, follow-up 3 two days after that, then closed after 3 more days (non-respondent, or handed to you if they had shown interest). Applies to no reply to the cold email *and* to silence after they replied and we proposed times. A reply from them starts the count again. Editable on the Filters & rubric page.

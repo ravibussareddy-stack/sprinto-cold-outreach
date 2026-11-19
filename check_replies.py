@@ -93,6 +93,13 @@ def check_thread(t: dict, now: dt.datetime, window: dict) -> str:
                      processed, touched_outbound=touched, replied=state.replied,
                      sentiment=state.sentiment, followups_sent=state.followups_sent)
     status = contact_status(state, waiting)
+    if status == "escalated":                          # it could not decide: ask you on the Questions page
+        try:
+            import questions
+            questions.ask_about_conversation(t["thread_id"], t["domain"], c.get("company") or t["domain"],
+                                             state.escalation or state.outcome or "no clear next step")
+        except Exception as e:
+            log(f"  could not save a question: {e}")
     db.upsert_contact(t["domain"], c.get("company"), c.get("contact_name"), c.get("contact_email"),
                       c.get("title"), status, state.outcome or None, state.followups_total)
     if not waiting:

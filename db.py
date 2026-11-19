@@ -126,6 +126,24 @@ CREATE TABLE IF NOT EXISTS rubric_changes (
     reverted BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Questions the system asks you when it is unsure (dashboard: Questions page).
+CREATE TABLE IF NOT EXISTS questions (
+    id BIGSERIAL PRIMARY KEY,
+    key TEXT UNIQUE NOT NULL,      -- e.g. certs:acme.io - one question per thing it is unsure about
+    kind TEXT NOT NULL,            -- saas | certs | contact | conversation
+    source TEXT NOT NULL,          -- which part of the system asked
+    domain TEXT,
+    run_id BIGINT,
+    question TEXT NOT NULL,
+    context TEXT,
+    options JSONB,                 -- [{value, label}], or null for a free-form answer
+    answer JSONB,
+    status TEXT NOT NULL DEFAULT 'open',   -- open | answered | dismissed
+    applied_note TEXT,             -- what the answer changed, once used
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    answered_at TIMESTAMPTZ,
+    applied_at TIMESTAMPTZ
+);
 -- Token use per model call.
 CREATE TABLE IF NOT EXISTS llm_usage (
     id BIGSERIAL PRIMARY KEY,
@@ -449,3 +467,30 @@ def log_rubric_change(section: str, key: str, old, new, reason: str, evidence: d
         c.execute("INSERT INTO rubric_changes (section, key, old_value, new_value, reason, evidence, source) "
                   "VALUES (%s,%s,%s,%s,%s,%s,%s)",
                   (section, key, Json(old), Json(new), reason, Json(evidence) if evidence else None, source))
+
+
+@_safe
+def ask_question(key: str, kind: str, source: str, domain: str | None, question: str, context: str | None,
+                 options: list | None, run_id: int | None = None) -> int | None:
+    """Ask once per key: an open or answered question with the same key is left as it is."""
+    _init()
+    with _conn() as c:
+        r = c.execute("INSERT INTO questions (key, kind, source, domain, run_id, question, context, options) "
+                      "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (key) DO NOTHING RETURNING id",
+                      (key, kind, source, domain, run_id, question, context, Json(options) if options is not None else None)).fetchone()
+        return r[0] if r else None
+
+
+@_safe
+def answer_for(key: str):
+    """Your answer to a question, or None if it is still open, dismissed or was never asked."""
+    _init()
+    with _conn() as c:
+        r = c.execute("SELECT answer FROM questions WHERE key = %s AND status = 'answered'", (key,)).fetchone()
+        return r[0] if r else None
+
+
+@_safe
+def mark_applied(key: str, note: str):
+    with _conn() as c:
+        c.execute("UPDATE questions SET applied_note = %s, applied_at = now() WHERE key = %s", (note, key))

@@ -17,11 +17,39 @@ async function readBody(req) {
 
 // Portfolio of frameworks (new certifications). add: re-opens dormant companies that fit it;
 // remove: puts the companies it re-opened back to dormant; dismiss / restore: hide or show a suggestion.
-async function portfolioAction(pool, action, id) {
-  const f = fw.BY_ID[id];
-  if (!f) return { status: 400, body: { error: "unknown framework" } };
-  if (!["add", "remove", "dismiss", "restore"].includes(action)) return { status: 400, body: { error: "action must be add, remove, dismiss or restore" } };
+async function portfolioAction(pool, action, id, input) {
+  if (!["add", "remove", "dismiss", "restore", "custom", "delete", "preview"].includes(action))
+    return { status: 400, body: { error: "action must be add, remove, dismiss, restore, custom, delete or preview" } };
   const st = await fw.loadState(pool);
+  if (action === "preview") {                        // dry run for a framework you are about to add: nothing is saved
+    const { errors, fw: made } = fw.customFramework(input || {});
+    if (errors.length) return { status: 400, body: { error: errors.join("; "), errors } };
+    const maxEmployees = (await load(pool)).rubric.size.max_employees;
+    const latest = (await pool.query(`SELECT DISTINCT ON (domain) domain, decision, record FROM runs ORDER BY domain, created_at DESC`)).rows;
+    const fits = [], prospects = [];
+    for (const r of latest) {
+      const p = (r.record || {}).profile || {}, q = (r.record || {}).qualification || {};
+      if (!fw.eligible(p, maxEmployees)) continue;
+      const why = fw.fit(made, p, q.certs_held || []);
+      if (!why) continue;
+      (r.decision === "DORMANT" ? fits : prospects).push({ domain: r.domain, company: p.company_name || r.domain, reason: why });
+    }
+    return { status: 200, body: { ok: true, action, name: made.name, fits_dormant: fits, fits_other: prospects } };
+  }
+  let custom = st.custom.slice();
+  if (action === "custom") {                         // your own framework: saved, then added like any other
+    const { errors, fw: made } = fw.customFramework(input || {});
+    if (errors.length) return { status: 400, body: { error: errors.join("; "), errors } };
+    if (fw.BY_ID[made.id] || st.byId[made.id]) return { status: 400, body: { error: `${made.name} is already in the list` } };
+    custom.push(made); st.byId[made.id] = made; id = made.id; action = "add";
+  }
+  const f = st.byId[id];
+  if (!f) return { status: 400, body: { error: "unknown framework" } };
+  if (action === "delete") {
+    if (!f.custom) return { status: 400, body: { error: "only frameworks you added can be deleted; remove or dismiss the others" } };
+    custom = custom.filter((c) => c.id !== id);
+    action = "remove";
+  }
   const acc = new Set(st.accepted), dis = new Set(st.dismissed);
   if (action === "add") { acc.add(id); dis.delete(id); }
   if (action === "remove") acc.delete(id);
@@ -29,7 +57,7 @@ async function portfolioAction(pool, action, id) {
   if (action === "restore") dis.delete(id);
   await pool.query(`INSERT INTO settings (key, value, updated_at) VALUES ('portfolio', $1, now())
                     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-                   [JSON.stringify({ accepted: [...acc], dismissed: [...dis] })]);
+                   [JSON.stringify({ accepted: [...acc], dismissed: [...dis], custom })]);      // deleted custom ids drop out on load
   const changed = [];
   if (action === "add" || action === "remove") {
     const maxEmployees = (await load(pool)).rubric.size.max_employees;
@@ -78,7 +106,7 @@ module.exports = async (req, res) => {
       }
       const body = await readBody(req);
       if (body.portfolio) {
-        const r = await portfolioAction(pool, body.portfolio.action, body.portfolio.id);
+        const r = await portfolioAction(pool, body.portfolio.action, body.portfolio.id, body.portfolio.framework);
         return res.status(r.status).json(r.body);
       }
       const before = (await load(pool)).rubric;

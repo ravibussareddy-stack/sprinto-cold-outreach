@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offerings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<main style="max-width:1100px">
+  <header class="glass top">
+    <div class="brand"><div class="logo">S</div>
+      <div><h1>Offerings</h1><div class="muted small">The frameworks Sprinto sells, new ones to consider, and your own</div></div></div>
+    <div class="actions"><button class="btn" id="tour-btn" type="button">Take the tour</button></div>
+  </header>
+  <nav class="glass nav" id="nav"></nav>
+  <div id="error" class="error"></div>
+
+  <section class="glass card section" id="how-card">
+    <h2>How this works</h2>
+    <ol class="criteria">
+      <li><b>Your portfolio</b><span>The frameworks emails may pitch. The writer and the fact check only treat these as things Sprinto covers.</span></li>
+      <li><b>Suggested certifications</b><span>Frameworks introduced recently, with their release date and source. <b>Add to portfolio</b> or <b>Not now</b>.</span></li>
+      <li><b>Your own</b><span>Anything else you sell: give it a name and the words that describe who needs it.</span></li>
+      <li><b>What adding does</b><span>Dormant (already certified) companies that fit become <b>Reactivated</b>, and new companies that fit qualify as expansion prospects. Removing it reverses that. Acquired, public or very large companies are never re-opened.</span></li>
+    </ol>
+  </section>
+
+  <section class="glass card section" id="portfolio-card">
+    <div class="row-head"><h2>Portfolio and suggested certifications</h2><span class="muted small" id="updated"></span></div>
+    <div id="portfolio"><p class="muted small">Loading…</p></div>
+  </section>
+
+  <section class="glass card section" id="add">
+    <h2>Add your own</h2>
+    <p class="muted small" style="margin-top:-6px">It joins your portfolio straight away and re-opens the dormant companies it fits.</p>
+    <form id="custom" class="form">
+      <div><label for="c-name">Name *</label><input id="c-name" type="text" placeholder="e.g. SOC 2 + HIPAA bundle" maxlength="80" required></div>
+      <div><label for="c-kind">Type</label><select id="c-kind" class="input">
+        <option value="framework">Framework</option><option value="certification">Certification</option><option value="regulation">Regulation</option></select></div>
+      <div style="grid-column:1/-1"><label for="c-keywords">Who needs it: keywords *</label>
+        <input id="c-keywords" type="text" placeholder="e.g. healthtech, telehealth, patient data">
+        <div class="muted small">Comma-separated. A company fits when one of these appears in what it does, its industries or the data it handles.</div></div>
+      <div><label for="c-markets">Only in these markets</label><input id="c-markets" type="text" placeholder="e.g. Europe, UK (optional)"></div>
+      <div><label for="c-who">Who it is for (one line)</label><input id="c-who" type="text" placeholder="e.g. US health-tech SaaS handling patient data" maxlength="300"></div>
+      <div style="grid-column:1/-1"><label for="c-pitch">How the email should pitch it</label>
+        <input id="c-pitch" type="text" placeholder="e.g. HIPAA alongside the SOC 2 controls they already run" maxlength="200"></div>
+    </form>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+      <button class="btn" id="preview">Preview who it fits</button>
+      <button class="btn primary" id="save">Add to portfolio</button>
+      <span class="small" id="add-note"></span>
+    </div>
+    <div id="preview-out" class="small" style="margin-top:10px"></div>
+  </section>
+</main>
+<script src="app.js"></script>
+<script>
+dash.nav("offerings");
+(function () {
+  var E = dash.esc, data = null;
+  function load() {
+    return dash.api("/api/insights").then(function (ins) {
+      data = ins;
+      dash.portfolio(document.getElementById("portfolio"), ins.portfolio, load, false);
+      document.getElementById("updated").textContent = "updated " + new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    }).catch(function (e) { document.getElementById("error").textContent = e.message; });
+  }
+  function form() {
+    var v = function (id) { return document.getElementById(id).value.trim(); };
+    return { name: v("c-name"), kind: document.getElementById("c-kind").value, keywords: v("c-keywords"),
+             markets: v("c-markets"), who: v("c-who"), pitch: v("c-pitch") };
+  }
+  function note(t, cls) { var n = document.getElementById("add-note"); n.textContent = t; n.className = "small " + (cls || ""); }
+
+  // Preview: the server applies the same fit rule to every researched company and saves nothing.
+  function companyLinks(list) {
+    return list.map(function (c) { return '<a href="company.html?domain=' + encodeURIComponent(c.domain) + '">' + E(c.company) +
+      '</a> <span class="muted">(' + E(c.reason) + ")</span>"; }).join(", ");
+  }
+  document.getElementById("preview").addEventListener("click", function () {
+    var f = form(), out = document.getElementById("preview-out"), btn = this;
+    if (!f.name || !f.keywords) { note("Name and at least one keyword are needed.", "bad"); return; }
+    btn.disabled = true; note("Checking every researched company…");
+    dash.api("/api/settings", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ portfolio: { action: "preview", framework: f } }) })
+      .then(function (r) {
+        note("");
+        out.innerHTML = (r.fits_dormant.length ? "<div><b>Would re-open " + r.fits_dormant.length + " dormant compan" + (r.fits_dormant.length > 1 ? "ies" : "y") +
+            ":</b> " + companyLinks(r.fits_dormant) + "</div>" : '<div class="muted">No dormant company fits these keywords.</div>') +
+          (r.fits_other.length ? "<div><b>Also fits " + r.fits_other.length + " other researched compan" + (r.fits_other.length > 1 ? "ies" : "y") + ":</b> " +
+            companyLinks(r.fits_other) + "</div>" : "") +
+          '<div class="muted">Nothing has been saved yet.</div>';
+      })
+      .catch(function (e) { note(e.message, "bad"); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  document.getElementById("save").addEventListener("click", function () {
+    var btn = this, f = form();
+    if (!f.name || !f.keywords) { note("Name and at least one keyword are needed.", "bad"); return; }
+    btn.disabled = true;
+    note("Adding…");
+    dash.portfolioAction({ action: "custom", framework: f }).then(function (msg) {
+      note(msg, "ok");
+      document.getElementById("custom").reset();
+      document.getElementById("preview-out").innerHTML = "";
+      return load();
+    }).catch(function (e) { note(e.message, "bad"); })
+      .then(function () { btn.disabled = false; });
+  });
+
+  var TOUR = [
+    { el: "#how-card", title: "What this page is", text: "Everything Sprinto sells, and the rules for what adding something new does." },
+    { el: "#portfolio-card", title: "Portfolio and suggestions", text: "Your current frameworks, then recently introduced certifications with dates and sources. Add one, or say not now." },
+    { el: "#add", title: "Add your own", text: "Name it and describe who needs it with a few keywords. It joins the portfolio and re-opens dormant companies that fit." }];
+  document.getElementById("tour-btn").addEventListener("click", function () { dash.tour(TOUR, "tour-offerings"); });
+  if (!dash.tourSeen("tour-offerings")) setTimeout(function () { dash.tour(TOUR, "tour-offerings"); }, 1000);
+  load().then(function () { if (location.hash === "#add") document.getElementById("add").scrollIntoView({ block: "start" }); });
+})();
+</script>
+</body>
+</html>

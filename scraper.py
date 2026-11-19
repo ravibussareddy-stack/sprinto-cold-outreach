@@ -113,9 +113,14 @@ def detect_certifications(raw_text: str) -> dict:
     for name, pat in CERT_PATTERNS.items():
         for m in list(re.finditer(pat, text, re.I))[:5]:
             pre, hit, post = _window(text, m.start(), m.end())
-            who = "in_progress" if re.search(r"in progress|underway|pursuing|working towards|coming soon|pending|"
-                                             r"preparing for|on track", pre[-40:] + post[:60], re.I) \
-                else classify_mention(pre, post, hit)
+            if re.search(r"\b(neither|nor|not|no|don'?t|doesn'?t|do not|does not|without|yet to|haven'?t|isn'?t|aren'?t)\b",
+                         pre[-35:], re.I) or re.search(r"^\W{0,3}(is|are)?\s*(not|n't)\b", post[:15], re.I):
+                who = "denied"                          # "we don't have SOC 2 yet", "neither SOC 2 nor ISO 27001"
+            elif re.search(r"in progress|underway|pursuing|working towards|coming soon|pending|preparing for|on track",
+                           pre[-40:] + post[:60], re.I):
+                who = "in_progress"
+            else:
+                who = classify_mention(pre, post, hit)
             if name not in found:
                 found.append(name)
             if who == "self":

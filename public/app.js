@@ -50,17 +50,22 @@
 
   // Navigation shared by every page, in groups. Dashboard sections are hash pages in index.html.
   var NAV = [
-    ["", [["overview", "Overview", "index.html#overview"]]],
+    ["", [["overview", "Overview", "index.html#overview"], ["questions", "Questions", "questions.html"]]],
     ["Outreach", [["pipeline", "Pipeline", "index.html#pipeline"], ["contacts", "Contacts", "index.html#contacts"],
                   ["emails", "Emails", "index.html#emails"]]],
     ["Quality", [["review", "Review", "index.html#review"], ["learning", "Learning", "index.html#learning"]]],
     ["Setup", [["costs", "Costs", "index.html#costs"], ["rubric", "Rubric", "settings.html"],
-               ["test", "Test case", "test.html"], ["how", "How it works", "how.html"]]],
+               ["offerings", "Offerings", "offerings.html"], ["test", "Test case", "test.html"], ["how", "How it works", "how.html"]]],
   ];
   var badges = {};
+  var askedCount = false;
   function nav(active) {
     var el = document.getElementById("nav");
     if (!el) return;
+    if (!askedCount) {                                 // open questions badge on every page
+      askedCount = true;
+      api("/api/questions").then(function (q) { navBadge("questions", q.open_count); }).catch(function () {});
+    }
     el.innerHTML = NAV.map(function (g) {
       return (g[0] ? '<span class="group">' + esc(g[0]) + "</span>" : "") + g[1].map(function (n) {
         var badge = badges[n[0]] ? '<span class="badge">' + badges[n[0]] + "</span>" : "";
@@ -98,6 +103,69 @@
   function inr(x, digits) {
     return x == null || isNaN(x) ? "-" : "\u20b9" + Number(x).toLocaleString("en-IN", { minimumFractionDigits: digits == null ? 2 : digits,
                                                                                         maximumFractionDigits: digits == null ? 2 : digits });
+  }
+
+  // ---------- portfolio of frameworks: overview card and Offerings page ----------
+  function pfPill(t, c) { return '<span class="pill ' + (c || "") + '">' + esc(t) + "</span>"; }
+  function pfCompanies(list) {
+    return list.map(function (c) { return '<a href="company.html?domain=' + encodeURIComponent(c.domain) + '">' + esc(c.company) + "</a>" +
+      (c.reason ? ' <span class="muted">(' + esc(c.reason) + ")</span>" : ""); }).join(", ");
+  }
+  function short(n) { return String(n).split(" (")[0]; }
+  // el: container; p: insights.portfolio; reload: called after a change; compact: overview (link to Offerings for "add your own")
+  function portfolio(el, p, reload, compact) {
+    if (!el) return;
+    if (!p) { el.innerHTML = '<p class="muted small">Not available.</p>'; return; }
+    var html = '<div class="small" style="margin-bottom:12px"><b>Your portfolio:</b> ' +
+      p.core.map(function (c) { return pfPill(c, "soft"); }).join(" ") + " " +
+      p.accepted.map(function (a) { return '<span class="pill strong">' + esc(short(a.name)) + (a.custom ? " (yours)" : "") +
+        ' <button class="x" data-pf="' + (a.custom ? "delete" : "remove") + '" data-id="' + esc(a.id) + '" title="Remove from the portfolio" aria-label="Remove ' +
+        esc(a.name) + '">&times;</button></span>'; }).join(" ") +
+      (compact ? ' <a class="btn mini" href="offerings.html#add">+ Add your own</a>' : "") + "</div>";
+    p.accepted.forEach(function (a) {
+      if (a.reopened.length) html += '<div class="note small" style="margin-bottom:10px"><b>' + esc(short(a.name)) + "</b> re-opened: " + pfCompanies(a.reopened) +
+        ". They are <b>Reactivated</b> in the Pipeline. Run one again to research it and draft the email: " +
+        a.reopened.map(function (c) { return '<a href="test.html?domain=' + encodeURIComponent(c.domain) + '">' + esc(c.company) + "</a>"; }).join(", ") + ".</div>";
+    });
+    if (!p.candidates.length) html += '<p class="muted small">No suggested certifications waiting for a decision.</p>';
+    html += p.candidates.map(function (c) {
+      var when = new Date(c.introduced).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      return '<div class="fw"><div class="row-head" style="margin-bottom:6px"><div><b>' + esc(c.name) + "</b> " + pfPill(c.kind, "soft") +
+        ' <span class="muted small">introduced ' + esc(when) + "</span></div>" +
+        '<div style="display:flex;gap:8px"><button class="btn" data-pf="dismiss" data-id="' + esc(c.id) + '">Not now</button>' +
+        '<button class="btn primary" data-pf="add" data-id="' + esc(c.id) + '">Add to portfolio</button></div></div>' +
+        '<div class="small">' + esc(c.introduced_note) + "." + (c.source ? ' <a href="' + esc(c.source) + '" target="_blank" rel="noopener">Official source</a>' : "") + "</div>" +
+        '<div class="small muted">Who needs it: ' + esc(c.who) + "</div>" +
+        (c.seen_on.length ? '<div class="small">Already seen on: ' + esc(c.seen_on.join(", ")) + "</div>" : "") +
+        '<div class="small">' + (c.fits_dormant.length ? "<b>Would re-open " + c.fits_dormant.length + " dormant compan" + (c.fits_dormant.length > 1 ? "ies" : "y") + ":</b> " + pfCompanies(c.fits_dormant)
+          : '<span class="muted">No dormant company fits it yet; new companies that fit it would qualify.</span>') + "</div></div>";
+    }).join("");
+    if (p.dismissed.length) html += '<div class="small muted" style="margin-top:10px">Not now: ' + p.dismissed.map(function (d) {
+      return esc(short(d.name)) + ' <button class="btn mini" data-pf="restore" data-id="' + esc(d.id) + '">Show again</button>'; }).join(" ") + "</div>";
+    html += '<div class="note small pf-note" style="margin-top:10px"></div>';
+    el.innerHTML = html;
+    if (el.dataset.wired) return;
+    el.dataset.wired = "1";
+    el.addEventListener("click", function (ev) {
+      var b = ev.target.closest("button[data-pf]");
+      if (!b) return;
+      if (b.dataset.pf === "delete" && !window.confirm("Delete this framework you added? Companies it re-opened go back to dormant.")) return;
+      b.disabled = true;
+      portfolioAction({ action: b.dataset.pf, id: b.dataset.id }).then(function (msg) {
+        reload && reload();
+        setTimeout(function () { var n = el.querySelector(".pf-note"); if (n) { n.textContent = msg; n.className = "note small pf-note ok"; } }, 900);
+      }).catch(function (e) { b.disabled = false; var n = el.querySelector(".pf-note"); if (n) { n.textContent = e.message; n.className = "note small pf-note bad"; } });
+    });
+  }
+  function portfolioAction(body) {
+    return api("/api/settings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ portfolio: body }) })
+      .then(function (r) {
+        var who = r.changed.map(function (c) { return c.company; }).join(", ");
+        return r.action === "add" ? r.name + " added to your portfolio. " + (r.changed.length ? r.changed.length + " dormant compan" +
+            (r.changed.length > 1 ? "ies are" : "y is") + " active again: " + who + "." : "No dormant company fits it yet; new companies that fit it will qualify.")
+          : r.action === "remove" ? r.name + " removed." + (r.changed.length ? " " + r.changed.length + " compan" + (r.changed.length > 1 ? "ies" : "y") + " back to dormant." : "")
+          : r.action === "dismiss" ? r.name + " hidden. Show it again any time." : r.name + " is back on the list.";
+      });
   }
 
   // ---------- criteria heads-up, built from the live rubric ----------
@@ -197,5 +265,6 @@
   function tourSeen(key) { try { return localStorage.getItem(key || "tour-done") === "1"; } catch (e) { return true; } }
 
   window.dash = { api: api, esc: esc, pct: pct, num: num, when: when, countUp: countUp, nav: nav, navBadge: navBadge,
-                  statusPills: statusPills, inr: inr, criteria: criteria, tour: tour, tourSeen: tourSeen };
+                  statusPills: statusPills, inr: inr, criteria: criteria, tour: tour, tourSeen: tourSeen,
+                  portfolio: portfolio, portfolioAction: portfolioAction };
 })();

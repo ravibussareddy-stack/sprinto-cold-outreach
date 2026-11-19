@@ -2,7 +2,7 @@
 
 The catalogue lives in lib/frameworks.json (read by the dashboard too, so both sides apply the same
 fit rules). Your choices live in the Neon settings table, key "portfolio":
-    {"accepted": ["iso_42001"], "dismissed": ["cmmc"]}
+    {"accepted": ["iso_42001"], "dismissed": ["cmmc"], "custom": [{framework you added yourself}]}
 An accepted framework re-opens certified (dormant) companies that fit it as expansion prospects.
 """
 import json
@@ -17,15 +17,33 @@ CORE = CATALOGUE["core"]
 BY_ID = {f["id"]: f for f in CATALOGUE["frameworks"]}
 
 
-def state() -> dict:
+def _raw() -> dict:
     s = db.get_setting("portfolio") if db.enabled() else None
-    s = s if isinstance(s, dict) else {}
-    return {"accepted": [i for i in s.get("accepted", []) if i in BY_ID],
-            "dismissed": [i for i in s.get("dismissed", []) if i in BY_ID]}
+    return s if isinstance(s, dict) else {}
+
+
+def all_by_id(raw: dict | None = None) -> dict:
+    """The catalogue plus the frameworks you added yourself (Offerings page)."""
+    raw = _raw() if raw is None else raw
+    out = dict(BY_ID)
+    for c in raw.get("custom", []) or []:
+        if isinstance(c, dict) and c.get("id") and c.get("fit", {}).get("keywords"):
+            out[c["id"]] = c
+    return out
+
+
+def state() -> dict:
+    raw = _raw()
+    known = all_by_id(raw)
+    return {"accepted": [i for i in raw.get("accepted", []) if i in known],
+            "dismissed": [i for i in raw.get("dismissed", []) if i in known],
+            "custom": [c for c in raw.get("custom", []) if isinstance(c, dict)]}
 
 
 def accepted() -> list[dict]:
-    return [BY_ID[i] for i in state()["accepted"]]
+    raw = _raw()
+    known = all_by_id(raw)
+    return [known[i] for i in raw.get("accepted", []) if i in known]
 
 
 def portfolio_names() -> list[str]:

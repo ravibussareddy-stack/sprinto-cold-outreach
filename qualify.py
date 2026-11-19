@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import frameworks
+import questions
 import rubric
 import scraper
 from extract import extract_profile
@@ -285,6 +286,17 @@ def explain_fetch_error(code: str | None) -> str:
     return f"{text} [{c or 'unknown'}]."
 
 
+def _with_answers(domain: str, profile: CompanyProfile) -> CompanyProfile:
+    """Your answers on the Questions page override what the website left unclear."""
+    a = questions.answer(f"saas:{domain}")
+    if a == "yes":
+        profile.is_b2b_saas = True
+        profile.buyer_type = profile.buyer_type or "businesses (confirmed by you)"
+    elif a == "no":
+        profile.is_b2b_saas = False
+    return profile
+
+
 # ---------------------------------------------------------------- the loop
 def qualify(domain: str, log) -> dict:
     """The evidence loop: homepage, then rounds of parallel fetches (one page per missing question)."""
@@ -297,7 +309,10 @@ def qualify(domain: str, log) -> dict:
                 "profile": None, "pages": []}
 
     pages, tried = [home], {home["url"], url}
-    profile = extract_profile(domain, pages)
+    told = questions.cert_answer_page(domain)          # your answer on the Questions page counts as evidence
+    if told:
+        pages.append(told); tried.add(told["url"])
+    profile = _with_answers(domain, extract_profile(domain, pages))
     log(f"  extracted from homepage; missing: {missing_facts(profile, pages) or 'nothing'}")
 
     extra = 0
@@ -343,7 +358,7 @@ def qualify(domain: str, log) -> dict:
             if pg["ok"]:
                 pages.append(pg); got = True
         if got:
-            profile = extract_profile(domain, pages)
+            profile = _with_answers(domain, extract_profile(domain, pages))
 
     still_missing = missing_facts(profile, pages)
     pts, reasons = score(profile, pages)

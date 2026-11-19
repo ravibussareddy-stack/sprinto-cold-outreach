@@ -116,3 +116,9 @@ def test_an_acquired_company_is_not_an_independent_buyer():
     res = run({"https://acme.io": "Spreadsheets", "https://acme.io/security": "We encrypt data."},
               profile=PROFILE | {"acquired_by": "Superhuman"})
     assert res["decision"] == "DISQUALIFIED" and "Superhuman" in res["reason"]
+
+
+def test_a_denied_certificate_is_not_held():
+    for t in ("We do not have SOC 2 yet.", "The company holds neither SOC 2 nor ISO 27001."):
+        r = scraper.detect_certifications(t)
+        assert not r["self_claimed"] and not r["unclear"], (t, r)
