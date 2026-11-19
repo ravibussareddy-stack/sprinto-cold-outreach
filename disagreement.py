@@ -97,5 +97,10 @@ def score(structure_failures: list[str], claims: ClaimCheck, verdict: JudgeVerdi
 
 def assess(email_body: str, research_json: str, structure_failures: list[str]) -> dict:
     """structure_failures: names of failed quality checks (writer.quality_checks) plus any
-    hard check failures."""
-    return score(structure_failures, check_claims(email_body, research_json), judge(email_body, research_json))
+    hard check failures. The claim check and the judge are independent, so they run in parallel
+    (same tokens, about half the wait)."""
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        claims = pool.submit(check_claims, email_body, research_json)
+        verdict = pool.submit(judge, email_body, research_json)
+        return score(structure_failures, claims.result(), verdict.result())

@@ -316,7 +316,7 @@ def _gmail_ctx():
 def _stub_followups():
     angles = []
 
-    def fake(n, first, title, company, research, previous, sender_name, max_attempts=2, stage="cold"):
+    def fake(n, first, title, company, research, previous, sender_name, max_attempts=2, stage="cold", guidance=None):
         angles.append((n, stage) if stage != "cold" else n)
         return _writer.FollowUp(body=f"Good morning Asha,\n\nHope you're doing well.\n\nFollow-up {n}?\n\n"
                                      "Kind regards,\nGrowth", value_angle=f"angle {n}", engagement_ask=f"ask {n}")

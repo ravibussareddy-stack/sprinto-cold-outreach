@@ -9,6 +9,7 @@ The original leaves the review queue (recorded as "redrafted").
 """
 import os
 import sys
+import time
 
 import db
 import disagreement
@@ -35,7 +36,22 @@ def _summary(run_id, rec: dict) -> dict:
             "quality": None if not q else f"{q.get('passed')}/{q.get('total')}"}
 
 
+def sender_of(rec: dict) -> str | None:
+    """The sender the original email was signed by: saved on newer runs, else read from the
+    lines after the sign-off ("Kind regards,\nRavi Bussareddy\nSprinto" -> "Ravi Bussareddy, Sprinto")."""
+    if rec.get("sender_name"):
+        return rec["sender_name"]
+    lines = [l.strip() for l in ((rec.get("email") or {}).get("body") or "").strip().splitlines()]
+    for i, l in enumerate(lines):
+        if writer.SIGN_OFF_RE.match(l) and len(l) < 25:
+            rest = [x for x in lines[i + 1:] if x]
+            return ", ".join(rest) if rest else None
+    return None
+
+
 def redraft(run_id: int, sender_name: str | None = None) -> dict:
+    """Low thinking level and the two scoring calls in parallel: about 15-25 seconds."""
+    t0 = time.time()
     run = db.get_run(run_id)
     if not run:
         raise RedraftError("run_not_found", f"no run with id {run_id}", 404)
@@ -50,19 +66,24 @@ def redraft(run_id: int, sender_name: str | None = None) -> dict:
         llm.on_usage = db.record_usage
     profile = CompanyProfile(**rec["profile"])
     pains = PainPoints(**rec["pain_points"])
-    sender_name = sender_name or os.getenv("SENDER_NAME", "Growth Team, Sprinto")
+    sender_name = sender_name or sender_of(rec) or os.getenv("SENDER_NAME", "Growth Team, Sprinto")
     guidance = feedback.relevant(poc.get("title"), profile.target_industries)
     examples = feedback.exemplars(poc.get("title"))
 
-    draft, problems = writer.draft_email(profile, poc, pains, sender_name, guidance=guidance, exemplars=examples)
-    quality = writer.quality_summary(writer.quality_checks(
-        draft, poc["first_name"], writer.greeting(poc["first_name"]), sender_name, profile.company_name))
-    structure = quality["failed"] + [p for p in problems if p not in quality["failed"]]
-    dis = disagreement.assess(draft.body, profile.model_dump_json(), structure)
+    llm.context["fast"] = True                  # low thinking level: about 3x quicker per call
+    try:
+        draft, problems = writer.draft_email(profile, poc, pains, sender_name, guidance=guidance, exemplars=examples)
+        quality = writer.quality_summary(writer.quality_checks(
+            draft, poc["first_name"], writer.greeting(poc["first_name"]), sender_name, profile.company_name))
+        structure = quality["failed"] + [p for p in problems if p not in quality["failed"]]
+        dis = disagreement.assess(draft.body, profile.model_dump_json(), structure)
+    finally:
+        llm.context["fast"] = False
     threshold = rubric.get("review", "disagreement_threshold")
 
     new = {k: rec.get(k) for k in ("domain", "qualification", "profile", "pages_read", "poc", "pain_points")}
     new.update(status="REDRAFTED", source="redraft", parent_run_id=run_id, email=draft.model_dump(),
+               sender_name=sender_name, seconds=round(time.time() - t0, 1),
                email_check_failures=problems, quality=quality, disagreement=dis,
                needs_review=dis["score"] > threshold,
                guidance_used=[{"id": g["id"], "scope": g["scope"], "score": g["outcome_score"]} for g in guidance])
@@ -73,7 +94,8 @@ def redraft(run_id: int, sender_name: str | None = None) -> dict:
     return {"before": before, "after": after, "change": delta, "improved": delta is not None and delta < 0,
             "guidance_used": [{"id": g["id"], "scope": g["scope"], "score": g["outcome_score"], "guidance": g["guidance"]}
                               for g in guidance],
-            "examples_used": len(examples), "needs_review": new["needs_review"], "threshold": threshold}
+            "examples_used": len(examples), "needs_review": new["needs_review"], "threshold": threshold,
+            "seconds": new["seconds"]}
 
 
 if __name__ == "__main__":

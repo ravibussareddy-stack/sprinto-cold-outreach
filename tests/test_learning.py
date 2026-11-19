@@ -21,7 +21,7 @@ Sprinto"""
 
 
 def checks(body, **kw):
-    d = EmailDraft(subject="soc 2 before your first enterprise customer", body=body, hook_used="x", reasoning="x")
+    d = EmailDraft(subject=kw.get("subject", "Ledgerly's first enterprise SOC 2 review"), body=body, hook_used="x", reasoning="x")
     return {c["check"]: c["ok"] for c in writer.quality_checks(
         d, "Priya", kw.get("greeting", "Good morning Priya,"), "Sarah Mitchell, Sprinto", "Ledgerly")}
 
@@ -32,11 +32,25 @@ def test_well_structured_email_passes_every_check():
 
 
 def test_structure_problems_are_named():
-    bad = GOOD.replace("Hope you're doing well.\n\n", "").replace("Kind regards,", "Thanks,") \
+    bad = GOOD.replace("Hope you're doing well.\n\n", "").replace("Kind regards,", "Cheers then,") \
               .replace("instead of shipping.", "instead of shipping. Ready to optimize?")
     r = checks(bad)
     assert not r["wellbeing_line"] and not r["sign_off"] and not r["one_question"] and not r["uk_spelling"]
     assert r["greeting"]
+
+
+def test_subject_must_be_capitalised_and_name_the_company():
+    r = checks(GOOD, subject="security questionnaires for enterprise deals")
+    assert not r["subject_capitalised"] and not r["subject_names_company"]
+    assert writer.fix_subject("security reviews at Ledgerly") == "Security reviews at Ledgerly"
+
+
+def test_feedback_sign_off_is_used_and_accepted():
+    fb = [{"guidance": 'It needs "best regards" instead of "kind regards".', "scope": "global", "outcome_score": 1.0}]
+    assert writer.preferred_sign_off(fb) == "Best regards,"
+    assert writer.preferred_sign_off([]) == "Kind regards,"
+    assert checks(GOOD.replace("Kind regards,", "Best regards,"))["sign_off"]
+    assert "OVERRIDE the default style rules" in writer.instructions_block(fb)
 
 
 def test_wrong_time_of_day_greeting_fails():
@@ -52,10 +66,10 @@ def test_roles_and_scopes():
 
 
 def test_guidance_is_given_ranked_with_the_conflict_rule():
-    block = writer._guidance_block([{"outcome_score": 1.0, "scope": "role:cto", "guidance": "Lead with a named customer"},
-                                    {"outcome_score": 0.3, "scope": "global", "guidance": "Lead with an award"}], None)
+    block = writer.instructions_block([{"outcome_score": 1.0, "scope": "role:cto", "guidance": "Lead with a named customer"},
+                                    {"outcome_score": 0.3, "scope": "global", "guidance": "Lead with an award"}])
     assert block.index("named customer") < block.index("award")
-    assert "if two conflict, follow the higher-ranked one" in block
+    assert "if two conflict, follow the higher-ranked one" in block.lower()
 
 
 # ---- learning from outcomes ----

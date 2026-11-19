@@ -45,7 +45,8 @@ class PainPoints(BaseModel):
 
 
 class EmailDraft(BaseModel):
-    subject: str = Field(description="Under 8 words, lowercase-ish, no clickbait, no emojis")
+    subject: str = Field(description="3-8 words, sentence case (capital first letter), names the company or the "
+                                     "specific researched hook and fits their industry; no clickbait, no emojis")
     body: str = Field(description="Plain text, greets the person by first name, 70-120 words, one question CTA, signed by the sender name provided")
     hook_used: str = Field(description="The specific researched fact the opening line is built on")
     reasoning: str = Field(description="One or two sentences: why this angle for this person")

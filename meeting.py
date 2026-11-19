@@ -174,9 +174,19 @@ def _ics(ctx: Ctx, iso: str) -> bytes:
     return ("\r\n".join(lines) + "\r\n").encode()
 
 
+def _guidance(title=None, industries=None) -> list[dict]:
+    """Feedback-repo items for this recipient; empty when there is no database."""
+    try:
+        import feedback
+        return feedback.relevant(title, industries)
+    except Exception:
+        return []
+
+
 def _sign_off(sender_name: str) -> str:
-    # "Ravi Bussareddy, Sprinto" -> name and company on separate lines, as in the cold email
-    return "Kind regards,\n" + sender_name.replace(", ", "\n")
+    # "Ravi Bussareddy, Sprinto" -> name and company on separate lines, as in the cold email.
+    # The sign-off phrase follows the feedback repo (e.g. "Best regards,"), default "Kind regards,".
+    return writer.preferred_sign_off(_guidance()) + "\n" + sender_name.replace(", ", "\n")
 
 
 def _propose_body(first: str, slots: list[str], sender_name: str, ack: str | None = None) -> str:
@@ -332,7 +342,8 @@ def build_graph(ctx: Ctx) -> StateGraph:
             if ctx.thread_id else []
         stage = "scheduling" if s["scheduling"] else "cold"
         ok, fu, line = _attempt("write_followup", lambda: writer.follow_up(
-            n, first, ctx.title, ctx.company, ctx.research, prev, ctx.sender_name, stage=stage), attempts=2)
+            n, first, ctx.title, ctx.company, ctx.research, prev, ctx.sender_name, stage=stage,
+            guidance=_guidance(ctx.title, ctx.industries)), attempts=2)
         if not ok:
             return {"outcome": "escalated_to_growth_lead", "escalation": f"follow-up {n} not written: {fu}",
                     "trace": [line]}

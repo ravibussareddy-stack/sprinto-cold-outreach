@@ -74,6 +74,7 @@ def _process(domain, do_send, sender_name, rec, t0, contact=None, fast=False):
 
 def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None, fast=False):
     rec["mode"] = "fast" if fast else "full"
+    rec["sender_name"] = sender_name
 
     # Steps 1-3: scrape, extract, qualify (with loop)
     try:
