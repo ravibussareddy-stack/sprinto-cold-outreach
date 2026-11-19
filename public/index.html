@@ -90,7 +90,7 @@
     <section class="glass card section">
       <div class="stats" id="contact-stats"></div>
       <div class="row-head"><h2>Everyone contacted</h2>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="small muted" id="cr-note">replies are checked every 5 minutes</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="small muted" id="cr-note">replies are checked automatically</span>
           <button class="btn mini" id="check-replies" type="button">Check replies now</button>
           <input type="search" id="contact-search" placeholder="Search name, company, status"></div></div>
       <div class="table-wrap"><table>
@@ -372,6 +372,20 @@
       .then(function () { clearInterval(tick); btn.disabled = false; st.textContent = "Takes about 60-90 seconds. Every email goes to our own test inbox, with the offerings deck attached."; });
   });
 
+  // When replies were last checked, and by what (scheduler every minute, GitHub, daily cron, this button).
+  var CALLER = { scheduler: "scheduler", github: "GitHub", "vercel-cron": "daily cron", dashboard: "you" };
+  function ago(iso) {
+    var s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+    return s < 90 ? s + "s ago" : s < 5400 ? Math.round(s / 60) + " min ago" : Math.round(s / 3600) + " h ago";
+  }
+  function renderReplyBeat(beats) {
+    var latest = Object.keys(beats).map(function (k) { return { by: k, at: beats[k].at }; })
+      .sort(function (a, b) { return new Date(b.at) - new Date(a.at); })[0];
+    var note = document.getElementById("cr-note");
+    if (!latest) { note.textContent = "replies not checked yet"; return; }
+    var sched = beats.scheduler && (Date.now() - new Date(beats.scheduler.at).getTime()) < 10 * 60000;
+    note.textContent = (sched ? "replies checked every minute \u00b7 " : "") + "last check " + ago(latest.at) + " (" + (CALLER[latest.by] || latest.by) + ")";
+  }
   document.getElementById("check-replies").addEventListener("click", function () {
     var b = this, note = document.getElementById("cr-note");
     b.disabled = true; note.innerHTML = '<span class="spinner"></span>Reading the inbox…';
@@ -515,6 +529,7 @@
         renderOverview(r[0], r[5]);
         renderPortfolio(r[5].portfolio);
         renderFresh(r[5].freshness);
+        renderReplyBeat((r[5].freshness || {}).reply_checks || {});
         state.pipeline = (r[0].pipeline || {}).rows || [];
         renderPipeline();
         state.contacts = r[1];

@@ -164,7 +164,8 @@ module.exports = async (req, res) => {
     const newsCount = (await one(pool, "SELECT count(*)::int AS n, count(company_guess)::int AS funding FROM news_items")) || {};
     const refreshed = await rows(pool, `SELECT domain, record->'changes' AS changes, created_at FROM runs
       WHERE record->>'source' = 'refresh' ORDER BY id DESC LIMIT 10`);
-    const freshness = { last_crawl: lastCrawl, matched_news: matchedNews, funding_news: fundingNews,
+    const beat = (await rows(pool, "SELECT value FROM settings WHERE key = 'reply_checks'"))[0];
+    const freshness = { reply_checks: beat ? beat.value : {}, last_crawl: lastCrawl, matched_news: matchedNews, funding_news: fundingNews,
                         articles: newsCount.n || 0, funding_headlines: newsCount.funding || 0, refreshed,
                         sources: require("../lib/sources.json").feeds };
     if (matchedNews.length) todo.push({ severity: "medium", title: `${matchedNews.length} news item(s) about companies you track`,

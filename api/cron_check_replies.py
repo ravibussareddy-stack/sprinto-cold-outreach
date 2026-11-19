@@ -14,6 +14,18 @@ if ROOT not in sys.path:
 os.environ.setdefault("REPLY_MODE", "gmail")
 
 import check_replies  # noqa: E402
+import datetime as dt  # noqa: E402
+import db  # noqa: E402
+
+
+def heartbeat(trigger: str, threads: int | None):
+    """Record the latest reply check per caller, so the dashboard can show "last checked 40s ago"."""
+    try:
+        beats = db.get_setting("reply_checks") or {}
+        beats[trigger] = {"at": dt.datetime.now(dt.timezone.utc).isoformat(), "threads": threads}
+        db.put_setting("reply_checks", beats)
+    except Exception:
+        pass
 import crawl  # noqa: E402
 import time  # noqa: E402
 import tune  # noqa: E402
@@ -42,6 +54,7 @@ class handler(BaseHTTPRequestHandler):
             try:
                 with contextlib.redirect_stdout(out):
                     summary = check_replies.main(trigger="dashboard")
+                heartbeat("dashboard", len((summary or {}).get("threads") or []))
                 return self._send(200, {"ok": True, **(summary or {})})
             except Exception as e:
                 return self._send(500, {"ok": False, "error": {"code": "internal_error", "message": f"{type(e).__name__}: {e}"}})
@@ -64,6 +77,8 @@ class handler(BaseHTTPRequestHandler):
             trigger = caller if caller in ("github", "scheduler") else "vercel-cron"
             with contextlib.redirect_stdout(out):
                 summary = check_replies.main(trigger=trigger)
+            heartbeat(trigger, len((summary or {}).get("threads") or []))
+            with contextlib.redirect_stdout(out):
                 try:                               # then keep company data fresh, in the time that is left
                     left = 270 - (time.time() - started)
                     crawled = crawl.run(time_budget=max(0, left - 60), trigger=trigger) if left > 90 else {"skipped": "no time left"}
