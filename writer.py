@@ -201,6 +201,17 @@ def preferred_sign_off(guidance: list[dict] | None) -> str:
     return DEFAULT_SIGN_OFF
 
 
+def fix_sign_off(body: str, sender_name: str) -> str:
+    """Whatever the model wrote after the sign-off line, end with the exact sender lines
+    ("Ravi Bussareddy, Sprinto" -> "Ravi Bussareddy\nSprinto")."""
+    lines = (body or "").rstrip().splitlines()
+    idx = next((i for i in range(len(lines) - 1, -1, -1)
+                if SIGN_OFF_RE.match(lines[i].strip()) and len(lines[i].strip()) < 25), None)
+    if idx is None or not sender_name:
+        return body
+    return "\n".join(lines[:idx + 1] + [x.strip() for x in sender_name.split(",") if x.strip()])
+
+
 def fix_subject(subject: str) -> str:
     s = (subject or "").strip().strip('"')
     return s[:1].upper() + s[1:]
@@ -299,6 +310,7 @@ def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_na
     for attempt in range(max_attempts):
         draft = ask(EmailDraft, system, base + feedback)
         draft.subject = fix_subject(draft.subject)
+        draft.body = fix_sign_off(draft.body, sender_name)
         problems = validate(draft, poc["first_name"], hello)
         soft = [c for c in quality_checks(draft, poc["first_name"], hello, sender_name, profile.company_name)
                 if not c["ok"]]
@@ -365,6 +377,7 @@ def follow_up(n: int, first_name: str, title: str | None, company: str, research
     feedback = ""
     for attempt in range(max_attempts):
         fu = ask(FollowUp, system, base + feedback)
+        fu.body = fix_sign_off(fu.body, sender_name)
         d = EmailDraft(subject="", body=fu.body, hook_used=fu.value_angle, reasoning=fu.engagement_ask)
         bad = [c for c in quality_checks(d, first_name, hello, sender_name) if not c["ok"] and c["check"] != "length"]
         words = len(fu.body.split())

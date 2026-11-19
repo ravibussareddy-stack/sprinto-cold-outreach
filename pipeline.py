@@ -147,65 +147,71 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
         rec["disagreement"] = {"error": f"{type(e).__name__}: {e}"}
         log(f"  disagreement: not computed ({e})")
 
-    # Step 7: send (to your own inbox only)
+    # Step 7: send (to your own inbox only), then the conversation
     if problems:
         rec["status"] = "DRAFT_FAILED_CHECKS"
         log(f"  not sending - failed checks: {problems}")
     elif do_send:
-        try:                                           # the mock offerings deck, built from your live portfolio
-            pdf = deck.for_portfolio(profile.company_name or domain)
-            attach = (f"Sprinto-offerings-{(profile.company_name or domain).replace(' ', '-')}.pdf", pdf, "application", "pdf")
-        except Exception as e:
-            log(f"  deck not attached: {e}")
-            attach = None
-        to = sender.send(draft.subject, draft.body,
-                         f"{contact['first_name']} {contact['last_name']}", contact["email"], attachment=attach)
-        rec["deck_attached"] = bool(attach)
-        rec["status"] = "SENT"
-        log(f"  sent to {to}")
+        rec.update(deliver(domain, contact, profile, pains, draft, sender_name, quality, log))
     else:
         rec["status"] = "DRAFTED"
-    # Sequence 1 reply handling, then Sequence 2 scheduling if the prospect is interested.
-    # Only after a draft that passed its checks; dry runs walk the flow without sending.
-    if not problems:
-        research = {"company": profile.company_name, "what_they_do": profile.one_line_description,
-                    "named_customers": profile.named_customers[:5], "recent_triggers": profile.recent_triggers[:3],
-                    "industries": profile.target_industries[:3],
-                    "pain_points": [p.title for p in pains.pain_points]}
-        ctx = meeting.Ctx(domain=domain, contact_name=f"{contact['first_name']} {contact['last_name']}",
-                          contact_email=contact["email"], company=profile.company_name or domain,
-                          sender_name=sender_name, do_send=do_send, log=log, subject=draft.subject,
-                          title=contact.get("title"), industries=profile.target_industries[:3],
-                          research=research)
-        if config.REPLY_MODE == "gmail" and do_send and db.enabled():
-            # Real replies: save the conversation and let check_replies.py continue it.
-            thread_id, state, _ = meeting.start(ctx)
-            closed = db.supersede_threads(domain)
-            if closed:
-                log(f"  closed {closed} older open conversation(s) with {domain}")
-            db.save_thread(thread_id, domain, draft.subject,
-                           {"domain": domain, "contact_name": ctx.contact_name,
-                            "contact_email": ctx.contact_email, "company": ctx.company,
-                            "sender_name": sender_name, "title": ctx.title,
-                            "industries": ctx.industries, "research": research})
-            db.log_email(thread_id, domain, "cold", draft.subject, draft.body, quality)
-            db.upsert_contact(domain, ctx.company, ctx.contact_name, ctx.contact_email, ctx.title, "contacted")
-            rec["thread_id"] = thread_id
-            rec["meeting"] = asdict(state)
-            rec["outcome"] = "awaiting_reply"
-            rec["status"] += " | awaiting_reply"
-            log(f"  waiting for a reply in Gmail (thread {thread_id})")
-        else:
-            if do_send:                          # log the cold email here too (Gmail mode logs it with its thread)
-                db.log_email(None, domain, "cold", draft.subject, draft.body, quality)
-            state = meeting.run(ctx, replies.load_replies(domain))
-            rec["meeting"] = asdict(state)
-            rec["outcome"] = state.outcome
-            rec["status"] += f" | {state.outcome}"
+        # Dry run: walk Sequence 1 / 2 without sending (file replies, if any).
+        ctx = _ctx(domain, contact, profile, pains, draft, sender_name, log, do_send=False)
+        state = meeting.run(ctx, replies.load_replies(domain))
+        rec["meeting"] = asdict(state)
+        rec["outcome"] = state.outcome
+        rec["status"] += f" | {state.outcome}"
     if q["decision"] == "QUALIFIED_FLAGGED":
         rec["status"] += " (flagged: thin evidence, review before a real send)"
     rec["seconds"] = round(time.time() - t0, 1)
     return rec
+
+
+def _ctx(domain, contact, profile, pains, draft, sender_name, log, do_send):
+    research = {"company": profile.company_name, "what_they_do": profile.one_line_description,
+                "named_customers": profile.named_customers[:5], "recent_triggers": profile.recent_triggers[:3],
+                "industries": profile.target_industries[:3],
+                "pain_points": [p.title for p in pains.pain_points]}
+    return meeting.Ctx(domain=domain, contact_name=f"{contact['first_name']} {contact.get('last_name') or ''}".strip(),
+                       contact_email=contact.get("email") or "", company=profile.company_name or domain,
+                       sender_name=sender_name, do_send=do_send, log=log, subject=draft.subject,
+                       title=contact.get("title"), industries=profile.target_industries[:3], research=research)
+
+
+def deliver(domain, contact, profile, pains, draft, sender_name, quality, log=log) -> dict:
+    """Send one cold email (to our own inbox, with the offerings deck) and start its conversation.
+    Used by the pipeline and by the dashboard's Send button, so both behave the same.
+    Returns the fields to merge into the run record (status, thread_id, meeting, outcome, ...)."""
+    try:                                               # the mock offerings deck, built from your live portfolio
+        pdf = deck.for_portfolio(profile.company_name or domain)
+        attach = (f"Sprinto-offerings-{(profile.company_name or domain).replace(' ', '-')}.pdf", pdf, "application", "pdf")
+    except Exception as e:
+        log(f"  deck not attached: {e}")
+        attach = None
+    to = sender.send(draft.subject, draft.body, f"{contact['first_name']} {contact.get('last_name') or ''}".strip(),
+                     contact.get("email") or "", attachment=attach)
+    log(f"  sent to {to}")
+    out = {"status": "SENT", "sent_to": to, "deck_attached": bool(attach)}
+    ctx = _ctx(domain, contact, profile, pains, draft, sender_name, log, do_send=True)
+    if config.REPLY_MODE == "gmail" and db.enabled():
+        # Real replies: save the conversation and let check_replies.py continue it.
+        thread_id, state, _ = meeting.start(ctx)
+        closed = db.supersede_threads(domain)
+        if closed:
+            log(f"  closed {closed} older open conversation(s) with {domain}")
+        db.save_thread(thread_id, domain, draft.subject,
+                       {"domain": domain, "contact_name": ctx.contact_name, "contact_email": ctx.contact_email,
+                        "company": ctx.company, "sender_name": sender_name, "title": ctx.title,
+                        "industries": ctx.industries, "research": ctx.research})
+        db.log_email(thread_id, domain, "cold", draft.subject, draft.body, quality)
+        db.upsert_contact(domain, ctx.company, ctx.contact_name, ctx.contact_email, ctx.title, "contacted")
+        out.update(thread_id=thread_id, meeting=asdict(state), outcome="awaiting_reply", status="SENT | awaiting_reply")
+        log(f"  waiting for a reply in Gmail (thread {thread_id})")
+    else:
+        db.log_email(None, domain, "cold", draft.subject, draft.body, quality)
+        state = meeting.run(ctx, replies.load_replies(domain))
+        out.update(meeting=asdict(state), outcome=state.outcome, status=f"SENT | {state.outcome}")
+    return out
 
 
 def write_report(run_dir: str, records: list[dict]):

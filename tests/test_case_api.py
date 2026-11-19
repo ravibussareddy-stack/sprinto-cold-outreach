@@ -116,3 +116,27 @@ def test_contact_fields_of_the_wrong_type_are_400_not_500():
         assert cases is None and err["code"] == "invalid_contact" and err["field"] == f"contact.{key}", (key, err)
     cases, err = case_api.parse_request({"domain": "acme.io", "contact": {"first_name": "Priya", "email": "priya@acme.io"}})
     assert err is None and cases[0]["contact"]["first_name"] == "Priya"      # the next valid request still works
+
+
+def test_redraft_contact_validation():
+    import pytest
+    import redraft
+    assert redraft.clean_contact({"first_name": " Priya ", "email": ""})["first_name"] == "Priya"
+    for bad in ({"first_name": ""}, {"first_name": "A", "email": "nope"}, {"first_name": 3}, "x"):
+        with pytest.raises(redraft.RedraftError):
+            redraft.clean_contact(bad)
+
+
+def test_send_refuses_a_sent_or_failed_draft(monkeypatch):
+    import pytest
+    import redraft
+    monkeypatch.setattr(redraft.db, "get_run", lambda i: {"domain": "a.io", "record": {"status": "SENT | awaiting_reply"}})
+    with pytest.raises(redraft.RedraftError) as e:
+        redraft.send_run(1)
+    assert e.value.code == "already_sent"
+    monkeypatch.setattr(redraft.db, "get_run", lambda i: {"domain": "a.io", "record": {
+        "status": "DRAFT_FAILED_CHECKS", "email": {"subject": "s", "body": "b", "hook_used": "h", "reasoning": "r"},
+        "profile": {"company_name": "A"}, "pain_points": {"pain_points": []}, "poc": {"first_name": "A"}, "email_check_failures": ["length"]}})
+    with pytest.raises(redraft.RedraftError) as e:
+        redraft.send_run(1)
+    assert e.value.code == "failed_checks"

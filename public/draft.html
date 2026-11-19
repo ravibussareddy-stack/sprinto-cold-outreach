@@ -108,6 +108,19 @@ dash.nav("emails");
         '<div class="muted small">Intended recipient: ' + E(poc.email || "-") + (poc.source ? " (" + E(poc.source) + ")" : "") +
         ". Every send goes to our own inbox, never the prospect.</div></section>" +
 
+      '<section class="glass card section" id="recipient"><div class="row-head"><h2 style="margin:0">Recipient</h2>' +
+        '<span class="muted small">change who it is for, then redraft; or send it as it is</span></div>' +
+        '<form class="form" id="rc-form" autocomplete="off">' +
+          '<div><label for="rc-first">First name *</label><input id="rc-first" maxlength="60" value="' + E(poc.first_name || "") + '"></div>' +
+          '<div><label for="rc-last">Last name</label><input id="rc-last" maxlength="60" value="' + E(poc.last_name || "") + '"></div>' +
+          '<div><label for="rc-email">Email</label><input id="rc-email" type="email" maxlength="120" placeholder="optional" value="' + E(poc.email || "") + '"></div>' +
+          '<div><label for="rc-title">Title</label><input id="rc-title" maxlength="80" placeholder="e.g. CTO" value="' + E(poc.title || "") + '"></div>' +
+        "</form>" +
+        '<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">' +
+          '<button class="btn" id="rc-redraft">Save and redraft for this person</button>' +
+          '<button class="btn primary" id="rc-send">Send this email</button>' +
+          '<span class="small" id="rc-note"></span></div></section>' +
+
       '<div class="grid-2">' +
         '<section class="glass lift card"><h2>Disagreement score</h2>' +
           (hasScore ? '<div class="big">' + d.score + '<span class="muted small"> / 100</span></div>' +
@@ -134,10 +147,53 @@ dash.nav("emails");
           '<div class="small"><b>Sceptical judge</b></div><p class="small">' + E(d.judge_reason || "-") + "</p>"
           : '<p class="muted small">Checked only when the draft is scored.</p>') + "</section>" +
       "</div>";
+    wireRecipient(r, rec, poc, sent);
   }).catch(function (e) {
     document.getElementById("content").innerHTML = '<section class="glass card section"><h2>Draft not found</h2><p class="muted">' +
       E(e.message) + '. Open one from <a href="index.html#emails">Emails</a>.</p></section>';
   });
+
+  // ---------- recipient: redraft for someone else, or send this draft ----------
+  function wireRecipient(r, rec, poc, sent) {
+    var note = document.getElementById("rc-note"), send = document.getElementById("rc-send"), redo = document.getElementById("rc-redraft");
+    var fields = ["first", "last", "email", "title"], orig = { first: poc.first_name || "", last: poc.last_name || "", email: poc.email || "", title: poc.title || "" };
+    function val(f) { return document.getElementById("rc-" + f).value.trim(); }
+    function say(t, cls) { note.innerHTML = t; note.className = "small " + (cls || ""); }
+    function changed() { return fields.some(function (f) { return val(f) !== orig[f]; }); }
+    function refresh() {
+      var why = sent ? "Already sent: replies and follow-ups are handled automatically." :
+        (rec.email_check_failures || []).length ? "This draft failed a required check (" + (rec.email_check_failures || []).join(", ") + "); redraft it first." :
+        !orig.first ? "Add a recipient and redraft for them first." :
+        changed() ? "You changed the recipient: redraft for them before sending." : "";
+      send.disabled = !!why;
+      send.title = why;
+      if (why) say(E(why), sent ? "ok" : ""); else if (!note.dataset.busy) say("");
+    }
+    fields.forEach(function (f) { document.getElementById("rc-" + f).addEventListener("input", refresh); });
+    refresh();
+    redo.addEventListener("click", function () {
+      if (!val("first")) { say("The recipient needs a first name.", "bad"); return; }
+      redo.disabled = true; send.disabled = true; note.dataset.busy = "1";
+      say('<span class="spinner"></span>Redrafting for ' + E(val("first")) + "… about 20 seconds.");
+      dash.api("/api/redraft", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ run_id: Number(r.id), contact: { first_name: val("first"), last_name: val("last"), email: val("email"), title: val("title") } }) })
+        .then(function (x) { location.href = "draft.html?id=" + encodeURIComponent(x.after.run_id); })
+        .catch(function (e) { delete note.dataset.busy; redo.disabled = false; refresh(); say(E(e.message), "bad"); });
+    });
+    send.addEventListener("click", function () {
+      if (!window.confirm("Send this email to our own test inbox, with the offerings deck, and start the conversation (replies and follow-ups)?")) return;
+      send.disabled = true; redo.disabled = true; note.dataset.busy = "1";
+      say('<span class="spinner"></span>Sending…');
+      dash.api("/api/redraft", { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ run_id: Number(r.id), action: "send" }) })
+        .then(function (x) {
+          say("Sent to " + E(x.sent_to) + (x.deck_attached ? ", with the offerings deck" : "") +
+            (x.thread_id ? ". Replies and follow-ups are now handled automatically." : "."), "ok");
+          setTimeout(function () { location.reload(); }, 2500);
+        })
+        .catch(function (e) { delete note.dataset.busy; redo.disabled = false; refresh(); say(E(e.message), "bad"); });
+    });
+  }
 
   document.getElementById("content").addEventListener("click", function (ev) {
     var b = ev.target.closest("#review-banner button");

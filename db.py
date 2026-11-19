@@ -509,3 +509,11 @@ def open_new_judgments() -> int:
 def question_exists(key: str) -> bool:
     with _conn() as c:
         return c.execute("SELECT 1 FROM questions WHERE key = %s", (key,)).fetchone() is not None
+
+
+@_safe
+def update_run(run_id: int, status: str, record: dict):
+    """A draft that was sent from the dashboard: same run, new status."""
+    with _conn() as c:
+        c.execute("UPDATE runs SET status = %s, record = %s WHERE id = %s",
+                  (status, Json(json.loads(json.dumps(record, default=str))), run_id))

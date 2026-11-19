@@ -111,3 +111,10 @@ def test_negative_conversation_adds_low_scored_lessons_and_no_exemplar(monkeypat
     saved = _stub(monkeypatch, CONVO[:3])
     r = learn.from_thread("t2", "acme.io", {"title": "CEO"}, "not_interested", "negative", log=lambda m: None)
     assert r["label"] == "negative" and saved["feedback"][0][3] == 0.3 and saved["exemplars"] == []
+
+
+def test_sign_off_always_ends_with_the_exact_sender_lines():
+    body = "Good morning Priya,\n\nHope you're doing well.\n\nText?\n\nBest regards,\nRavi Bussareddy"
+    out = writer.fix_sign_off(body, "Ravi Bussareddy, Sprinto")
+    assert out.endswith("Best regards,\nRavi Bussareddy\nSprinto")
+    assert writer.fix_sign_off(out, "Ravi Bussareddy, Sprinto") == out          # idempotent
