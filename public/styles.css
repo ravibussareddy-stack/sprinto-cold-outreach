@@ -123,6 +123,7 @@ h2 { font-size: 15px; margin: 0 0 14px; color: var(--blue-900); letter-spacing: 
 
 /* ---- KPI tiles ---- */
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 18px; }
+@media (min-width: 900px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
 .tile { padding: 16px 18px; cursor: default; }
 .tile .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .tile .value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; color: var(--blue-900); }

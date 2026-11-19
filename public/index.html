@@ -241,6 +241,11 @@
     if (d.review_queue) rt.classList.add("alert");
     box.appendChild(rt);
     box.appendChild(disagreementTile(d));
+    var em = m.emails || {};
+    box.appendChild(tile("Emails", em.written || 0, intFmt, (em.sent || 0) + " sent to your inbox · " + (em.cold_drafts || 0) + " cold drafts, " +
+      (em.follow_ups_and_replies || 0) + " follow-ups / replies", null, "#emails"));
+    box.appendChild(tile("Cost per email", em.cost_per_email_inr, function (x) { return x == null ? "-" : dash.inr(x); },
+      "all model cost ÷ emails written (research on dormant companies included)", null, "#costs"));
     box.appendChild(tile("Model cost", t.est_cost_inr, function (x) { return dash.inr(x); },
       intFmt((t.input || 0) + (t.output || 0)) + " tokens so far", null, "#costs"));
     box.appendChild(tile("Companies", (m.pipeline || {}).companies || 0, intFmt, (m.contacts || 0) + " contacted, " + ((m.feedback || {}).lessons || 0) + " lessons learnt", null, "#pipeline"));

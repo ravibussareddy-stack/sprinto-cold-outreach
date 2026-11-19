@@ -42,6 +42,8 @@ module.exports = async (req, res) => {
       FROM threads WHERE outcome IS DISTINCT FROM 'cancelled_by_user'`, [{}]);
 
     const emailKinds = await safe(pool, `SELECT kind, count(*)::int AS n FROM emails GROUP BY kind ORDER BY n DESC`, []);
+    // Emails written = every drafted cold email (sent or not, redrafts included) + every follow-up / reply sent.
+    const [drafted] = await safe(pool, `SELECT count(*)::int AS n FROM runs WHERE record ? 'email'`, [{ n: 0 }]);
 
     // Average disagreement: over all drafts, and over the ones that went wrong -
     // above the review threshold, conversation ended badly (declined / no reply), or rewritten by you.
@@ -108,6 +110,14 @@ module.exports = async (req, res) => {
       engagement_rate: rate(conv.replied, conv.started),
       booking_rate: rate(conv.booked, conv.positive),
       emails_by_kind: emailKinds,
+      emails: (() => {
+        const sent = emailKinds.reduce((a, k) => a + k.n, 0);
+        const cold_sent = (emailKinds.find((k) => k.kind === "cold") || { n: 0 }).n;
+        const written = (drafted.n || 0) + (sent - cold_sent);
+        const inr = cost(tin, tout) * USD_INR;
+        return { written, sent, cold_drafts: drafted.n || 0, follow_ups_and_replies: sent - cold_sent,
+                 cost_per_email_inr: written ? inr / written : null };
+      })(),
       quality: { drafts: quality.drafts || 0, avg_quality: n(quality.avg_quality) },
       disagreement: {
         threshold: REVIEW_THRESHOLD, review_queue: quality.review_queue || 0,
