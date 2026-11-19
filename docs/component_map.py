@@ -1,39 +1,93 @@
 """Draw the component map (docs/component-map.svg): actors as rows, the six stages as columns.
 
     python docs/component_map.py
+
+Arrows run down the gutters between columns and enter a box from its side, so they never cross a box.
 """
 import os
 
-W, ACTOR_W, HEAD_H, ROW_H = 1320, 140, 46, 84
+W, ACTOR_W, HEAD_H, ROW_H = 1320, 150, 46, 70
 STAGES = ["Trigger", "Input", "Context", "Processing", "AI", "Output"]
 COL_W = (W - ACTOR_W - 4) / 6
 
-# (actor, role, band tint, box fill, box border, stage index, box lines)
-ROWS = [
-    ("Ravi", "Growth lead", "#eef0fe", "#e3e6fd", "#5b5bd6", 0, ["Adds a contact or", "runs a test case"]),
-    ("Dashboard / API", "Vercel", "#eef5fe", "#dfeafd", "#3b73d9", 1, ["Receives domain + contact", "Daily cron starts runs"]),
-    ("Web crawler", "Research", "#eefaf2", "#dcf5e4", "#3aa55c", 2, ["Reads site, sitemap,", "security pages", "+ news feeds"]),
-    ("Neon", "Memory", "#eef9f8", "#d8f2ef", "#2b9c90", 2, ["Rubric, your rulings,", "lessons, past runs"]),
-    ("Qualifier", "Code + Gemini", "#fffbe8", "#fff4c4", "#c99a12", 3, ["Scores fit 0-100", "Checks certificates", "Stops dormant / poor fit"]),
-    ("Hunter", "Contact finder", "#f6faea", "#ecf5d2", "#7a9a20", 3, ["Finds the decision-maker", "(if none supplied)"]),
-    ("Gemini", "Draft", "#fdf0f5", "#fbe3ec", "#c8457a", 4, ["Writes pain points + email", "in house style", "+ offerings deck"]),
-    ("Quality checks", "Code + critic", "#f4f0fd", "#e9e2fc", "#7651c9", 5, ["15 draft checks", "Critic: specific, not generic", "Fact check (disagreement)"]),
-    ("Review gate", "Ravi", "#fff8ec", "#fff8f0", "#e07b1f", 5, ["Reviews flagged drafts", "Send -> own inbox + deck", "Replies, follow-ups, Calendly"]),
+# actor, role, band tint, box fill, box border
+ACTORS = [
+    ("Ravi", "Growth lead", "#eef0fe", "#e3e6fd", "#5b5bd6"),
+    ("Daily cron", "Vercel scheduler", "#f1f3f6", "#e6e9ee", "#5b6777"),
+    ("Dashboard / API", "Vercel", "#eef5fe", "#dfeafd", "#3b73d9"),
+    ("News crawler", "5 RSS feeds", "#eefaf6", "#d6f3e9", "#22966f"),
+    ("Web research", "Scraper", "#eefaf2", "#dcf5e4", "#3aa55c"),
+    ("Neon", "Memory", "#eef9f8", "#d8f2ef", "#2b9c90"),
+    ("Feedback repo", "Lessons", "#f2f8ec", "#e3f1d3", "#5e9a2c"),
+    ("Qualifier", "Code + Gemini", "#fffbe8", "#fff4c4", "#c99a12"),
+    ("Hunter", "Contact finder", "#fdf6ea", "#fbebcf", "#b7791f"),
+    ("Gemini", "Writer", "#fdf0f5", "#fbe3ec", "#c8457a"),
+    ("Quality checks", "Code + critic", "#f4f0fd", "#e9e2fc", "#7651c9"),
+    ("Review gate", "Ravi", "#fff8ec", "#fff8f0", "#e07b1f"),
+    ("Gmail", "Inbox", "#eef4fb", "#dde9f7", "#2f6db5"),
+    ("Reply handler", "LangGraph + Gemini", "#fbf0f8", "#f5e0f0", "#a3457f"),
 ]
-# arrows: (from row, to row) - routed from the source box's side to the target box's top
-ARROWS = [(0, 1), (1, 2), (2, 4), (4, 5), (3, 6), (5, 6), (6, 7), (7, 8)]
+GATE_ROW = 11
 
-H = HEAD_H + ROW_H * len(ROWS) + 4
+# steps: key -> (row, stage, lines)
+STEPS = {
+    "add":      (0, 0, ["Adds a contact or", "runs a test case"]),
+    "rulings":  (0, 2, ["Feedback, rulings,", "portfolio (Questions,", "Offerings pages)"]),
+    "cron":     (1, 0, ["Every day: crawl,", "re-research stale", "companies, check replies"]),
+    "input":    (2, 1, ["Receives domain", "+ contact"]),
+    "news":     (3, 1, ["Funding news from", "TechCrunch, Inc42 ...", "matched to companies"]),
+    "research": (4, 2, ["Site, sitemap, security", "and press pages;", "digs deeper if unknown"]),
+    "memory":   (5, 2, ["Rubric, past runs,", "news, portfolio"]),
+    "lessons":  (6, 2, ["Ranked lessons", "+ winning emails"]),
+    "qualify":  (7, 3, ["Scores fit, certificates,", "stage; stops dormant;", "applies your rulings"]),
+    "hunter":   (8, 3, ["Finds the decision-maker", "(if none supplied)"]),
+    "write":    (9, 4, ["Pain points + email", "in house style", "+ offerings deck"]),
+    "checks":   (10, 5, ["15 draft checks,", "critic (not generic),", "fact check"]),
+    "gate":     (11, 5, ["Reviews flagged", "drafts; Send"]),
+    "send":     (12, 5, ["Sends to own inbox", "with the deck"]),
+    "reply":    (12, 0, ["Prospect replies", "(or stays silent)"]),
+    "read":     (13, 3, ["Reads the reply, decides;", "timers 3-3-2 days"]),
+    "followup": (13, 4, ["Follow-ups, meeting", "times, Calendly booking"]),
+    "learn":    (13, 5, ["Learns from outcomes:", "lessons to the repo,", "rubric tunes itself"]),
+}
+# arrows: (from, to, gutter x offset, entry y offset, mode); mode "left" = same column, down the left gutter
+ARROWS = [("add", "input", 0, 0, ""), ("cron", "news", 0, 0, ""), ("input", "research", 2, -8, ""),
+          ("rulings", "lessons", -6, 0, "left"),
+          ("news", "qualify", -8, -14, ""), ("research", "qualify", -2, 0, ""), ("memory", "qualify", 4, 14, ""),
+          ("qualify", "hunter", 0, 0, ""), ("hunter", "write", -4, -10, ""), ("lessons", "write", 4, 10, ""),
+          ("write", "checks", 0, 0, ""), ("checks", "gate", 0, 0, ""), ("gate", "send", 0, 0, ""),
+          ("reply", "read", 0, 0, ""), ("read", "followup", 0, 0, ""), ("followup", "send", -4, 0, ""),
+          ("followup", "learn", 4, 0, "")]
+
+H = HEAD_H + ROW_H * len(ACTORS) + 4
 
 
 def col_x(c):
     return ACTOR_W + 2 + c * COL_W
 
 
-def box(r):
-    c = ROWS[r][5]
-    x, y = col_x(c) + 10, HEAD_H + r * ROW_H + 10
-    return x, y, COL_W - 20, ROW_H - 20
+def box(key):
+    r, c, _ = STEPS[key]
+    return col_x(c) + 14, HEAD_H + r * ROW_H + 8, COL_W - 28, ROW_H - 16
+
+
+def route(a, b, off, yoff=0, mode=""):
+    ax, ay, aw, ah = box(a)
+    bx, by, bw, bh = box(b)
+    (ar, ac, _), (br, bc, _) = STEPS[a], STEPS[b]
+    ty = by + bh / 2 + yoff
+    if ac == bc and br == ar + 1:                       # next row, same column: straight down
+        sx, sy = ax + aw / 2, ay + ah
+        return (sx, sy), f"M{sx} {sy} L{sx} {by - 2}"
+    if ac == bc and mode == "left":                     # same column, further down: the left gutter
+        sx, sy = ax, ay + ah / 2
+        gx = col_x(ac) + 6 + off
+        return (sx, sy), f"M{sx} {sy} L{gx} {sy} L{gx} {ty} L{bx - 2} {ty}"
+    sx, sy = ax + aw, ay + ah / 2                       # different column: along the row, down the target's left gutter
+    if ar == br:
+        return (sx, sy), f"M{sx} {sy} L{bx - 2} {sy}"
+    gx = col_x(bc) + 6 + off
+    return (sx, sy), f"M{sx} {sy} L{gx} {sy} L{gx} {ty} L{bx - 2} {ty}"
 
 
 def svg():
@@ -47,34 +101,27 @@ def svg():
          f'<text x="{ACTOR_W/2}" y="{HEAD_H/2+4}" fill="#e5e7eb" font-size="12" text-anchor="middle">Actor</text>']
     for i, s in enumerate(STAGES):
         o.append(f'<text x="{col_x(i)+COL_W/2}" y="{HEAD_H/2+4}" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle">{s}</text>')
-    for r, (name, role, band, fill, border, c, lines) in enumerate(ROWS):
+    for r, (name, role, band, fill, border) in enumerate(ACTORS):
         y = HEAD_H + r * ROW_H
         o.append(f'<rect x="{ACTOR_W+2}" y="{y}" width="{W-ACTOR_W-4}" height="{ROW_H}" fill="{band}"/>')
         o.append(f'<line x1="0" y1="{y}" x2="{W}" y2="{y}" stroke="#374151" stroke-width="0.6" opacity="0.5"/>')
         o.append(f'<text x="{ACTOR_W/2}" y="{y+ROW_H/2-3}" fill="#ffffff" font-size="12.5" font-weight="bold" text-anchor="middle">{name}</text>')
-        o.append(f'<text x="{ACTOR_W/2}" y="{y+ROW_H/2+14}" fill="#9ca3af" font-size="10" text-anchor="middle">{role}</text>')
-    for i in range(1, 6):                              # faint column lines
+        o.append(f'<text x="{ACTOR_W/2}" y="{y+ROW_H/2+13}" fill="#9ca3af" font-size="10" text-anchor="middle">{role}</text>')
+    for i in range(1, 6):
         o.append(f'<line x1="{col_x(i)}" y1="{HEAD_H}" x2="{col_x(i)}" y2="{H}" stroke="#e5e7eb" stroke-width="1"/>')
-    gy = HEAD_H + (len(ROWS) - 1) * ROW_H              # the review gate band
+    gy = HEAD_H + GATE_ROW * ROW_H
     o.append(f'<rect x="{ACTOR_W+3}" y="{gy+1}" width="{W-ACTOR_W-6}" height="{ROW_H-2}" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="8 5"/>')
-    for r, (name, role, band, fill, border, c, lines) in enumerate(ROWS):
-        x, y, w, h = box(r)
+    for key, (r, c, lines) in STEPS.items():
+        x, y, w, h = box(key)
+        fill, border = ACTORS[r][3], ACTORS[r][4]
         o.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="6" fill="{fill}" stroke="{border}" stroke-width="1.6"/>')
-        top = y + h / 2 - (len(lines) - 1) * 7 + 4
+        top = y + h / 2 - (len(lines) - 1) * 6.5 + 4
         for k, line in enumerate(lines):
-            o.append(f'<text x="{x+w/2}" y="{top+k*14}" fill="#111827" font-size="11" text-anchor="middle">{line.replace("->", "&#8594;")}</text>')
-    for a, b in ARROWS:
-        ax, ay, aw, ah = box(a)
-        bx, by, bw, bh = box(b)
-        tx = bx + bw / 2 + (14 if (a, b) in ((5, 6),) else (-14 if (a, b) == (3, 6) else 0))
-        if ROWS[a][5] == ROWS[b][5]:                   # same column: straight down from the bottom
-            sx, sy = ax + aw / 2, ay + ah
-            d = f"M{sx} {sy} L{sx} {by-2}"
-        else:                                          # from the right side, across, then down
-            sx, sy = ax + aw, ay + ah / 2
-            d = f"M{sx} {sy} L{tx} {sy} L{tx} {by-2}"
-        o.append(f'<path d="{d}" fill="none" stroke="#6b7280" stroke-width="1.6" stroke-dasharray="6 4" marker-end="url(#a)"/>')
-        o.append(f'<circle cx="{sx}" cy="{sy}" r="4" fill="#22c55e"/>')
+            o.append(f'<text x="{x+w/2}" y="{top+k*13}" fill="#111827" font-size="10.5" text-anchor="middle">{line}</text>')
+    for a, b, off, yoff, mode in ARROWS:
+        (sx, sy), d = route(a, b, off, yoff, mode)
+        o.append(f'<path d="{d}" fill="none" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#a)"/>')
+        o.append(f'<circle cx="{sx}" cy="{sy}" r="3.8" fill="#22c55e"/>')
     o.append("</svg>")
     return "\n".join(o)
 
