@@ -385,14 +385,26 @@
   function renderFeedback(f) {
     document.getElementById("lessons").innerHTML = f.lessons.length ? f.lessons.map(function (l, i) {
       var w = Math.round(l.outcome_score * 100);
-      return '<div class="lesson"><div class="meta"><b>#' + (i + 1) + "</b>" + pill(l.scope) + pill(l.source === "human" ? "you" : "learnt", "soft") +
-        (l.outcome ? pill(l.outcome, "soft") : "") + '<span class="score"><span class="track"><span style="width:' + w + '%"></span></span>' +
-        Number(l.outcome_score).toFixed(2) + "</span></div>" + E(l.guidance) + "</div>";
+      return '<div class="lesson' + (l.active ? "" : " off") + '"><div class="meta"><b>#' + E(l.id) + "</b>" + pill(l.scope) + pill(l.source === "human" ? "you" : "learnt", "soft") +
+        (l.outcome ? pill(l.outcome, "soft") : "") + (l.active ? "" : pill("off", "warn")) +
+        '<span class="score"><span class="track"><span style="width:' + w + '%"></span></span>' + Number(l.outcome_score).toFixed(2) + "</span>" +
+        '<button class="btn mini" data-lesson="' + E(l.id) + '" data-active="' + (l.active ? "false" : "true") + '">' + (l.active ? "Turn off" : "Turn on") + "</button>" +
+        "</div>" + E(l.guidance) + "</div>";
     }).join("") : '<div class="empty">No feedback yet. Add some above, or it will be learnt as conversations end.</div>';
     document.getElementById("exemplar-rows").innerHTML = f.exemplars.length ? f.exemplars.map(function (e) {
       return "<tr><td>" + E(e.domain) + "</td><td>" + E(e.role || "-") + "</td><td>" + E(e.subject) + "</td><td>" + pill(e.outcome) + "</td><td>" + Number(e.outcome_score).toFixed(2) + "</td></tr>";
     }).join("") : '<tr><td colspan="5" class="empty">None yet - emails that earn a positive reply are saved here.</td></tr>';
   }
+
+  document.getElementById("lessons").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-lesson]");
+    if (!b) return;
+    b.disabled = true;
+    dash.api("/api/feedback", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "set_active", id: Number(b.dataset.lesson), active: b.dataset.active === "true" }) })
+      .then(function () { return dash.api("/api/feedback"); }).then(renderFeedback)
+      .catch(function (e) { b.disabled = false; document.getElementById("error").textContent = e.message; });
+  });
 
   // ---------- costs ----------
   function renderBudget(b) {

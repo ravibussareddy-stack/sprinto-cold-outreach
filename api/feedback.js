@@ -16,6 +16,14 @@ module.exports = async (req, res) => {
   try {
     if (req.method === "POST") {
       const b = await readBody(req);
+      // {action: "set_active", id, active}: turn a lesson off (the writer ignores it) or back on. Nothing is deleted.
+      if (b.action === "set_active") {
+        const id = parseInt(b.id, 10);
+        if (!id || typeof b.active !== "boolean") return res.status(400).json({ error: "send {action: 'set_active', id, active: true|false}" });
+        const r = await pool.query("UPDATE feedback SET active = $2 WHERE id = $1 RETURNING id, active", [id, b.active]);
+        if (!r.rows.length) return res.status(404).json({ error: "no lesson with that id" });
+        return res.status(200).json({ ok: true, id: r.rows[0].id, active: r.rows[0].active });
+      }
       const guidance = typeof b.guidance === "string" ? b.guidance.trim() : "";
       const scope = typeof b.scope === "string" && /^(global|role:[a-z]+|industry:[a-z0-9 &-]+)$/.test(b.scope.trim().toLowerCase())
         ? b.scope.trim().toLowerCase() : "global";

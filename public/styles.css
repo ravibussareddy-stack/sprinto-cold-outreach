@@ -270,3 +270,6 @@ textarea.input { min-height: 84px; resize: vertical; }
 .compare .side { padding: 12px 14px; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--glass-border); }
 .compare .side.better { border-color: var(--blue-700); box-shadow: 0 0 0 3px rgba(29,78,216,.12); }
 ul.tight { margin: 0; padding-left: 18px; } ul.tight li { margin: 2px 0; }
+.lesson.off { opacity: 0.55; }
+.lesson .meta .btn.mini { margin-left: auto; }
+.btn.mini { padding: 3px 10px; font-size: 12px; }
