@@ -2,6 +2,10 @@
 
 ## For evaluators: start here
 
+![Component map: actors by stage, from trigger to output](docs/component-map.png)
+
+_Component map (`docs/component-map.svg`, regenerate with `python docs/component_map.py`)._
+
 | | Link |
 |---|---|
 | Run a test case (form) | https://sprinto-cold-outreach-web.vercel.app/test.html |
