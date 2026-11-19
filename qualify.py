@@ -68,9 +68,10 @@ def certs_held(p: CompanyProfile, pages: list[dict]) -> set[str]:
     that read as its own claim or as a bare badge (footer, alt text). Mentions about customers
     ("we help you get SOC 2") or vendors ("hosted on AWS, SOC 2 audited") never count."""
     names = set(p.certifications_claimed)
+    badges = questions.ruling("badge_only") != "clear_only"      # your ruling: do bare badges count?
     for pg in pages:
         c = page_certs(pg)
-        names |= set(c["self_claimed"]) | set(c.get("unclear", []))
+        names |= set(c["self_claimed"]) | (set(c.get("unclear", [])) if badges else set())
     return names
 
 
@@ -136,8 +137,18 @@ def named_certs(p: CompanyProfile, pages: list[dict]) -> set[str]:
     """Certifications that count for the dormant rule: security-compliance certificates only, minus
     rubric certifications.not_certifications (default: GDPR - a regulation, not a certification)."""
     excluded = {x.lower() for x in rubric.get("certifications", "not_certifications")}
-    return {family(c) for c in certs_held(p, pages)
+    held = {family(c) for c in certs_held(p, pages)
             if c.lower() not in excluded and family(c).lower() not in excluded and COMPLIANCE_CERT.search(c)}
+    ev = all_evidence(pages)
+    if "SOC 2" in held and questions.ruling("soc2_type1_only") == "prospect" and questions.soc2_type1_only(ev):
+        held.discard("SOC 2")                                     # your ruling: Type I alone is not certified
+    if questions.ruling("old_report") == "lapsed" and questions.old_report(ev):
+        held -= {"SOC 2", "ISO 27001"}                            # your ruling: old reports have lapsed
+    return held
+
+
+def all_evidence(pages: list[dict]) -> list[dict]:
+    return [e | {"url": pg["url"]} for pg in pages for e in page_certs(pg).get("evidence", [])]
 
 
 def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | None:
@@ -157,12 +168,17 @@ def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | Non
     stop = ineligible(p)
     if stop:
         return stop
+    if compliance_tools(p, pages) and questions.ruling("uses_platform") == "skip":
+        return "DISQUALIFIED", f"Already uses {compliance_tools(p, pages)[0]['tool']} and holds no certificate: you ruled to skip these."
+    what = " ".join([p.one_line_description or "", p.buyer_type or ""] + p.target_industries)
+    if questions.SELLS.search(what) and questions.ruling("sells_compliance") == "skip":
+        return "DISQUALIFIED", "Sells compliance software itself: you ruled these are competitors."
     return None
 
 
 def ineligible(p: CompanyProfile) -> tuple[str, str] | None:
     """Rules that hold whatever the certificates say: acquired, public or too big."""
-    if p.acquired_by or p.funding_stage == "Acquired":
+    if (p.acquired_by or p.funding_stage == "Acquired") and questions.ruling("acquired") == "skip":
         return ("DISQUALIFIED", f"Now part of {p.acquired_by or 'another company'}: compliance is usually decided "
                                 f"by the parent company's security team, so this is not an independent buyer.")
     if p.funding_stage in ("Public",) or (p.employee_estimate or 0) > rubric.get("size", "max_employees"):
@@ -189,6 +205,22 @@ def pick_next_url(question: str, homepage: dict, tried: set[str]) -> str | None:
         if cand not in tried:
             return cand
     return None
+
+
+def deep_cert_urls(homepage: dict, tried: set[str], limit: int = 4) -> list[str]:
+    """Certification still unknown after the normal loop: research harder instead of asking.
+    The site's own sitemap first (pages that really exist), then the usual trust / security addresses."""
+    u = urlparse(homepage["url"])
+    base, host = f"{u.scheme}://{u.netloc}", u.netloc.replace("www.", "")
+    found = scraper.sitemap_urls(base, r"trust|security|compliance|soc-?2|iso-?27001|certification")
+    guesses = [f"{u.scheme}://trust.{host}", base + "/trust-center", base + "/trust", base + "/security",
+               base + "/legal/security", base + "/compliance", base + "/security-and-compliance",
+               base + "/privacy-policy", base + "/privacy"]          # privacy policies often name certifications
+    out = []
+    for c in found + guesses:
+        if c not in tried and c.rstrip("/") not in tried and c not in out:
+            out.append(c)
+    return out[:limit]
 
 
 # ---------------------------------------------------------------- scoring
@@ -258,8 +290,7 @@ def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
                                                   f"(a compliance programme exists; Sprinto adds the core frameworks)")
     elif not has_soc2 and not has_iso:
         read = [pg["url"] for pg in pages if is_security_page(pg["url"])]
-        where = "(you confirmed neither on the Questions page)" if questions.ANSWER_PAGE in read else \
-            f"claimed on {read[0] if read else 'its security page'}"
+        where = f"claimed on {read[0] if read else 'its security page'}"
         pts += gap["no_soc2_or_iso"]; why.append(f"+{gap['no_soc2_or_iso']} no SOC 2 / ISO 27001 {where} (greenfield)")
     elif not (has_soc2 and has_iso):
         pts += gap["holds_one"]; why.append(f"+{gap['holds_one']} holds {'SOC 2' if has_soc2 else 'ISO 27001'} only - expansion to "
@@ -287,18 +318,45 @@ def explain_fetch_error(code: str | None) -> str:
     return f"{text} [{c or 'unknown'}]."
 
 
-def _with_answers(domain: str, profile: CompanyProfile) -> CompanyProfile:
-    """Your answers on the Questions page override what the website left unclear."""
-    a = questions.answer(f"saas:{domain}")
-    if a == "yes":
-        profile.is_b2b_saas = True
-        profile.buyer_type = profile.buyer_type or "businesses (confirmed by you)"
-    elif a == "no":
-        profile.is_b2b_saas = False
-    return profile
+def _stop(profile: CompanyProfile, pages: list[dict]) -> tuple[str, str] | None:
+    stop = short_circuit(profile, pages)
+    if stop and stop[0] == "DORMANT":
+        # Certified, but a framework you added to the portfolio fits them: an expansion prospect.
+        exp = frameworks.expansions(profile.model_dump(), sorted(named_certs(profile, pages)))
+        profile.expansion_frameworks = [f"{e['name']} ({e['reason']})" for e in exp]
+        if exp:
+            stop = ineligible(profile)          # an expansion still has to be a company Sprinto can sell to
+    return stop
 
 
-# ---------------------------------------------------------------- the loop
+def judgement(profile, pages) -> list[dict]:
+    """Situations here that the rules leave to your judgement (questions.TOPICS + new ones)."""
+    core = {"SOC 2", "ISO 27001"} & {family(c) for c in certs_held(profile, pages)}
+    return questions.detect(profile, all_evidence(pages), core, compliance_tools(profile, pages))
+
+
+def _pending_flags(findings: list[dict]) -> list[str]:
+    out = []
+    for f in findings:
+        if f["topic"] in questions.TOPICS and not questions.answered(f["topic"]):
+            t = questions.TOPICS[f["topic"]]
+            label = next(o["label"] for o in t["options"] if o["value"] == t["default"])
+            out.append(f"judgement call waiting for you: {t['title'].lower()} ({f['finding']}); using the default: {label}")
+    return out
+
+
+def _early(stop, profile, pages, trace) -> dict:
+    decision, reason = stop
+    findings = judgement(profile, pages)
+    ruled = questions.apply_open_ruling(profile, decision, reason, findings)
+    if ruled:
+        decision, reason = ruled
+    return {"decision": decision, "reason": reason, "score": None, "score_reasons": [],
+            "certs_held": sorted(named_certs(profile, pages)), "flags": _pending_flags(findings),
+            "certification": cert_evidence(profile, pages), "judgement": findings,
+            "profile": profile, "pages": pages, "trace": trace}
+
+
 def qualify(domain: str, log) -> dict:
     """The evidence loop: homepage, then rounds of parallel fetches (one page per missing question)."""
     cap = rubric.get("evidence_loop", "max_extra_fetches")
@@ -310,28 +368,16 @@ def qualify(domain: str, log) -> dict:
                 "profile": None, "pages": []}
 
     pages, tried = [home], {home["url"], url}
-    told = questions.cert_answer_page(domain)          # your answer on the Questions page counts as evidence
-    if told:
-        pages.append(told); tried.add(told["url"])
-    profile = _with_answers(domain, extract_profile(domain, pages))
+    questions.load()                                   # your standing rulings, read once for this run
+    profile = extract_profile(domain, pages)
     log(f"  extracted from homepage; missing: {missing_facts(profile, pages) or 'nothing'}")
 
     extra = 0
     per_question = {"stage": 0, "certs": 0, "saas": 0}
     while True:
-        stop = short_circuit(profile, pages)
-        if stop and stop[0] == "DORMANT":
-            # Certified, but a framework you added to the portfolio fits them: an expansion prospect.
-            exp = frameworks.expansions(profile.model_dump(), sorted(named_certs(profile, pages)))
-            profile.expansion_frameworks = [f"{e['name']} ({e['reason']})" for e in exp]
-            if exp:
-                stop = ineligible(profile)          # an expansion still has to be a company Sprinto can sell to
+        stop = _stop(profile, pages)
         if stop:
-            decision, reason = stop
-            return {"decision": decision, "reason": reason, "score": None, "score_reasons": [],
-                    "certs_held": sorted(named_certs(profile, pages)),
-                    "certification": cert_evidence(profile, pages),
-                    "profile": profile, "pages": pages, "trace": trace}
+            return _early(stop, profile, pages, trace)
         missing = missing_facts(profile, pages)
         if not missing or extra >= cap:
             break
@@ -359,7 +405,27 @@ def qualify(domain: str, log) -> dict:
             if pg["ok"]:
                 pages.append(pg); got = True
         if got:
-            profile = _with_answers(domain, extract_profile(domain, pages))
+            profile = extract_profile(domain, pages)
+
+    # Certification still unknown: research harder (sitemap, trust pages) rather than ask anyone.
+    if "certs" in missing_facts(profile, pages):
+        deep = deep_cert_urls(home, tried)
+        if deep:
+            for u in deep:
+                tried.add(u)
+            with ThreadPoolExecutor(max_workers=len(deep)) as pool:
+                fetched = list(pool.map(scraper.fetch, deep))
+            got = False
+            for u, pg in zip(deep, fetched):
+                trace.append({"fetch": u, "for": "certs (deeper research)", "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
+                log(f"  deeper research: {u} ({'ok' if pg['ok'] else pg['error']})")
+                if pg["ok"]:
+                    pages.append(pg); got = True
+            if got:
+                profile = extract_profile(domain, pages)
+                stop = _stop(profile, pages)
+                if stop:
+                    return _early(stop, profile, pages, trace)
 
     still_missing = missing_facts(profile, pages)
     pts, reasons = score(profile, pages)
@@ -368,7 +434,7 @@ def qualify(domain: str, log) -> dict:
     if certification["compliance_tools"] and not profile.compliance_tool_used:
         profile.compliance_tool_used = certification["compliance_tools"][0]["tool"]   # the writer sees it too
     if "certs" in still_missing:
-        flags.append("certification status unknown: no security or trust page found; greenfield points withheld")
+        flags.append("certification status unknown: no security or trust page found, even after checking the sitemap; greenfield points withheld")
     if profile.expansion_frameworks:
         flags.append(f"expansion prospect: already certified; pitch {profile.expansion_frameworks[0].split(' (')[0]}")
     for t in certification["compliance_tools"][:1]:
@@ -401,7 +467,12 @@ def qualify(domain: str, log) -> dict:
         decision = "QUALIFIED_FLAGGED"
     else:
         decision = "DISQUALIFIED"
-    return {"decision": decision, "score": pts, "score_reasons": reasons,
+    findings = judgement(profile, pages)
+    flags += _pending_flags(findings)
+    ruled = questions.apply_open_ruling(profile, decision, reason, findings)
+    if ruled:
+        decision, reason = ruled
+    return {"decision": decision, "score": pts, "score_reasons": reasons, "judgement": findings,
             "still_missing": still_missing, "flags": flags, "reason": reason,
             "certs_held": sorted(named_certs(profile, pages)), "certification": certification,
             "expansion": profile.expansion_frameworks,

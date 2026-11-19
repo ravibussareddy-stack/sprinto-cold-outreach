@@ -117,10 +117,10 @@ module.exports = async (req, res) => {
       detail: "Most already hold SOC 2 or ISO 27001. New certifications in your portfolio can re-open the ones that need them.",
       link: "settings.html" });
 
-    const openQ = await rows(pool, "SELECT kind, domain FROM questions WHERE status = 'open'");
-    if (openQ.length) todo.unshift({ severity: "high", title: `${openQ.length} question(s) for you`,
-      detail: "The system was unsure and asked: " + [...new Set(openQ.map((q) => q.domain).filter(Boolean))].slice(0, 4).join(", ") +
-        ". Answers are used on the next run.", link: "questions.html" });
+    const openQ = await rows(pool, "SELECT question FROM questions WHERE status = 'open' ORDER BY created_at DESC");
+    if (openQ.length) todo.unshift({ severity: "high", title: `${openQ.length} judgement call(s) for you`,
+      detail: openQ.slice(0, 2).map((q) => q.question).join(" · ") + (openQ.length > 2 ? " …" : "") +
+        " Until you rule, the cautious default is used.", link: "questions.html" });
 
     // ---------- new certifications: what is new, who needs it, who it would re-open ----------
     const pstate = await fw.loadState(pool);

@@ -10,6 +10,13 @@ class Evidence(BaseModel):
     source_url: str
 
 
+class UnusualFinding(BaseModel):
+    topic: str = Field(description="snake_case name for the KIND of situation (reuse an existing topic name if one fits)")
+    finding: str = Field(description="What you found, in a few words")
+    quote: Optional[str] = Field(None, description="Short verbatim quote from the site")
+    question: str = Field(description="The judgement question for the sales lead: how should this kind of situation be treated from now on?")
+
+
 class CompanyProfile(BaseModel):
     company_name: Optional[str] = None
     one_line_description: Optional[str] = None
@@ -34,6 +41,12 @@ class CompanyProfile(BaseModel):
         "(e.g. a trust centre 'powered by Vanta', 'we use Drata'). null if not stated. Not tools it integrates with or sells.")
     geographic_markets: list[str] = []
     expansion_frameworks: list[str] = Field([], description="Leave empty: filled in by code, not from the website.")
+    unusual_finding: Optional[UnusualFinding] = Field(None, description=(
+        "Almost always null. Only when the site shows something a sales researcher would genuinely not know how to "
+        "INTERPRET for qualifying a compliance-software prospect, and no ordinary rule covers it (e.g. certified only "
+        "through a parent company, a certificate for one product line only). Never a missing fact that more research "
+        "could find, never certification held/not held, acquisitions, competitors' tools, SOC 2 Type I, badges or old "
+        "report dates (those are handled already)."))
     recent_triggers: list[str] = Field([], description="Recent events: funding round, new enterprise launch, expansion to US/EU, big customer win, new product")
     evidence: list[Evidence] = Field([], description="One quote per important field you filled")
 

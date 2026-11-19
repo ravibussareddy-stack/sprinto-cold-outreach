@@ -103,6 +103,35 @@ def classify_mention(pre: str, post: str, hit: str = "SOC 2") -> str:
     return "unclear"
 
 
+def sitemap_urls(base: str, pattern: str, limit: int = 5) -> list[str]:
+    """URLs from the site's sitemap whose path matches `pattern` (shortest first). Empty on any error."""
+    out = []
+    for path in ("/sitemap.xml", "/sitemap_index.xml"):
+        url = base + path
+        if not robots_allows(url):
+            continue
+        try:
+            r = session.get(url, timeout=8)
+        except requests.RequestException:
+            continue
+        if r.status_code != 200:
+            continue
+        locs = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", r.text)
+        subs = [u for u in locs if u.endswith(".xml")][:3]         # a sitemap index: look one level down
+        for s in subs:
+            try:
+                rr = session.get(s, timeout=8)
+                if rr.status_code == 200:
+                    locs += re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", rr.text)
+            except requests.RequestException:
+                pass
+        out = [u for u in locs if not u.endswith(".xml") and re.search(pattern, urlparse(u).path, re.I)
+               and "/blog" not in u and "/news" not in u]
+        if out:
+            break
+    return sorted(set(out), key=len)[:limit]
+
+
 def detect_certifications(raw_text: str) -> dict:
     """mentioned: every certification named anywhere (kept for the model as a hint).
     self_claimed: those with at least one mention that reads as the company's own claim, or a

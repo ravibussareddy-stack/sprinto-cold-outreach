@@ -220,19 +220,27 @@ re-opened back to dormant.
 keywords describing who needs it, optional markets and a one-line pitch. **Preview who it fits** checks every researched
 company without saving; adding it puts it in the portfolio and re-opens the dormant companies it fits.
 
-## Questions: the system asks when it is unsure
+## Questions: judgement calls, not missing facts
 
-`questions.py` + `/api/questions` + `questions.html`. Instead of guessing, a run asks you (once per company and topic):
+Missing facts are researched, never asked: when certification is still unknown after the normal pages, the run reads
+the site's sitemap and the usual trust, security and privacy pages (`qualify.deep_cert_urls`). A question is raised
+only for a situation the rules do not settle - "I found this; how should I read it from now on?" - and your answer
+becomes a **standing ruling** for every company (`questions.py`, `/api/questions`, `questions.html`).
 
-| Question | Asked when | Your answer does |
+| Situation (asked once, examples added) | Default until you rule | The other ruling |
 |---|---|---|
-| Is it a B2B SaaS company? | the website does not say (manual review) | yes: scored; no: disqualified - next run |
-| Does it hold SOC 2 or ISO 27001? | no security or trust page was found | yes: dormant; neither: greenfield points - next run (it enters the evidence as `answer://you/security`) |
-| Who should we email? | no suitable decision-maker found | that contact is used - next run |
-| How should we handle this conversation? | a reply could not be handled automatically | applied at once: yours, or closed as a cold lead |
+| Only a SOC 2 **Type I** report | certified (dormant) | still a prospect for Type II |
+| Certificate shown only as a **badge**, no statement | counts | only clear statements count |
+| Uses **Vanta / Drata**-type platform, no certificate | switch prospect (flagged) | skip |
+| **Acquired** company | skip | prospect |
+| **Sells compliance software** itself | prospect | competitor: skip |
+| Only an **old report** (2+ years) | still counts | lapsed |
 
-Open questions show as a badge on **Questions** in every page's nav and as the first to-do item. Each answer records
-what it will do, and once a run uses it, when and with what result. **Not now** and **Change answer** are always there.
+New situations: while reading a site the model may note one `unusual_finding` the rules do not cover (never a missing
+fact). It becomes a free-text question; your ruling is applied to later companies with the same finding by a short
+model call that can only keep the decision or move it to dormant / disqualified / qualified, quoting your ruling. At
+most 5 new situations wait at once. Nothing ever waits on a question: open ones show the default in the company's
+flags ("judgement call waiting for you: ..."), on the Questions page (badge in the nav) and as the first to-do.
 
 ## Follow-up timers, send window, budget, company view
 

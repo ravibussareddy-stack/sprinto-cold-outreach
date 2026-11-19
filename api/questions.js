@@ -1,11 +1,11 @@
 const { getPool } = require("../lib/db");
 
-// Questions the system asks you when it is unsure (questions.py writes them).
+// Judgement questions: situations the rules do not settle (questions.py raises them, once each).
 //   GET  /api/questions                          -> { open: [...], recent: [...], open_count }
 //   POST /api/questions { id, answer }           -> answer it (validated per kind)
 //   POST /api/questions { id, dismiss: true }    -> not now (the system carries on without it)
 //   POST /api/questions { id, reopen: true }     -> ask again
-// Answers about a company are used on its next run; a conversation answer is applied straight away.
+// An answer is a standing ruling: every company is judged with it from its next run.
 async function readBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
   if (typeof req.body === "string") return JSON.parse(req.body || "{}");
@@ -16,33 +16,23 @@ async function readBody(req) {
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 function validate(q, answer) {
-  if (q.kind === "contact") {
-    if (!answer || typeof answer !== "object") return { error: "give the contact's first name and email" };
-    const c = {};
-    for (const k of ["first_name", "last_name", "email", "title"]) {
-      if (answer[k] != null && typeof answer[k] !== "string") return { error: `${k} must be text` };
-      c[k] = String(answer[k] || "").trim().slice(0, 120);
-    }
-    if (!c.first_name) return { error: "first name is needed" };
-    if (!EMAIL.test(c.email)) return { error: "a valid email is needed" };
-    return { value: c };
+  if (q.kind === "judgment_open") {                  // a new situation: your ruling in your own words
+    const t = typeof answer === "string" ? answer.trim() : "";
+    if (t.length < 5 || t.length > 500) return { error: "write your ruling in 5-500 characters" };
+    return { value: t };
   }
   const allowed = (q.options || []).map((o) => o.value);
   if (!allowed.includes(answer)) return { error: "answer must be one of: " + allowed.join(", ") };
   return { value: answer };
 }
 
-// What the answer will do, in plain words (shown on the card once answered).
+// What the ruling will do, in plain words (shown on the card once answered).
 function effect(q, value) {
-  const d = q.domain || "this company";
-  if (q.kind === "saas") return value === "yes" ? `${d} will be scored as B2B SaaS on its next run.` : `${d} will be disqualified on its next run.`;
-  if (q.kind === "certs") return {
-    soc2: `${d} will be dormant on its next run (you confirmed SOC 2).`, iso: `${d} will be dormant on its next run (you confirmed ISO 27001).`,
-    both: `${d} will be dormant on its next run (you confirmed both).`, none: `${d} earns the greenfield points on its next run (you confirmed neither).`,
-    unsure: `No change: ${d} stays flagged as unknown.` }[value];
-  if (q.kind === "contact") return `${value.first_name} ${value.last_name || ""} (${value.email}) will be used for ${d} on its next run. Emails still go only to our own inbox.`;
-  if (q.kind === "conversation") return value === "self" ? "Marked as yours: no more automatic emails in this conversation." : "Closed as a cold lead: no more automatic emails.";
-  return "Saved.";
+  if (q.kind === "judgment_open") return "Saved as a ruling: applied to every later company with this kind of finding.";
+  const o = (q.options || []).find((x) => x.value === value);
+  const seen = (q.examples || []).map((e) => e.company || e.domain).filter(Boolean);
+  return (o && o.effect ? o.effect : "Saved.") + " Applies to every company from its next run" +
+    (seen.length ? ` (seen so far at ${seen.slice(0, 4).join(", ")}${seen.length > 4 ? "…" : ""}).` : ".");
 }
 
 module.exports = async (req, res) => {
@@ -64,14 +54,7 @@ module.exports = async (req, res) => {
       }
       const { value, error } = validate(q, b.answer);
       if (error) return res.status(400).json({ error });
-      let note = effect(q, value), applied = false;
-      if (q.kind === "conversation") {                 // applied now: the reply checker leaves this thread alone
-        const thread = q.key.slice("conversation:".length);
-        const outcome = value === "self" ? "handled_by_you" : "closed_by_you";
-        await pool.query("UPDATE threads SET status = 'done', outcome = $2, updated_at = now() WHERE thread_id = $1", [thread, outcome]);
-        await pool.query("UPDATE contacts SET status = $2, updated_at = now() WHERE domain = $1", [q.domain, value === "self" ? "engaged" : "cold_lead"]);
-        applied = true;
-      }
+      const note = effect(q, value), applied = false;
       await pool.query(`UPDATE questions SET status = 'answered', answer = $2, answered_at = now(),
                         applied_note = $3, applied_at = CASE WHEN $4 THEN now() ELSE NULL END WHERE id = $1`,
                        [id, JSON.stringify(value), note, applied]);

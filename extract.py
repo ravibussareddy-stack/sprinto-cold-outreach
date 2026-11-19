@@ -16,6 +16,11 @@ Rules:
 
 
 def extract_profile(domain: str, pages: list[dict]) -> CompanyProfile:
+    try:
+        import questions
+        known = questions.open_rulings()
+    except Exception:
+        known = []
     blocks = []
     for p in pages:
         blocks.append(f"=== SOURCE: {p['url']} ===\n{p['text']}")
@@ -29,5 +34,8 @@ def extract_profile(domain: str, pages: list[dict]) -> CompanyProfile:
                           f"found mentions of: {', '.join(p['certs']['mentioned'])}"
                           f"{'; language suggests certification IN PROGRESS' if p['certs']['in_progress'] else ''})")
     user = f"Company domain: {domain}\n\n" + "\n\n".join(blocks)
+    if known:
+        user += ("\n\nunusual_finding topics already raised with the sales lead (reuse the topic name if one fits): "
+                 + "; ".join(f"{k['topic']}: {k['question']}" for k in known[:20]))
     # temperature 0: the same pages must give the same facts, or the score moves between runs
     return ask(CompanyProfile, SYSTEM, user, temperature=0.0, thinking="low")   # copying facts: no deep reasoning needed

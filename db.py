@@ -140,10 +140,12 @@ CREATE TABLE IF NOT EXISTS questions (
     answer JSONB,
     status TEXT NOT NULL DEFAULT 'open',   -- open | answered | dismissed
     applied_note TEXT,             -- what the answer changed, once used
+    examples JSONB NOT NULL DEFAULT '[]'::jsonb,   -- companies where the situation was seen
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     answered_at TIMESTAMPTZ,
     applied_at TIMESTAMPTZ
 );
+ALTER TABLE questions ADD COLUMN IF NOT EXISTS examples JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Token use per model call.
 CREATE TABLE IF NOT EXISTS llm_usage (
     id BIGSERIAL PRIMARY KEY,
@@ -470,27 +472,40 @@ def log_rubric_change(section: str, key: str, old, new, reason: str, evidence: d
 
 
 @_safe
-def ask_question(key: str, kind: str, source: str, domain: str | None, question: str, context: str | None,
-                 options: list | None, run_id: int | None = None) -> int | None:
-    """Ask once per key: an open or answered question with the same key is left as it is."""
+def ask_judgment(key: str, kind: str, question: str, context: str, options: list | None, example: dict) -> None:
+    """Ask once (global key); while it is open, add this company as another example (up to 10)."""
     _init()
     with _conn() as c:
-        r = c.execute("INSERT INTO questions (key, kind, source, domain, run_id, question, context, options) "
-                      "VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (key) DO NOTHING RETURNING id",
-                      (key, kind, source, domain, run_id, question, context, Json(options) if options is not None else None)).fetchone()
-        return r[0] if r else None
+        c.execute("INSERT INTO questions (key, kind, source, domain, question, context, options, examples) "
+                  "VALUES (%s,%s,'qualification',%s,%s,%s,%s,%s::jsonb) "
+                  "ON CONFLICT (key) DO UPDATE SET examples = CASE "
+                  "  WHEN questions.status = 'open' AND NOT questions.examples @> %s::jsonb AND jsonb_array_length(questions.examples) < 10 "
+                  "  THEN questions.examples || %s::jsonb ELSE questions.examples END",
+                  (key, kind, example.get("domain"), question, context, Json(options) if options is not None else None,
+                   Json([example]), Json([{"domain": example.get("domain")}]), Json([example])))
 
 
 @_safe
-def answer_for(key: str):
-    """Your answer to a question, or None if it is still open, dismissed or was never asked."""
+def answered_judgments() -> list[tuple]:
     _init()
     with _conn() as c:
-        r = c.execute("SELECT answer FROM questions WHERE key = %s AND status = 'answered'", (key,)).fetchone()
-        return r[0] if r else None
+        return c.execute("SELECT key, answer FROM questions WHERE key LIKE 'judgment:%%' AND status = 'answered'").fetchall()
 
 
 @_safe
-def mark_applied(key: str, note: str):
+def judgment_topics() -> list[dict]:
     with _conn() as c:
-        c.execute("UPDATE questions SET applied_note = %s, applied_at = now() WHERE key = %s", (note, key))
+        rows = c.execute("SELECT key, question FROM questions WHERE key LIKE 'judgment:new:%%'").fetchall()
+        return [{"topic": k.split("judgment:new:", 1)[1], "question": q} for k, q in rows]
+
+
+@_safe
+def open_new_judgments() -> int:
+    with _conn() as c:
+        return c.execute("SELECT count(*) FROM questions WHERE key LIKE 'judgment:new:%%' AND status = 'open'").fetchone()[0]
+
+
+@_safe
+def question_exists(key: str) -> bool:
+    with _conn() as c:
+        return c.execute("SELECT 1 FROM questions WHERE key = %s", (key,)).fetchone() is not None

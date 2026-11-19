@@ -76,10 +76,8 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
         rec.update(status="ERROR", error=f"qualify: {e}")
         return rec
     rec["qualification"] = {k: v for k, v in q.items() if k not in ("profile", "pages")}
-    try:                                               # use your answers, and ask what would change the decision
-        questions.mark_used(domain, q.get("decision"))
-        questions.ask_after_qualify(domain, (q["profile"].company_name if q.get("profile") else None) or domain,
-                                    q, q.get("profile"))
+    try:                                               # judgement calls the rules leave to you: ask once
+        questions.ask(domain, (q["profile"].company_name if q.get("profile") else None) or domain, q.get("judgement") or [])
     except Exception as e:
         log(f"  could not save a question: {e}")
     rec["profile"] = q["profile"].model_dump() if q["profile"] else None
@@ -102,15 +100,11 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
     profile = q["profile"]
     # A contact supplied with the case (API / test input) wins over the lookup.
     contact = dict(given_contact, source="provided with the case") if given_contact else \
-        (questions.contact_answer(domain) or poc_mod.find_poc(domain, profile.employee_estimate))
+        poc_mod.find_poc(domain, profile.employee_estimate)
     rec["poc"] = contact
     if "error" in contact:
         log(f"  PoC: {contact['error']}")
         rec["status"] = "NO_POC"
-        try:
-            questions.ask_for_contact(domain, profile.company_name or domain, contact["error"])
-        except Exception as e:
-            log(f"  could not save a question: {e}")
         return rec
     log(f"  PoC: {contact['first_name']} {contact['last_name']} ({contact['title']}) via {contact['source']}")
 

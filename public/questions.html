@@ -10,36 +10,39 @@
 <style>
   .q { padding: 14px 16px; border-radius: 16px; background: var(--glass-strong); border: 1px solid var(--glass-border); margin-top: 10px; display: grid; gap: 8px; }
   .q:hover { border-color: var(--blue-500); }
-  .q .opts { display: flex; flex-wrap: wrap; gap: 8px; }
-  .q .contact { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
-  .q.done { opacity: .8; }
+  .q .opts { display: grid; gap: 8px; }
+  .q .opt { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .q .opt .muted { flex: 1; min-width: 200px; }
+  .q blockquote { margin: 0; padding: 6px 10px; border-left: 3px solid var(--blue-300); color: var(--muted); font-size: 13px; }
+  .q textarea { width: 100%; min-height: 64px; }
+  .q.done { opacity: .85; }
 </style>
 </head>
 <body>
 <main style="max-width:1000px">
   <header class="glass top">
     <div class="brand"><div class="logo">S</div>
-      <div><h1>Questions</h1><div class="muted small">When the system is unsure, it asks you instead of guessing</div></div></div>
+      <div><h1>Questions</h1><div class="muted small">Judgement calls the rules don't settle. Your answer becomes a standing ruling</div></div></div>
     <div class="actions"><span class="muted small" id="count"></span><button class="btn" id="refresh">Refresh</button></div>
   </header>
   <nav class="glass nav" id="nav"></nav>
   <div id="error" class="error"></div>
 
   <section class="glass card section">
-    <div class="row-head"><h2>Waiting for you</h2><span class="muted small">answers are used the next time that company runs</span></div>
+    <div class="row-head"><h2>Waiting for your ruling</h2><span class="muted small">nothing waits on these: the default is used until you answer</span></div>
     <div id="open"><p class="muted small">Loading…</p></div>
   </section>
   <section class="glass card section">
-    <h2>Answered recently</h2>
+    <h2>Your rulings</h2>
     <div id="recent"></div>
   </section>
   <section class="glass card section">
-    <h2>What it asks, and why</h2>
+    <h2>How questions work</h2>
     <ol class="criteria">
-      <li><b>Is it a B2B SaaS company?</b><span>When the website does not say. No: disqualified. Yes: it is scored.</span></li>
-      <li><b>Does it hold SOC 2 or ISO 27001?</b><span>When no security or trust page is found. Yes: dormant. Neither: it earns the greenfield points.</span></li>
-      <li><b>Who should we email?</b><span>When no suitable decision-maker is found. Your contact is used next time (emails still go only to our own inbox).</span></li>
-      <li><b>How should we handle this conversation?</b><span>When a reply cannot be handled automatically. Applied straight away.</span></li>
+      <li><b>Facts are researched, not asked</b><span>If something is missing (a certificate, a security page), the system looks harder: sitemap, trust and privacy pages.</span></li>
+      <li><b>Only judgement calls are asked</b><span>"I found this, my rules don't say how to read it." For example: SOC 2 Type I only, a badge with no statement, an old report, an acquisition, a company already on Vanta or Drata, a company that sells compliance software itself.</span></li>
+      <li><b>Asked once, applied everywhere</b><span>Each situation is asked once; later companies with the same finding are added as examples. Your answer applies to every company from its next run.</span></li>
+      <li><b>New situations</b><span>If the system meets something its rules don't cover, it asks in its own words and you answer in yours (at most 5 waiting at a time).</span></li>
     </ol>
   </section>
 </main>
@@ -48,44 +51,48 @@
 dash.nav("questions");
 (function () {
   var E = dash.esc;
-  var SOURCE = { qualification: "Qualification", "contact lookup": "Contact lookup", "reply handling": "Reply handling" };
-  function answerText(q) {
-    var a = q.answer;
-    if (a && typeof a === "object") return [a.first_name, a.last_name].filter(Boolean).join(" ") + " <" + a.email + ">" + (a.title ? ", " + a.title : "");
-    var o = (q.options || []).find(function (x) { return x.value === a; });
-    return o ? o.label : String(a == null ? "" : a);
-  }
-  function head(q) {
-    return '<div class="row-head" style="margin:0"><div><b>' + E(q.question) + '</b></div><span class="muted small">' +
-      E(SOURCE[q.source] || q.source) + " &middot; " + E(dash.when(q.created_at)) + "</span></div>" +
-      (q.context ? '<div class="small muted">' + E(q.context) + "</div>" : "") +
-      (q.domain ? '<div class="small"><a href="company.html?domain=' + encodeURIComponent(q.domain) + '">Open ' + E(q.domain) + "</a></div>" : "");
+  function examples(q) {
+    var ex = q.examples || [];
+    if (!ex.length) return "";
+    var first = ex[0];
+    return '<div class="small"><b>Found at ' + E(first.company || first.domain) + ":</b> " + E(first.finding || "") + "</div>" +
+      (first.quote ? "<blockquote>“" + E(first.quote) + "”" + (first.url ? ' <a href="' + E(first.url) + '" target="_blank" rel="noopener">source</a>' : "") + "</blockquote>" : "") +
+      (ex.length > 1 ? '<div class="small muted">Also seen at: ' + ex.slice(1).map(function (e) {
+        return '<a href="company.html?domain=' + encodeURIComponent(e.domain) + '">' + E(e.company || e.domain) + "</a>"; }).join(", ") + "</div>" : "");
   }
   function openCard(q) {
-    var body = q.kind === "contact"
-      ? '<div class="contact"><input placeholder="First name *" data-f="first_name"><input placeholder="Last name" data-f="last_name">' +
-        '<input placeholder="Email *" type="email" data-f="email"><input placeholder="Title (e.g. CTO)" data-f="title"></div>' +
-        '<div class="opts"><button class="btn primary" data-act="contact">Use this contact</button><button class="btn" data-act="dismiss">Not now</button></div>'
-      : '<div class="opts">' + (q.options || []).map(function (o, i) {
-          return '<button class="btn' + (i === 0 ? " primary" : "") + '" data-act="answer" data-v="' + E(o.value) + '">' + E(o.label) + "</button>"; }).join("") +
-        '<button class="btn" data-act="dismiss">Not now</button></div>';
-    return '<div class="q" data-id="' + E(q.id) + '">' + head(q) + body + '<div class="small note" data-note></div></div>';
+    var body = q.kind === "judgment_open"
+      ? '<textarea class="input" placeholder="Your ruling, e.g. Treat a parent company\'s SOC 2 as covering the subsidiary: dormant." data-text></textarea>' +
+        '<div class="opt"><button class="btn primary" data-act="text">Save ruling</button><button class="btn" data-act="dismiss">Not now</button></div>'
+      : '<div class="opts">' + (q.options || []).map(function (o) {
+          return '<div class="opt"><button class="btn primary" data-act="answer" data-v="' + E(o.value) + '">' + E(o.label) + "</button>" +
+            '<span class="small muted">' + E(o.effect || "") + "</span></div>"; }).join("") +
+        '<div class="opt"><button class="btn" data-act="dismiss">Not now (keep the default)</button></div></div>';
+    return '<div class="q" data-id="' + E(q.id) + '"><div class="row-head" style="margin:0"><b>' + E(q.question) + '</b><span class="muted small">' +
+      E(dash.when(q.created_at)) + "</span></div>" + examples(q) +
+      (q.context ? '<div class="small muted">' + E(q.context) + "</div>" : "") + body + '<div class="small note" data-note></div></div>';
+  }
+  function rulingText(q) {
+    if (q.status === "dismissed") return "Not now: the default is used";
+    if (q.kind === "judgment_open") return "“" + q.answer + "”";
+    var o = (q.options || []).find(function (x) { return x.value === q.answer; });
+    return o ? o.label + (o.effect ? " — " + o.effect : "") : String(q.answer);
   }
   function doneCard(q) {
-    var run = q.domain && q.kind !== "conversation" && q.status === "answered" && !q.applied_at
-      ? ' <a class="btn mini" href="test.html?domain=' + encodeURIComponent(q.domain) + '">Run it now</a>' : "";
-    return '<div class="q done" data-id="' + E(q.id) + '">' + head(q) +
-      '<div class="small"><b>' + (q.status === "dismissed" ? "Not now" : "Your answer: " + E(answerText(q))) + "</b>" +
-      (q.applied_note ? ' <span class="muted">' + E(q.applied_note) + "</span>" : "") + run +
-      ' <button class="btn mini" data-act="reopen">Change answer</button></div></div>';
+    var seen = (q.examples || []).map(function (e) { return e.company || e.domain; });
+    return '<div class="q done" data-id="' + E(q.id) + '"><b>' + E(q.question) + "</b>" +
+      '<div class="small"><b>' + E(rulingText(q)) + "</b></div>" +
+      (seen.length ? '<div class="small muted">Seen at: ' + E(seen.join(", ")) + "</div>" : "") +
+      '<div><button class="btn mini" data-act="reopen">Change ruling</button></div></div>';
   }
   function load() {
     return dash.api("/api/questions").then(function (r) {
       document.getElementById("count").textContent = r.open_count ? r.open_count + " waiting" : "nothing waiting";
       dash.navBadge("questions", r.open_count);
       document.getElementById("open").innerHTML = r.open.length ? r.open.map(openCard).join("")
-        : '<p class="muted small">No questions right now. When a run is unsure about something that would change its decision, it asks here.</p>';
-      document.getElementById("recent").innerHTML = r.recent.length ? r.recent.map(doneCard).join("") : '<p class="muted small">None yet.</p>';
+        : '<p class="muted small">No judgement calls waiting. When a run finds something its rules don\'t settle, it asks here.</p>';
+      document.getElementById("recent").innerHTML = r.recent.length ? r.recent.map(doneCard).join("")
+        : '<p class="muted small">No rulings yet. Until you rule, each situation uses its cautious default.</p>';
     }).catch(function (e) { document.getElementById("error").textContent = e.message; });
   }
   function post(body) {
@@ -96,17 +103,13 @@ dash.nav("questions");
     if (!b) return;
     var card = b.closest(".q"), id = Number(card.dataset.id), note = card.querySelector("[data-note]"), body;
     if (b.dataset.act === "answer") body = { id: id, answer: b.dataset.v };
+    else if (b.dataset.act === "text") body = { id: id, answer: card.querySelector("[data-text]").value };
     else if (b.dataset.act === "dismiss") body = { id: id, dismiss: true };
     else if (b.dataset.act === "reopen") body = { id: id, reopen: true };
-    else if (b.dataset.act === "contact") {
-      var c = {};
-      card.querySelectorAll("[data-f]").forEach(function (i) { c[i.dataset.f] = i.value.trim(); });
-      body = { id: id, answer: c };
-    }
     card.querySelectorAll("button").forEach(function (x) { x.disabled = true; });
     post(body).then(function (r) {
       if (note && r.effect) { note.textContent = r.effect; note.className = "small note ok"; }
-      setTimeout(load, r.effect ? 1400 : 0);
+      setTimeout(load, r.effect ? 1600 : 0);
     }).catch(function (e) {
       card.querySelectorAll("button").forEach(function (x) { x.disabled = false; });
       if (note) { note.textContent = e.message; note.className = "small note bad"; }
