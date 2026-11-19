@@ -81,3 +81,9 @@ def test_a_compliance_tool_in_use_withholds_greenfield_points():
     res = run({"https://acme.io": "Analytics", "https://acme.io/security": "Our trust center is powered by Vanta."})
     assert not any(r.startswith("+20") for r in res["score_reasons"])
     assert any("Vanta" in f for f in res["flags"])
+
+
+def test_a_non_compliance_standard_is_not_a_certification():
+    res = run({"https://acme.io": "Passkeys for developers", "https://acme.io/security": "We encrypt data."},
+              profile=PROFILE | {"certifications_claimed": ["FIDO2"]})
+    assert res["decision"] != "DORMANT" and res["certification"]["held"] == []

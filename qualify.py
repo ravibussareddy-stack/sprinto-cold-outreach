@@ -80,7 +80,7 @@ def cert_status(p: CompanyProfile, pages: list[dict]) -> str:
     """confirmed: the company claims a certification. in_progress: says an audit is under way.
     none_found: a security / trust page was read and claims none. unknown: no such page read -
     absence of evidence, so it must not earn greenfield points."""
-    if certs_held(p, pages):
+    if named_certs(p, pages):
         return "confirmed"
     if p.certification_in_progress or any(page_certs(pg).get("in_progress") for pg in pages):
         return "in_progress"
@@ -121,11 +121,17 @@ def missing_facts(p: CompanyProfile, pages: list[dict]) -> list[str]:
     return missing
 
 
+# Security-compliance certifications Sprinto sells into or that show a compliance programme.
+# Anything else the model calls a certification (FIDO2, a cloud partner badge) is not one here.
+COMPLIANCE_CERT = re.compile(r"soc[\s\-]?(2|ii|1|i|3)\b|iso[\s/\-]?(iec[\s\-]?)?(27001|27701|27017|27018|42001|9001)|hipaa|"
+                             r"pci[\s\-]?dss|hitrust|fedramp|csa star|cyber essentials|tisax|nist 800", re.I)
+
+
 def named_certs(p: CompanyProfile, pages: list[dict]) -> set[str]:
-    """Certifications that count for the dormant rule. Rubric: certifications.not_certifications
-    (default: GDPR - a regulation, not a certification)."""
+    """Certifications that count for the dormant rule: security-compliance certificates only, minus
+    rubric certifications.not_certifications (default: GDPR - a regulation, not a certification)."""
     excluded = {x.lower() for x in rubric.get("certifications", "not_certifications")}
-    return {c for c in certs_held(p, pages) if c.lower() not in excluded}
+    return {c for c in certs_held(p, pages) if c.lower() not in excluded and COMPLIANCE_CERT.search(c)}
 
 
 def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | None:
@@ -299,8 +305,18 @@ def qualify(domain: str, log, max_extra: int | None = None) -> dict:
     #   any other question unanswered     -> flagged
     #   all answered and score >= QUALIFY -> qualified
     #   score below REVIEW_SCORE          -> disqualified
+    reason = f"score {pts}/100"
     if profile.is_b2b_saas is None:
         decision = "MANUAL_REVIEW"
+    elif pts < rubric.get("decision", "review_score"):
+        # Too little evidence of fit to write. With questions still open a person should look;
+        # with everything answered it is a clear no.
+        if still_missing:
+            decision = "MANUAL_REVIEW"
+            reason = (f"score {pts}/100, below {rubric.get('decision', 'review_score')}, with "
+                      f"{', '.join(still_missing)} unanswered: not enough evidence to write - review by hand")
+        else:
+            decision = "DISQUALIFIED"
     elif "stage" in still_missing or flags:
         decision = "QUALIFIED_FLAGGED"
     elif pts >= rubric.get("decision", "qualify_score"):
@@ -310,6 +326,6 @@ def qualify(domain: str, log, max_extra: int | None = None) -> dict:
     else:
         decision = "DISQUALIFIED"
     return {"decision": decision, "score": pts, "score_reasons": reasons,
-            "still_missing": still_missing, "flags": flags, "reason": f"score {pts}/100",
+            "still_missing": still_missing, "flags": flags, "reason": reason,
             "certs_held": sorted(named_certs(profile, pages)), "certification": certification,
             "profile": profile, "pages": pages, "trace": trace}

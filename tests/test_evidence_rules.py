@@ -60,9 +60,18 @@ def test_unanswered_certs_flags_the_company():
 
 def test_unknown_stage_is_flagged_not_dropped():
     stub_site(home_mentions=())
-    qualify.extract_profile = lambda d, pages: CompanyProfile(is_b2b_saas=True, buyer_type="CTOs")
+    qualify.extract_profile = lambda d, pages: CompanyProfile(is_b2b_saas=True, buyer_type="CTOs", security_compliance_roles_hiring=["Security Engineer"],
+                                                              named_customers=["A", "B"], handles_sensitive_data=True)
     res = run_qualify("acme.io", lambda m: None)
     assert res["decision"] == "QUALIFIED_FLAGGED" and any("stage" in f for f in res["flags"]), res
+
+
+def test_weak_evidence_with_open_questions_goes_to_manual_review_not_outreach():
+    stub_site(home_mentions=())
+    qualify.extract_profile = lambda d, pages: CompanyProfile(is_b2b_saas=True, buyer_type="CTOs")
+    res = run_qualify("acme.io", lambda m: None)
+    assert res["score"] < 35 and res["decision"] == "MANUAL_REVIEW", res
+    assert "not enough evidence" in res["reason"]
 
 
 def test_any_named_certification_makes_company_dormant():
