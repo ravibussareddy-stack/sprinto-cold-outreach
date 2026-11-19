@@ -17,6 +17,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
+import frameworks
 import rubric
 import scraper
 from extract import extract_profile
@@ -145,7 +146,8 @@ def short_circuit(p: CompanyProfile, pages: list[dict]) -> tuple[str, str] | Non
         return "DISQUALIFIED", "Not a B2B SaaS company - outside Sprinto's ICP."
     certs = named_certs(p, pages)
     rule = rubric.get("certifications", "dormant_rule")
-    dormant = (rule == "any_named_cert" and certs) or \
+    core = {"SOC 2", "ISO 27001"} & certs
+    dormant = (rule == "soc2_or_iso" and core) or (rule == "any_named_cert" and certs) or \
               (rule == "soc2_and_iso" and holds_cert(p, pages, "SOC 2") and holds_cert(p, pages, "ISO 27001"))
     if dormant:
         return ("DORMANT",
@@ -234,10 +236,17 @@ def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
     # with no claim), never just "nothing found on the pages we happened to read".
     has_soc2, has_iso = holds_cert(p, pages, "SOC 2"), holds_cert(p, pages, "ISO 27001")
     status, tools = cert_status(p, pages), compliance_tools(p, pages)
-    if tools:
+    if p.expansion_frameworks and (has_soc2 or has_iso):
+        pts += gap["new_framework"]
+        why.append(f"+{gap['new_framework']} expansion: already certified, but needs {p.expansion_frameworks[0]}, now in your portfolio")
+    elif tools:
         why.append(f"+0 certification gap: already uses {tools[0]['tool']} for compliance (a switch conversation, not greenfield)")
     elif not has_soc2 and not has_iso and status == "unknown":
         why.append("+0 certification gap: status unknown - no security or trust page found, so greenfield points are withheld")
+    elif not has_soc2 and not has_iso and status == "confirmed":
+        others = ", ".join(sorted(named_certs(p, pages)))
+        pts += gap["no_soc2_or_iso"]; why.append(f"+{gap['no_soc2_or_iso']} holds {others} but no SOC 2 / ISO 27001 yet "
+                                                  f"(a compliance programme exists; Sprinto adds the core frameworks)")
     elif not has_soc2 and not has_iso:
         read = [pg["url"] for pg in pages if is_security_page(pg["url"])]
         pts += gap["no_soc2_or_iso"]; why.append(f"+{gap['no_soc2_or_iso']} no SOC 2 / ISO 27001 claimed on "
@@ -287,6 +296,12 @@ def qualify(domain: str, log) -> dict:
     per_question = {"stage": 0, "certs": 0, "saas": 0}
     while True:
         stop = short_circuit(profile, pages)
+        if stop and stop[0] == "DORMANT":
+            # Certified, but a framework you added to the portfolio fits them: an expansion prospect.
+            exp = frameworks.expansions(profile.model_dump(), sorted(named_certs(profile, pages)))
+            profile.expansion_frameworks = [f"{e['name']} ({e['reason']})" for e in exp]
+            if exp:
+                stop = None
         if stop:
             decision, reason = stop
             return {"decision": decision, "reason": reason, "score": None, "score_reasons": [],
@@ -330,6 +345,8 @@ def qualify(domain: str, log) -> dict:
         profile.compliance_tool_used = certification["compliance_tools"][0]["tool"]   # the writer sees it too
     if "certs" in still_missing:
         flags.append("certification status unknown: no security or trust page found; greenfield points withheld")
+    if profile.expansion_frameworks:
+        flags.append(f"expansion prospect: already certified; pitch {profile.expansion_frameworks[0].split(' (')[0]}")
     for t in certification["compliance_tools"][:1]:
         flags.append(f"already uses {t['tool']} for compliance: pitch a switch, not a first audit")
     if "stage" in still_missing:
@@ -363,4 +380,5 @@ def qualify(domain: str, log) -> dict:
     return {"decision": decision, "score": pts, "score_reasons": reasons,
             "still_missing": still_missing, "flags": flags, "reason": reason,
             "certs_held": sorted(named_certs(profile, pages)), "certification": certification,
+            "expansion": profile.expansion_frameworks,
             "profile": profile, "pages": pages, "trace": trace}

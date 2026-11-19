@@ -61,14 +61,22 @@ Sprinto description:
 {SPRINTO_CONTEXT}"""
 
 
+def _portfolio_note() -> str:
+    try:
+        import frameworks
+        return frameworks.portfolio_note()
+    except Exception:
+        return ""
+
+
 def check_claims(email_body: str, research_json: str) -> ClaimCheck:
     user = f"Research (JSON):\n{research_json}\n\nEmail:\n{email_body}"
-    return ask(ClaimCheck, CLAIM_SYSTEM, user, temperature=0.0)
+    return ask(ClaimCheck, CLAIM_SYSTEM + _portfolio_note(), user, temperature=0.0)
 
 
 def judge(email_body: str, research_json: str) -> JudgeVerdict:
     user = f"Research (JSON):\n{research_json}\n\nEmail:\n{email_body}"
-    return ask(JudgeVerdict, JUDGE_SYSTEM, user, temperature=0.0)
+    return ask(JudgeVerdict, JUDGE_SYSTEM + _portfolio_note(), user, temperature=0.0)
 
 
 def score(structure_failures: list[str], claims: ClaimCheck, verdict: JudgeVerdict) -> dict:

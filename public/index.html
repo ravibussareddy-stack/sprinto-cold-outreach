@@ -30,6 +30,10 @@
       <div class="row-head"><h2>How companies are judged</h2><span class="muted small">the live rules, in the order they are applied</span></div>
       <div id="criteria"></div>
     </section>
+    <section class="glass card section" id="portfolio-card">
+      <div class="row-head"><h2>New certifications</h2><span class="muted small">frameworks introduced recently, and who needs them</span></div>
+      <div id="portfolio"></div>
+    </section>
     <div class="grid-2">
       <section class="glass card" id="todo-card">
         <div class="row-head"><h2>To-do</h2><span class="muted small" id="todo-count"></span></div>
@@ -441,6 +445,7 @@
       .then(function (r) {
         last = { m: r[0], runs: r[3] };
         renderOverview(r[0], r[5]);
+        renderPortfolio(r[5].portfolio);
         state.pipeline = (r[0].pipeline || {}).rows || [];
         renderPipeline();
         state.contacts = r[1];
@@ -486,15 +491,68 @@
   load();
   setInterval(load, 60000);
 
+  // ---------- portfolio: new certifications ----------
+  function companies(list) {
+    return list.map(function (c) { return '<a href="company.html?domain=' + encodeURIComponent(c.domain) + '">' + E(c.company) + "</a>" +
+      (c.reason ? ' <span class="muted">(' + E(c.reason) + ")</span>" : ""); }).join(", ");
+  }
+  function renderPortfolio(p) {
+    var box = document.getElementById("portfolio");
+    if (!p) { box.innerHTML = '<p class="muted small">Not available.</p>'; return; }
+    var html = '<div class="small" style="margin-bottom:12px"><b>Your portfolio:</b> ' +
+      p.core.map(function (c) { return pill(c, "soft"); }).join(" ") + " " +
+      p.accepted.map(function (a) { return '<span class="pill strong">' + E(a.name.split(" (")[0]) +
+        ' <button class="x" data-pf="remove" data-id="' + E(a.id) + '" title="Remove from the portfolio" aria-label="Remove ' + E(a.name) + '">&times;</button></span>'; }).join(" ") + "</div>";
+    p.accepted.forEach(function (a) {
+      if (a.reopened.length) html += '<div class="note small" style="margin-bottom:10px"><b>' + E(a.name.split(" (")[0]) + "</b> re-opened: " + companies(a.reopened) +
+        '. They are <b>Reactivated</b> in the Pipeline. Run one again to research it and draft the email: ' +
+        a.reopened.map(function (c) { return '<a href="test.html?domain=' + encodeURIComponent(c.domain) + '">' + E(c.company) + "</a>"; }).join(", ") + ".</div>";
+    });
+    if (!p.candidates.length) html += '<p class="muted small">No new certifications waiting for a decision.</p>';
+    html += p.candidates.map(function (c) {
+      var when = new Date(c.introduced).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+      return '<div class="fw"><div class="row-head" style="margin-bottom:6px"><div><b>' + E(c.name) + "</b> " + pill(c.kind, "soft") +
+        ' <span class="muted small">introduced ' + E(when) + "</span></div>" +
+        '<div style="display:flex;gap:8px"><button class="btn" data-pf="dismiss" data-id="' + E(c.id) + '">Not now</button>' +
+        '<button class="btn primary" data-pf="add" data-id="' + E(c.id) + '">Add to portfolio</button></div></div>' +
+        '<div class="small">' + E(c.introduced_note) + '. <a href="' + E(c.source) + '" target="_blank" rel="noopener">Official source</a></div>' +
+        '<div class="small muted">Who needs it: ' + E(c.who) + "</div>" +
+        (c.seen_on.length ? '<div class="small">Already seen on: ' + E(c.seen_on.join(", ")) + "</div>" : "") +
+        '<div class="small">' + (c.fits_dormant.length ? "<b>Would re-open " + c.fits_dormant.length + " dormant compan" + (c.fits_dormant.length > 1 ? "ies" : "y") + ":</b> " + companies(c.fits_dormant)
+          : '<span class="muted">No dormant company fits it yet; new companies that fit it would qualify.</span>') + "</div></div>";
+    }).join("");
+    if (p.dismissed.length) html += '<div class="small muted" style="margin-top:10px">Not now: ' + p.dismissed.map(function (d) {
+      return E(d.name.split(" (")[0]) + ' <button class="btn mini" data-pf="restore" data-id="' + E(d.id) + '">Show again</button>'; }).join(" ") + "</div>";
+    html += '<div class="note small" id="pf-note" style="margin-top:10px"></div>';
+    box.innerHTML = html;
+  }
+  document.getElementById("portfolio").addEventListener("click", function (ev) {
+    var b = ev.target.closest("button[data-pf]");
+    if (!b) return;
+    b.disabled = true;
+    dash.api("/api/settings", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ portfolio: { action: b.dataset.pf, id: b.dataset.id } }) })
+      .then(function (r) {
+        var msg = r.action === "add" ? r.name + " added to your portfolio. " + (r.changed.length ? r.changed.length + " dormant compan" +
+            (r.changed.length > 1 ? "ies are" : "y is") + " active again: " + r.changed.map(function (c) { return c.company; }).join(", ") + "." : "No dormant company fits it yet.")
+          : r.action === "remove" ? r.name + " removed." + (r.changed.length ? " " + r.changed.length + " compan" + (r.changed.length > 1 ? "ies" : "y") + " back to dormant." : "")
+          : r.action === "dismiss" ? r.name + " hidden. Show it again any time." : r.name + " is back on the list.";
+        load();
+        setTimeout(function () { var n = document.getElementById("pf-note"); if (n) { n.textContent = msg; n.className = "note small ok"; } }, 900);
+      })
+      .catch(function (e) { b.disabled = false; document.getElementById("error").textContent = e.message; });
+  });
+
   // ---------- criteria heads-up and guided tour ----------
   dash.criteria(document.getElementById("criteria"));
   function navStep(key, title, text) { return { el: '#nav a[data-key="' + key + '"]', title: title, text: text }; }
   var TOUR = [
     { title: "Welcome", text: "This dashboard runs Sprinto's cold outreach: it researches a company, decides whether it is worth an email, " +
-      "finds the right person, writes the email and handles the replies. Two minutes, eleven stops. Use the arrow keys or the buttons." },
+      "finds the right person, writes the email and handles the replies. About two minutes. Use the arrow keys or the buttons." },
     { el: "#run-test-btn", title: "Try one company", text: "The quickest way in: give it a domain and watch every step, with the evidence behind each decision." },
     { el: "#tiles", title: "The headline numbers", text: "Replies, meetings, drafts waiting for review, disagreement, emails and cost. Each tile opens the page behind it." },
     { el: "#criteria-card", title: "How companies are judged", text: "The live rules, in order. Heads-up: most well-known SaaS companies already hold SOC 2, so they come back Dormant. That is deliberate." },
+    { el: "#portfolio-card", title: "New certifications", text: "Frameworks introduced recently (ISO 42001, DORA...). Add one to your portfolio and the dormant companies that need it become active again." },
     { el: "#todo-card", title: "What needs you", text: "Upcoming meetings, drafts to review and anything stuck. Empty means nothing is waiting." },
     navStep("pipeline", "Pipeline", "Every company researched, where it stands and why. Click one for the full story: evidence, contact, emails and next step."),
     navStep("emails", "Emails", "Every email written. Open a draft to see its checks, its disagreement score, and to give feedback and redraft it."),

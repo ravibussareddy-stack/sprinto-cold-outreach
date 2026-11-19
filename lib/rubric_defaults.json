@@ -8,7 +8,7 @@
     "max_employees": 1000
   },
   "certifications": {
-    "dormant_rule": "any_named_cert",
+    "dormant_rule": "soc2_or_iso",
     "not_certifications": [
       "gdpr"
     ]
@@ -33,7 +33,8 @@
   },
   "certification_gap": {
     "no_soc2_or_iso": 20,
-    "holds_one": 10
+    "holds_one": 10,
+    "new_framework": 15
   },
   "evidence_loop": {
     "certs": 1,

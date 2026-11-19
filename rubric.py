@@ -15,7 +15,7 @@ import os
 import db
 
 DEFAULTS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib", "rubric_defaults.json")
-DORMANT_RULES = ("any_named_cert", "soc2_and_iso", "off")
+DORMANT_RULES = ("soc2_or_iso", "any_named_cert", "soc2_and_iso", "off")
 SEND_MODES = ("auto", "fixed")
 WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 _active: dict | None = None

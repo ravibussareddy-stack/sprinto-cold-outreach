@@ -293,3 +293,6 @@ ul.tight { margin: 0; padding-left: 18px; } ul.tight li { margin: 2px 0; }
 @media (prefers-reduced-motion: reduce) { .tour-card { transition: none; } }
 .tour-lift { z-index: 96 !important; position: relative; }
 .nav.tour-lift { position: sticky; }
+.fw { padding: 12px 14px; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--glass-border); margin-top: 10px; display: grid; gap: 4px; }
+.fw:hover { border-color: var(--blue-500); }
+.pill .x { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 0 0 4px; }

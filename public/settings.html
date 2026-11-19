@@ -93,7 +93,8 @@ dash.nav("rubric");
       cap: ["Cap on compliance points", "Compliance pressure never adds more than this."] }],
     ["certification_gap", "Certification gap points", "", {
       no_soc2_or_iso: ["No SOC 2 or ISO 27001", "Greenfield: the strongest fit."],
-      holds_one: ["Holds only one of the two", "Expansion: only reachable if the dormant rule lets it through."] }],
+      holds_one: ["Holds only one of the two", "Expansion: only reachable if the dormant rule lets it through."],
+      new_framework: ["Needs a framework you added", "Already certified, but fits a new framework in your portfolio (e.g. ISO 42001)."] }],
     ["evidence_loop", "Evidence loop", "Extra pages the agent may fetch when facts are missing.", {
       certs: ["Fetches for certifications", ""], saas: ["Fetches for 'is it B2B SaaS?'", ""],
       stage: ["Fetches for stage", ""], max_extra_fetches: ["Most extra fetches per company", "Hard cap on the loop."] }],
@@ -116,7 +117,8 @@ dash.nav("rubric");
       min_outcomes: ["Results needed before a change", "Fewer results than this and nothing changes."],
       max_step: ["Largest change per step (points)", "A single change never moves a value further than this."] }],
   ];
-  var RULE_LABELS = { any_named_cert: "Any named certification (lecturer's rule)",
+  var RULE_LABELS = { soc2_or_iso: "If it holds SOC 2 or ISO 27001 (HIPAA or PCI alone stays a prospect)",
+    any_named_cert: "Any named certification, HIPAA and PCI included",
     soc2_and_iso: "Only if it holds both SOC 2 and ISO 27001",
     off: "Never - certifications only change the score" };
   var state = { saved: null, defaults: null, ranges: {}, rules: [] };

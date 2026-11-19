@@ -1,6 +1,7 @@
 const { getPool } = require("../lib/db");
 const rubric = require("../lib/rubric");
 const sendtime = require("../lib/sendtime");
+const fw = require("../lib/frameworks");
 
 // The Overview page: what needs doing now, and how this week compares with last week.
 const PRICE_IN = parseFloat(process.env.GEMINI_PRICE_INPUT_PER_M || "0.30");
@@ -113,8 +114,40 @@ module.exports = async (req, res) => {
       link: "settings.html#changes" });
     if (latest.length && dormant.length / latest.length > 0.5) todo.push({ severity: "low",
       title: `${dormant.length} of ${latest.length} companies are dormant`,
-      detail: "Most already hold SOC 2. If SOC 2-only companies should be expansion leads, change the dormant rule.",
+      detail: "Most already hold SOC 2 or ISO 27001. New certifications in your portfolio can re-open the ones that need them.",
       link: "settings.html" });
+
+    // ---------- new certifications: what is new, who needs it, who it would re-open ----------
+    const pstate = await fw.loadState(pool);
+    const latestFull = await rows(pool, `
+      SELECT DISTINCT ON (domain) domain, decision, record->'profile' AS profile,
+             record->'qualification'->'certs_held' AS certs, record->'qualification'->'expansion' AS expansion
+      FROM runs ORDER BY domain, created_at DESC`);
+    const describe = (f) => {
+      const seen = latestFull.filter((r) => fw.families(r.certs || []).includes(f.family)).map((r) => (r.profile || {}).company_name || r.domain);
+      const fits = latestFull.filter((r) => r.decision === "DORMANT").map((r) => {
+        const why = fw.fit(f, r.profile || {}, r.certs || []);
+        return why ? { domain: r.domain, company: (r.profile || {}).company_name || r.domain, reason: why } : null;
+      }).filter(Boolean);
+      const reopened = latestFull.filter((r) => r.decision === "REACTIVATED" && (r.expansion || []).some((e) => e.startsWith(f.name)))
+        .map((r) => ({ domain: r.domain, company: (r.profile || {}).company_name || r.domain }));
+      return { id: f.id, name: f.name, kind: f.kind, introduced: f.introduced, introduced_note: f.introduced_note,
+               source: f.source, who: f.who, pitch: f.pitch, seen_on: seen, fits_dormant: fits, reopened };
+    };
+    const portfolio = {
+      core: fw.CAT.core,
+      accepted: pstate.accepted.map((id) => describe(fw.BY_ID[id])),
+      candidates: fw.CAT.frameworks.filter((f) => !pstate.accepted.includes(f.id) && !pstate.dismissed.includes(f.id)).map(describe),
+      dismissed: pstate.dismissed.map((id) => ({ id, name: fw.BY_ID[id].name })),
+    };
+    if (portfolio.candidates.length) {
+      const fitting = portfolio.candidates.reduce((n, c) => n + c.fits_dormant.length, 0);
+      todo.push({ severity: fitting ? "medium" : "low",
+        title: `${portfolio.candidates.length} new certification(s) to review for your portfolio`,
+        detail: portfolio.candidates.map((c) => c.name.split(" (")[0]).join(", ") +
+          (fitting ? `. Adding them would re-open ${fitting} dormant compan${fitting > 1 ? "ies" : "y"}.` : "."),
+        link: "#portfolio-card" });
+    }
 
     // ---------- weekly ----------
     const cur = await windowStats(pool, 7, 0, threshold);
@@ -159,10 +192,13 @@ module.exports = async (req, res) => {
     if (certTop.length) highlights.push(`Dormant companies most often hold ${certTop.slice(0, 3).map(([c, n]) => `${c} (${n})`).join(", ")}.`);
     if (failedChecks.length) highlights.push(`Most-failed draft check: ${failedChecks[0].check_name} (${failedChecks[0].n} draft(s)).`);
     if (cur.tokens) highlights.push(`Model cost about ₹${cur.est_cost_inr.toFixed(2)} (${cur.tokens.toLocaleString("en-IN")} tokens).`);
+    if (portfolio.candidates.length) highlights.push(`New certifications introduced: ${portfolio.candidates.map((c) =>
+      `${c.name.split(" (")[0]} (${new Date(c.introduced).toLocaleDateString("en-GB", { month: "short", year: "numeric" })})`).join(", ")}. ` +
+      `Would you like to add them to your portfolio? See "New certifications" below.`);
 
     let sendtimeInfo = null;
     try { sendtimeInfo = await sendtime.compute(pool); } catch (e) { sendtimeInfo = null; }
-    res.status(200).json({ sendtime: sendtimeInfo, todo, trends, highlights, dormant_certs: certTop.map(([cert, n]) => ({ cert, n })),
+    res.status(200).json({ portfolio, sendtime: sendtimeInfo, todo, trends, highlights, dormant_certs: certTop.map(([cert, n]) => ({ cert, n })),
                            failed_checks: failedChecks, top_lessons: topLessons, this_week: cur, last_week: prev });
   } catch (e) {
     res.status(500).json({ error: "database read failed" });

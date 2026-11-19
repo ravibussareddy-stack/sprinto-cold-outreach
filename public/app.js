@@ -82,7 +82,7 @@
   var STATUS_WORDS = { SENT: ["Sent", "strong"], DRAFTED: ["Draft", ""], REDRAFTED: ["Redraft", "mid"],
     DRAFT_FAILED_CHECKS: ["Failed checks", "warn"], NO_POC: ["No contact", "soft"], DORMANT: ["Dormant", "soft"],
     DISQUALIFIED: ["Disqualified", "soft"], MANUAL_REVIEW: ["Manual check", "warn"], FAILED: ["Unreachable", "warn"],
-    ERROR: ["Error", "warn"], awaiting_reply: ["Awaiting reply", ""], no_reply: ["No reply", "soft"],
+    ERROR: ["Error", "warn"], REACTIVATED: ["Reactivated", "strong"], awaiting_reply: ["Awaiting reply", ""], no_reply: ["No reply", "soft"],
     booked: ["Booked", "strong"], not_interested: ["Declined", "soft"], non_respondent: ["No response", "soft"],
     escalated_to_growth_lead: ["Needs you", "warn"], aborted: ["Aborted", "warn"] };
   function statusPills(status) {
@@ -102,6 +102,7 @@
 
   // ---------- criteria heads-up, built from the live rubric ----------
   var DORMANT_TEXT = {
+    soc2_or_iso: "already holds SOC 2 or ISO 27001 itself (HIPAA or PCI DSS alone stays a prospect: Sprinto adds SOC 2 / ISO 27001)",
     any_named_cert: "already holds any security-compliance certificate itself (SOC 2, ISO 27001, HIPAA, PCI DSS...; GDPR does not count)",
     soc2_and_iso: "already holds both SOC 2 and ISO 27001",
     off: null };

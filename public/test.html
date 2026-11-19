@@ -90,6 +90,8 @@ dash.nav("test");
   var E = dash.esc;
   function show(id, on) { document.getElementById(id).style.display = on ? "" : "none"; }
   dash.criteria(document.getElementById("criteria"));
+  var pre = new URLSearchParams(location.search).get("domain");
+  if (pre) document.getElementById("domain").value = pre;
   var TOUR = [
     { el: "#domain", title: "1. The company", text: "A domain or any URL on the site. Try one you know, e.g. a small B2B SaaS company." },
     { el: "#who", title: "2. Who to write to", text: "Supply a contact, or let it find a decision-maker with Hunter. It only looks once the company qualifies, to save searches." },

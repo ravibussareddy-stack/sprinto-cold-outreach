@@ -14,7 +14,7 @@ const STAGE_BY_CONTACT = {
   cold_lead: "Cold lead", non_respondent: "Non-respondent", escalated: "Needs you",
 };
 const STAGE_BY_DECISION = {
-  QUALIFIED: "Qualified", QUALIFIED_FLAGGED: "Qualified", REACTIVATED: "Qualified",
+  QUALIFIED: "Qualified", QUALIFIED_FLAGGED: "Qualified", REACTIVATED: "Reactivated",
   DORMANT: "Dormant", DISQUALIFIED: "Disqualified", MANUAL_REVIEW: "Manual review",
 };
 

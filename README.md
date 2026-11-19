@@ -16,13 +16,15 @@ curl -s -X POST https://sprinto-cold-outreach-web.vercel.app/api/run_case \
   -d '{"domain": "atlan.com", "contact": {"first_name": "Priya", "last_name": "Sharma", "email": "priya@atlan.com", "title": "CTO"}, "send": false}'
 ```
 
-**Active qualification policy (the one the deployed app uses):** a company that **itself** holds any named
-certification (SOC 2, ISO 27001, HIPAA, PCI DSS...; GDPR is a regulation and does not count) is **DORMANT** -
-no email, re-engaged only if a new certificate appears. Mentions about customers ("we help you get SOC 2") or
-vendors ("hosted on AWS, SOC 2 audited") never count. Certification status has three states - *confirmed*,
-*in progress*, *unknown* - and greenfield points are given only after a security or trust page has been read
-and shows no claim. The other policies on the **Filters & rubric** page (only SOC 2 + ISO 27001, or never) are
-configurable alternatives, not the submission default. Benchmark on fresh companies: [`BENCHMARK.md`](BENCHMARK.md).
+**Active qualification policy (the one the deployed app uses):** a company that **itself** holds **SOC 2 or
+ISO 27001** is **DORMANT** - no email, re-engaged only if a new certificate appears or a framework you add to the
+portfolio fits it. HIPAA or PCI DSS alone stays a prospect (Sprinto adds the core frameworks); GDPR is a regulation
+and never counts. Mentions about customers ("we help you get SOC 2") or vendors ("hosted on AWS, SOC 2 audited")
+never count, and neither does a "page not found" page. Certification status has three states - *confirmed*,
+*in progress*, *unknown* - and greenfield points are given only after a real security or trust page shows no claim.
+Companies that were acquired, or already run their audit on another compliance platform, are not prospects. The
+other policies on the **Filters & rubric** page are configurable alternatives, not the submission default.
+Benchmark on fresh companies: [`BENCHMARK.md`](BENCHMARK.md).
 
 A repeatable 7-step pipeline. Give it a list of domains, and for each one it:
 
@@ -200,6 +202,19 @@ Every qualification filter and point value lives in `lib/rubric_defaults.json`. 
 - Contact fields of the wrong type (e.g. a number for `first_name`) return **400** `invalid_contact` with the field path, e.g. `contact.first_name`.
 - Errors: invalid requests return **400** with `error.code` (`empty_body`, `invalid_json`, `missing_domain`, `invalid_domain`, `invalid_contact`, `invalid_send`, `too_many_cases`, ...) and nothing runs; wrong method **405**. Companies that cannot be processed still return **200** with a reason: `site_unreachable`, `no_contact_found`, `draft_failed_checks`, `pipeline_error`, or a `DISQUALIFIED` / `DORMANT` decision. The service never crashes on an input.
 - A run takes about 60-80 seconds (`maxDuration` 300s in `vercel.json`). Needs these Vercel env vars: `GEMINI_API_KEY1`(-3), `NEON_DATABASE_URL` (or `DATABASE_URL`), `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `SEND_TO`, `SENDER_NAME`.
+
+## New certifications and the portfolio
+
+`lib/frameworks.json` lists frameworks introduced recently (ISO/IEC 42001, DORA, NIS2, the EU AI Act, CMMC 2.0), each
+with its release date, official source, who needs it and a plain fit rule (keywords in what the company does, plus a
+market where the framework applies). Python (`frameworks.py`) and the dashboard (`lib/frameworks.js`) read the same
+file. The overview's highlights and to-do say which ones are new, which researched companies already show them, and
+which dormant companies each would re-open. **Add to portfolio** saves it (Neon `settings`, key `portfolio`), logs it
+in the rubric change log (undoable), and marks every dormant company that fits it **Reactivated**; from then on a
+certified company that fits an accepted framework qualifies as an **expansion prospect** (+15, rubric
+`certification_gap.new_framework`) and its email pitches that framework. The writer and the fact check are told the
+current portfolio, so a claim that Sprinto covers an accepted framework is supported. **Remove** puts the companies it
+re-opened back to dormant.
 
 ## Follow-up timers, send window, budget, company view
 

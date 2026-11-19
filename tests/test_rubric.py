@@ -30,13 +30,23 @@ def test_inconsistent_thresholds_fall_back_to_defaults():
 
 
 def test_unknown_dormant_rule_falls_back():
-    assert rubric.merge(rubric.defaults(), {"certifications": {"dormant_rule": "maybe"}})["certifications"]["dormant_rule"] == "any_named_cert"
+    assert rubric.merge(rubric.defaults(), {"certifications": {"dormant_rule": "maybe"}})["certifications"]["dormant_rule"] == "soc2_or_iso"
 
 
-def test_dormant_rule_any_named_cert_is_the_default():
+def test_dormant_rule_soc2_or_iso_is_the_default():
     p = CompanyProfile(**SAAS)
     assert short_circuit(p, [page(["SOC 2"])])[0] == "DORMANT"
+    assert short_circuit(p, [page(["ISO 27001"])])[0] == "DORMANT"
     assert short_circuit(p, [page(["GDPR"])]) is None          # GDPR is not a certification
+    assert short_circuit(p, [page(["HIPAA"])]) is None         # HIPAA alone stays a prospect
+    assert short_circuit(p, [page(["PCI DSS"])]) is None
+    pts, why = score(p, [page(["HIPAA"])])
+    assert any("holds HIPAA but no SOC 2" in w for w in why), why
+
+
+def test_dormant_rule_any_named_cert_includes_hipaa():
+    rubric.use({"certifications": {"dormant_rule": "any_named_cert"}})
+    assert short_circuit(CompanyProfile(**SAAS), [page(["HIPAA"])])[0] == "DORMANT"
 
 
 def test_dormant_rule_soc2_and_iso_lets_soc2_only_through_as_expansion():

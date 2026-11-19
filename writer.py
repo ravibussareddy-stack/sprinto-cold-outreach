@@ -35,7 +35,9 @@ Separate fact from hypothesis:
   "tends to", "likely"). Never state durations, effort or costs ("weeks of manual
   work", "hours a week") unless the research says so.
 - If compliance_tool_used is set, they already run a compliance platform: the
-  pain is what that tool leaves undone, not a first audit."""
+  pain is what that tool leaves undone, not a first audit.
+- If expansion_frameworks is set, they ALREADY hold SOC 2 / ISO 27001: pain point #1
+  is the new framework named there (why they now need it), never a first audit."""
 
 EMAIL_EXAMPLES = """Example 1 (CTO, Series A fintech; hook: new enterprise plan)
 Subject: Ledgerly's first enterprise SOC 2 review
@@ -108,6 +110,8 @@ Rules:
   15-minute call next week be useful?", "Might it be worth a brief conversation?").
 - 75-125 words including the greeting. Plain text. No bullet lists, no emojis,
   no buzzwords ("synergy", "leverage", "revolutionise"), no fake familiarity.
+- If the research lists expansion_frameworks, the company is already certified: the
+  angle is that new framework (built on the controls they already run), never a first audit.
 - Never invent facts, numbers or customer names not in the research. Never state
   how long something takes them or how much effort it costs ("weeks of manual
   work") unless the research says so; hedge or ask instead.
@@ -137,10 +141,18 @@ def greeting(first_name: str, now: dt.datetime | None = None) -> str:
     return f"Good {part} {first_name},"
 
 
+def _portfolio_note() -> str:
+    try:
+        import frameworks
+        return frameworks.portfolio_note()
+    except Exception:
+        return ""
+
+
 def pain_points(profile: CompanyProfile, poc: dict) -> PainPoints:
     user = (f"Contact: {poc['first_name']} {poc.get('last_name','')}, {poc.get('title')}\n\n"
             f"Company profile (JSON):\n{profile.model_dump_json(indent=1)}")
-    return ask(PainPoints, PAIN_SYSTEM, user)
+    return ask(PainPoints, PAIN_SYSTEM + _portfolio_note(), user)
 
 
 def validate(draft: EmailDraft, first_name: str, greeting_line: str | None = None) -> list[str]:
@@ -272,7 +284,7 @@ def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_na
             f"Greeting line to open with: {hello}\n\n"
             f"Pain points (use #1 as the main angle):\n{json.dumps(pains.model_dump(), indent=1)}\n\n"
             f"Research:\n{profile.model_dump_json(indent=1)}" + _guidance_block(guidance, exemplars))
-    system = EMAIL_SYSTEM + instructions_block(guidance)
+    system = EMAIL_SYSTEM + _portfolio_note() + instructions_block(guidance)
     feedback = ""
     for attempt in range(max_attempts):
         draft = ask(EmailDraft, system, base + feedback)

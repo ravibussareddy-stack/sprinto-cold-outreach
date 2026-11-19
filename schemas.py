@@ -33,6 +33,7 @@ class CompanyProfile(BaseModel):
     compliance_tool_used: Optional[str] = Field(None, description="Compliance automation platform the company ITSELF uses "
         "(e.g. a trust centre 'powered by Vanta', 'we use Drata'). null if not stated. Not tools it integrates with or sells.")
     geographic_markets: list[str] = []
+    expansion_frameworks: list[str] = Field([], description="Leave empty: filled in by code, not from the website.")
     recent_triggers: list[str] = Field([], description="Recent events: funding round, new enterprise launch, expansion to US/EU, big customer win, new product")
     evidence: list[Evidence] = Field([], description="One quote per important field you filled")
 

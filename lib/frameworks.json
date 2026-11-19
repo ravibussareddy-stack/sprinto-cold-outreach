@@ -1,0 +1,289 @@
+{
+ "core": [
+  "SOC 2",
+  "ISO 27001",
+  "GDPR",
+  "HIPAA",
+  "PCI DSS"
+ ],
+ "frameworks": [
+  {
+   "id": "iso_42001",
+   "name": "ISO/IEC 42001",
+   "family": "ISO 42001",
+   "kind": "certification",
+   "introduced": "2023-12-18",
+   "introduced_note": "published December 2023: the first certifiable AI management system standard",
+   "source": "https://www.iso.org/standard/81230.html",
+   "who": "Companies that build or sell AI products, now asked by enterprise buyers how their AI is governed.",
+   "pitch": "an ISO 42001 AI management system, built on the SOC 2 / ISO 27001 controls they already run",
+   "fit": {
+    "keywords": [
+     "ai",
+     "artificial intelligence",
+     "machine learning",
+     "ml",
+     "llm",
+     "large language model",
+     "generative",
+     "genai",
+     "gen ai",
+     "ai agent",
+     "agents",
+     "copilot",
+     "chatbot",
+     "computer vision",
+     "nlp"
+    ]
+   }
+  },
+  {
+   "id": "dora",
+   "name": "DORA (EU Digital Operational Resilience Act)",
+   "family": "DORA",
+   "kind": "regulation",
+   "introduced": "2025-01-17",
+   "introduced_note": "applies from 17 January 2025 to EU financial firms and their critical ICT suppliers",
+   "source": "https://eur-lex.europa.eu/eli/reg/2022/2554/oj",
+   "who": "Software companies that sell to EU banks, insurers, payment and investment firms.",
+   "pitch": "DORA evidence for their EU financial customers' ICT third-party reviews",
+   "fit": {
+    "keywords": [
+     "fintech",
+     "bank",
+     "banking",
+     "financial",
+     "finance",
+     "payment",
+     "payments",
+     "insurance",
+     "insurtech",
+     "lending",
+     "wealth",
+     "trading",
+     "brokerage",
+     "credit"
+    ],
+    "markets": [
+     "europe",
+     "eu",
+     "european union",
+     "germany",
+     "france",
+     "netherlands",
+     "spain",
+     "italy",
+     "ireland",
+     "belgium",
+     "sweden",
+     "denmark",
+     "finland",
+     "austria",
+     "poland",
+     "portugal",
+     "emea",
+     "nordics",
+     "dach",
+     "benelux"
+    ]
+   }
+  },
+  {
+   "id": "nis2",
+   "name": "NIS2 Directive",
+   "family": "NIS2",
+   "kind": "regulation",
+   "introduced": "2024-10-17",
+   "introduced_note": "EU member states' laws due from 17 October 2024",
+   "source": "https://eur-lex.europa.eu/eli/dir/2022/2555/oj",
+   "who": "Cloud, hosting, managed IT and security providers (and suppliers to health, energy, transport) serving the EU.",
+   "pitch": "NIS2-ready controls and supply-chain evidence for EU customers",
+   "fit": {
+    "keywords": [
+     "cloud",
+     "hosting",
+     "infrastructure",
+     "managed service",
+     "it service",
+     "data center",
+     "data centre",
+     "devops",
+     "security",
+     "cybersecurity",
+     "health",
+     "healthcare",
+     "energy",
+     "transport",
+     "logistics"
+    ],
+    "markets": [
+     "europe",
+     "eu",
+     "european union",
+     "germany",
+     "france",
+     "netherlands",
+     "spain",
+     "italy",
+     "ireland",
+     "belgium",
+     "sweden",
+     "denmark",
+     "finland",
+     "austria",
+     "poland",
+     "portugal",
+     "emea",
+     "nordics",
+     "dach",
+     "benelux"
+    ]
+   }
+  },
+  {
+   "id": "eu_ai_act",
+   "name": "EU AI Act",
+   "family": "EU AI Act",
+   "kind": "regulation",
+   "introduced": "2024-08-01",
+   "introduced_note": "in force since 1 August 2024; obligations phase in through 2025-2027",
+   "source": "https://eur-lex.europa.eu/eli/reg/2024/1689/oj",
+   "who": "AI products sold into the EU, especially those used in hiring, credit, health or education decisions.",
+   "pitch": "EU AI Act readiness alongside the security controls they already have",
+   "fit": {
+    "keywords": [
+     "ai",
+     "artificial intelligence",
+     "machine learning",
+     "ml",
+     "llm",
+     "large language model",
+     "generative",
+     "genai",
+     "gen ai",
+     "ai agent",
+     "agents",
+     "copilot",
+     "chatbot",
+     "computer vision",
+     "nlp"
+    ],
+    "markets": [
+     "europe",
+     "eu",
+     "european union",
+     "germany",
+     "france",
+     "netherlands",
+     "spain",
+     "italy",
+     "ireland",
+     "belgium",
+     "sweden",
+     "denmark",
+     "finland",
+     "austria",
+     "poland",
+     "portugal",
+     "emea",
+     "nordics",
+     "dach",
+     "benelux"
+    ]
+   }
+  },
+  {
+   "id": "cmmc",
+   "name": "CMMC 2.0",
+   "family": "CMMC",
+   "kind": "certification",
+   "introduced": "2024-12-16",
+   "introduced_note": "US Department of Defense program rule effective 16 December 2024",
+   "source": "https://www.federalregister.gov/documents/2024/10/15/2024-22905/cybersecurity-maturity-model-certification-cmmc-program",
+   "who": "Software companies selling to the US defence supply chain or federal agencies.",
+   "pitch": "CMMC 2.0 readiness for US defence and government deals",
+   "fit": {
+    "keywords": [
+     "defense",
+     "defence",
+     "government",
+     "federal",
+     "public sector",
+     "dod",
+     "aerospace",
+     "military"
+    ]
+   }
+  }
+ ],
+ "families": [
+  [
+   "soc[\\s\\-]?(2|ii|3)\\b",
+   "SOC 2"
+  ],
+  [
+   "soc[\\s\\-]?(1|i)\\b",
+   "SOC 1"
+  ],
+  [
+   "27001",
+   "ISO 27001"
+  ],
+  [
+   "27701",
+   "ISO 27701"
+  ],
+  [
+   "27017",
+   "ISO 27017"
+  ],
+  [
+   "27018",
+   "ISO 27018"
+  ],
+  [
+   "42001",
+   "ISO 42001"
+  ],
+  [
+   "9001",
+   "ISO 9001"
+  ],
+  [
+   "hipaa",
+   "HIPAA"
+  ],
+  [
+   "pci",
+   "PCI DSS"
+  ],
+  [
+   "hitrust",
+   "HITRUST"
+  ],
+  [
+   "fedramp",
+   "FedRAMP"
+  ],
+  [
+   "csa star",
+   "CSA STAR"
+  ],
+  [
+   "cyber essentials",
+   "Cyber Essentials"
+  ],
+  [
+   "tisax",
+   "TISAX"
+  ],
+  [
+   "cmmc",
+   "CMMC"
+  ],
+  [
+   "gdpr",
+   "GDPR"
+  ]
+ ]
+}

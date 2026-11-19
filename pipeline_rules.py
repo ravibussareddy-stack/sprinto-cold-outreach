@@ -3,11 +3,11 @@ import re
 
 # Certificate names vary ("SOC 2 Type II", "SOC-2 Type 2", "ISO/IEC 27001:2022"). Compare families,
 # or a renamed badge looks like a new certificate and wakes a dormant company up.
-FAMILIES = [(r"soc[\s\-]?(2|ii|3)\b", "SOC 2"), (r"soc[\s\-]?(1|i)\b", "SOC 1"), (r"27001", "ISO 27001"),
-            (r"27701", "ISO 27701"), (r"27017", "ISO 27017"), (r"27018", "ISO 27018"), (r"42001", "ISO 42001"),
-            (r"9001", "ISO 9001"), (r"hipaa", "HIPAA"), (r"pci", "PCI DSS"), (r"hitrust", "HITRUST"),
-            (r"fedramp", "FedRAMP"), (r"csa star", "CSA STAR"), (r"cyber essentials", "Cyber Essentials"),
-            (r"tisax", "TISAX"), (r"gdpr", "GDPR")]
+import json
+import os
+
+_CAT = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "lib", "frameworks.json")))
+FAMILIES = [(pat, fam) for pat, fam in _CAT["families"]]      # shared with the dashboard (lib/frameworks.js)
 
 
 def family(name: str) -> str:
