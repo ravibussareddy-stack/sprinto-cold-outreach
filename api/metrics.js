@@ -43,7 +43,9 @@ module.exports = async (req, res) => {
 
     const emailKinds = await safe(pool, `SELECT kind, count(*)::int AS n FROM emails GROUP BY kind ORDER BY n DESC`, []);
     // Emails written = every drafted cold email (sent or not, redrafts included) + every follow-up / reply sent.
-    const [drafted] = await safe(pool, `SELECT count(*)::int AS n FROM runs WHERE record ? 'email'`, [{ n: 0 }]);
+    // Cold emails sent: from the run records too, since early sends predate the emails log.
+    const [drafted] = await safe(pool, `SELECT count(*)::int AS n, count(*) FILTER (WHERE status LIKE 'SENT%')::int AS sent
+                                        FROM runs WHERE record ? 'email'`, [{ n: 0, sent: 0 }]);
 
     // Average disagreement: over all drafts, and over the ones that went wrong -
     // above the review threshold, conversation ended badly (declined / no reply), or rewritten by you.
@@ -111,11 +113,13 @@ module.exports = async (req, res) => {
       booking_rate: rate(conv.booked, conv.positive),
       emails_by_kind: emailKinds,
       emails: (() => {
-        const sent = emailKinds.reduce((a, k) => a + k.n, 0);
-        const cold_sent = (emailKinds.find((k) => k.kind === "cold") || { n: 0 }).n;
-        const written = (drafted.n || 0) + (sent - cold_sent);
+        const logged = emailKinds.reduce((a, k) => a + k.n, 0);
+        const cold_logged = (emailKinds.find((k) => k.kind === "cold") || { n: 0 }).n;
+        const later = logged - cold_logged;                 // follow-ups, proposals, confirmations, thank-yous
+        const sent = Math.max(cold_logged, drafted.sent || 0) + later;
+        const written = (drafted.n || 0) + later;
         const inr = cost(tin, tout) * USD_INR;
-        return { written, sent, cold_drafts: drafted.n || 0, follow_ups_and_replies: sent - cold_sent,
+        return { written, sent, cold_drafts: drafted.n || 0, follow_ups_and_replies: later,
                  cost_per_email_inr: written ? inr / written : null };
       })(),
       quality: { drafts: quality.drafts || 0, avg_quality: n(quality.avg_quality) },
