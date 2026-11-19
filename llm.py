@@ -54,9 +54,12 @@ def _generate(**kwargs):
                       transient=(genai_errors.APIError,))
 
 
-def ask(schema, system: str, user: str, max_output_tokens: int = 8000, temperature: float = 0.3):
+def ask(schema, system: str, user: str, max_output_tokens: int = 8000, temperature: float = 0.3,
+        thinking: str | None = None):
     """Ask Gemini for JSON matching `schema` and return a validated instance.
-    Raises if the response is blocked or does not validate."""
+    thinking="low": quicker, for mechanical steps (copying facts into fields). context["fast"]
+    makes every call low. Raises if the response is blocked or does not validate."""
+    low = thinking == "low" or context.get("fast")
     resp = _generate(
         model=config.GEMINI_MODEL,
         contents=user,
@@ -66,7 +69,7 @@ def ask(schema, system: str, user: str, max_output_tokens: int = 8000, temperatu
             response_schema=schema,
             max_output_tokens=max_output_tokens,
             temperature=temperature,
-            **({"thinking_config": types.ThinkingConfig(thinking_level="low")} if context.get("fast") else {}),
+            **({"thinking_config": types.ThinkingConfig(thinking_level="low")} if low else {}),
         ),
     )
     usage_log["calls"] += 1

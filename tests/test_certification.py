@@ -92,3 +92,15 @@ def test_a_non_compliance_standard_is_not_a_certification():
 def test_evidence_quotes_the_plainest_statement_of_the_claim():
     ev = scraper.detect_certifications(FIXTURE)["evidence"]
     assert any(e["who"] == "self" and e["sentence"].startswith("PostHog is certified as SOC 2 Type 2") for e in ev), ev
+
+
+def test_in_progress_with_a_chosen_platform_earns_no_urgency_points():
+    res = run({"https://acme.io": "Analytics", "https://acme.io/security": "Trust center powered by Vanta. ISO 27001 in progress."})
+    assert any("already with Vanta" in r for r in res["score_reasons"]), res["score_reasons"]
+    assert not any(r.startswith("+10 certification explicitly in progress") for r in res["score_reasons"])
+
+
+def test_an_acquisition_is_not_a_buying_trigger():
+    res = run({"https://acme.io": "HR software", "https://acme.io/security": "We encrypt data."},
+              profile=PROFILE | {"recent_triggers": ["Acquired by MYND"]})
+    assert not any("recent trigger" in r for r in res["score_reasons"]), res["score_reasons"]

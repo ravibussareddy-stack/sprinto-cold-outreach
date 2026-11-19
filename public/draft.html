@@ -113,7 +113,7 @@ dash.nav("emails");
           (hasScore ? '<div class="big">' + d.score + '<span class="muted small"> / 100</span></div>' +
             part("Structure", structure, 25) + part("Wrong info", wrong, 45) + part("Sceptical judge", parts.judge, 30) +
             '<p class="muted small">Lower is better. Above ' + E(queue.threshold) + " a draft goes to the Review queue.</p>"
-            : '<p class="muted">Not scored' + (d.skipped ? " (fast mode)" : d.error ? ": " + E(d.error) : "") +
+            : '<p class="muted">Not scored' + (d.error ? ": " + E(d.error) : "") +
               '. <a href="#feedback">Redraft below</a> to score it.</p>') + "</section>" +
         '<section class="glass lift card"><h2>Draft checks' + (qual ? " &middot; " + qual.passed + "/" + qual.total : "") + "</h2>" +
           '<p class="muted small" style="margin-top:-6px">Structure and style only. Facts are checked by the disagreement score.</p>' +

@@ -265,7 +265,7 @@ def _guidance_block(guidance: list[dict] | None, exemplars: list[dict] | None) -
 def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_name: str,
                 max_attempts: int = 2, guidance: list[dict] | None = None,
                 exemplars: list[dict] | None = None, soft_retry: bool = True) -> tuple[EmailDraft, list[str]]:
-    """soft_retry=False (fast mode): retry only when a hard check fails, not to polish soft ones."""
+    """soft_retry=False: retry only when a hard check fails, not to polish soft ones."""
     hello = greeting(poc["first_name"])
     base = (f"Recipient: {poc['first_name']} {poc.get('last_name','')}, {poc.get('title')} at "
             f"{profile.company_name}\nSender name: {sender_name}\n"

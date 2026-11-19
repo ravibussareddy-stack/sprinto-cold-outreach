@@ -37,8 +37,8 @@ def test_aliases_and_name_split():
 
 
 def _fake(status, **extra):
-    def run(domain, do_send, sender, contact=None, fast=False):
-        CALLS.append(fast)
+    def run(domain, do_send, sender, contact=None):
+        CALLS.append(domain)
         rec = {"domain": domain, "status": status, "seconds": 1.0,
                "qualification": {"decision": extra.get("decision", "QUALIFIED"), "score": 60, "reason": "fit"}}
         if contact:
@@ -100,17 +100,12 @@ def test_unreachable_site_has_its_own_code(monkeypatch):
 
 
 
-def test_mode_defaults_to_fast_and_can_be_full(monkeypatch):
+def test_an_old_mode_field_is_accepted_and_ignored(monkeypatch):
     monkeypatch.setattr(case_api.db, "save_run", lambda rec: None)
     monkeypatch.setattr(pipeline, "process", _fake("DORMANT", decision="DORMANT"))
-    CALLS.clear()
-    status, out = case_api.run_cases({"domain": "plane.so", "send": False})
-    assert status == 200 and CALLS == [True] and out["mode"] == "fast"
-    CALLS.clear()
-    status, out = case_api.run_cases({"domain": "plane.so", "send": False, "mode": "full"})
-    assert CALLS == [False] and out["mode"] == "full"
-    status, out = case_api.run_cases({"domain": "plane.so", "mode": "turbo"})
-    assert status == 400 and out["error"]["code"] == "invalid_mode"
+    for mode in ("fast", "full", "turbo"):
+        status, out = case_api.run_cases({"domain": "plane.so", "send": False, "mode": mode})
+        assert status == 200 and out["decision"] == "DORMANT"
 
 
 def test_contact_fields_of_the_wrong_type_are_400_not_500():

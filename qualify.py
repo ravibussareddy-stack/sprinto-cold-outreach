@@ -14,6 +14,7 @@ The MODEL extracts facts into named fields. The CODE checks which fields are
 filled and decides what to fetch next. Hard cap: MAX_EXTRA_FETCHES.
 """
 import re
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
 import rubric
@@ -38,6 +39,7 @@ ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "keka.c
 
 REGULATED = re.compile(r"fintech|financ|bank|payment|lending|insur|health|medic|clinic|hr\b|payroll|"
                        r"legal|govern|education|edtech|security|identity", re.I)
+NOT_A_TRIGGER = re.compile(r"acquir|acquisition|merg|part of|subsidiar|rebrand", re.I)
 ENTERPRISE_FEATURES = re.compile(r"sso|saml|scim|audit log|sla|data residency|dpa|role-based|rbac", re.I)
 
 
@@ -211,11 +213,16 @@ def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
     if p.security_compliance_roles_hiring:
         cp += cpv["security_hiring"]; why.append(f"+{cpv['security_hiring']} hiring security/compliance: "
                                                  f"{', '.join(p.security_compliance_roles_hiring[:3])}")
-    regex_in_progress = any(pg["certs"]["in_progress"] for pg in pages)
-    if p.certification_in_progress or regex_in_progress:
+    regex_in_progress = any(page_certs(pg).get("in_progress") for pg in pages)
+    tools = compliance_tools(p, pages)
+    if (p.certification_in_progress or regex_in_progress) and tools:
+        why.append(f"+0 certification in progress, but already with {tools[0]['tool']}: the platform is chosen, so no urgency points")
+    elif p.certification_in_progress or regex_in_progress:
         cp += cpv["certification_in_progress"]; why.append(f"+{cpv['certification_in_progress']} certification explicitly in progress (actively preparing for audit)")
-    if p.recent_triggers:
-        cp += cpv["recent_trigger"]; why.append(f"+{cpv['recent_trigger']} recent trigger: {p.recent_triggers[0]}")
+    # Acquisitions and mergers are not buying triggers: the parent's security team usually takes over.
+    triggers = [t for t in p.recent_triggers if not NOT_A_TRIGGER.search(t)]
+    if triggers:
+        cp += cpv["recent_trigger"]; why.append(f"+{cpv['recent_trigger']} recent trigger: {triggers[0]}")
     cp = min(cp, cpv["cap"]); pts += cp
 
     # Certification gap. Greenfield points need evidence of absence (a security / trust page read
@@ -255,10 +262,9 @@ def explain_fetch_error(code: str | None) -> str:
 
 
 # ---------------------------------------------------------------- the loop
-def qualify(domain: str, log, max_extra: int | None = None) -> dict:
-    """max_extra caps the extra fetches below the rubric's limit (fast mode)."""
-    cap = rubric.get("evidence_loop", "max_extra_fetches") if max_extra is None else \
-        min(max_extra, rubric.get("evidence_loop", "max_extra_fetches"))
+def qualify(domain: str, log) -> dict:
+    """The evidence loop: homepage, then rounds of parallel fetches (one page per missing question)."""
+    cap = rubric.get("evidence_loop", "max_extra_fetches")
     url = domain if domain.startswith("http") else f"https://{domain}"
     home = scraper.fetch(url)
     trace = [{"fetch": url, "ok": home["ok"], "method": home["method"], "error": home["error"]}]
@@ -283,26 +289,30 @@ def qualify(domain: str, log, max_extra: int | None = None) -> dict:
         missing = missing_facts(profile, pages)
         if not missing or extra >= cap:
             break
-        # Fetch for the highest-value missing fact: certification first (it can end the assessment
-        # and moves the score across the threshold), then stage, then SaaS.
-        # Each question has its own fetch limit from the evidence map.
-        nxt, q = None, None
-        for cand in ("certs", "stage", "saas"):       # certs first: it can stop outreach outright
-            if cand not in missing or per_question[cand] >= rubric.get("evidence_loop", cand):
+        # One round: the best page for EACH missing question, fetched at the same time, then one
+        # re-extraction. Certification first (it can end the assessment and moves the score across
+        # the threshold), then stage, then SaaS. Each question keeps its own fetch limit.
+        batch = []
+        for cand in ("certs", "stage", "saas"):
+            if cand not in missing or per_question[cand] >= rubric.get("evidence_loop", cand) or extra + len(batch) >= cap:
                 continue
-            nxt = pick_next_url(cand, home, tried)
+            nxt = pick_next_url(cand, home, tried | {u for u, _ in batch})
             if nxt:
-                q = cand
-                break
-        if not nxt:
+                batch.append((nxt, cand))
+        if not batch:
             break
-        per_question[q] += 1
-        tried.add(nxt); extra += 1
-        pg = scraper.fetch(nxt)
-        trace.append({"fetch": nxt, "for": q, "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
-        log(f"  loop {extra}/{cap}: need {q} -> {nxt} ({'ok' if pg['ok'] else pg['error']})")
-        if pg["ok"]:
-            pages.append(pg)
+        for u, q in batch:
+            tried.add(u); per_question[q] += 1
+        with ThreadPoolExecutor(max_workers=len(batch)) as pool:
+            fetched = list(pool.map(lambda b: scraper.fetch(b[0]), batch))
+        got = False
+        for (u, q), pg in zip(batch, fetched):
+            extra += 1
+            trace.append({"fetch": u, "for": q, "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
+            log(f"  loop {extra}/{cap}: need {q} -> {u} ({'ok' if pg['ok'] else pg['error']})")
+            if pg["ok"]:
+                pages.append(pg); got = True
+        if got:
             profile = extract_profile(domain, pages)
 
     still_missing = missing_facts(profile, pages)

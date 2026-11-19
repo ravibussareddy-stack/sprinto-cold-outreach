@@ -22,7 +22,7 @@ CASES = [
      "body": {"domain": "posthog.com", "contact": STAND_IN, "send": False},
      "expect_decision": {"DORMANT"}, "expect_http": 200, "right_action": "no email"},
     {"name": "Compliance work under way with another platform, contact supplied (Hanko: ISO 27001 in progress on its trust page, powered by Comp AI)",
-     "body": {"domain": "hanko.io", "contact": STAND_IN, "send": False, "mode": "full"},
+     "body": {"domain": "hanko.io", "contact": STAND_IN, "send": False},
      "expect_decision": {"QUALIFIED_FLAGGED"}, "expect_http": 200,
      "right_action": "draft an email",
      "note": "Flagged: already uses a compliance platform, so it is a switch pitch reviewed before sending. "
@@ -85,7 +85,7 @@ def main():
         print(json.dumps(res))
     passed = sum(r["pass"] for r in rows)
     lines = [f"# Benchmark on fresh and edge-case companies",
-             f"Run {dt.datetime.now().strftime('%Y-%m-%d %H:%M')} against `{BASE}/api/run_case` (fast mode unless the case says full, `send: false`). "
+             f"Run {dt.datetime.now().strftime('%Y-%m-%d %H:%M')} against `{BASE}/api/run_case` (full pipeline, `send: false`). "
              f"Expected outcomes are written in `benchmark.py`; two were set or corrected after a check, as each case notes.\n",
              f"**{passed}/{len(rows)} as expected.**\n",
              "| Case | Expected | Actual | Certification | Time | Right action? |", "|---|---|---|---|---|---|"]

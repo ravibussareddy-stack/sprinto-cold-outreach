@@ -57,7 +57,7 @@
     </form>
     <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap">
       <button class="btn primary" id="run">Run case</button>
-      <span class="muted small" id="state">Takes about 30-60 seconds.</span>
+      <span class="muted small" id="state">Takes about 60-80 seconds.</span>
     </div>
     <p class="muted small" style="margin-top:14px">Automated tests: <code>POST /api/run_case</code> with
       <code>{"domain": "atlan.com", "contact": {"first_name": "Priya", "email": "priya@atlan.com", "title": "CTO"}, "send": false}</code>.
@@ -95,7 +95,7 @@ dash.nav("test");
     { el: "#who", title: "2. Who to write to", text: "Supply a contact, or let it find a decision-maker with Hunter. It only looks once the company qualifies, to save searches." },
     { el: "#send", title: "3. Draft or send", text: "Off by default: you get the draft only. On: it is emailed to our own test inbox, never the prospect, and replies are then handled automatically." },
     { el: "#criteria-card", title: "4. What to expect", text: "The live rules. Certified companies stop as Dormant with the evidence shown, so a short answer is often the right one." },
-    { el: "#run", title: "5. Run it", text: "About 30-60 seconds. The result shows the decision, the score line by line, the certification evidence with sources, the contact, the pain points and the email, plus the raw JSON." }];
+    { el: "#run", title: "5. Run it", text: "About 60-80 seconds. The result shows the decision, the score line by line, the certification evidence with sources, the contact, the pain points and the email, plus the raw JSON." }];
   document.getElementById("tour-btn").addEventListener("click", function () { dash.tour(TOUR, "tour-test"); });
   if (!dash.tourSeen("tour-test")) setTimeout(function () { dash.tour(TOUR, "tour-test"); }, 900);
   var who = "given";
@@ -149,7 +149,7 @@ dash.nav("test");
                         (p.source_url ? " " + link(p.source_url) : "") + "<br><span class=\"muted\">Hypothesis:</span> " + E(p.why || "-") + "</li>"; }))],
                     ["Draft checks", out.quality ? E(out.quality.passed + "/" + out.quality.total + " draft checks (structure and style only)") +
                       (out.quality.failed && out.quality.failed.length ? " - failed: " + E(out.quality.failed.join(", ")) : "") : "-"],
-                    ["Disagreement", out.disagreement ? E(out.disagreement.score + "/100" + (out.disagreement.needs_review ? " (needs review)" : "")) : "not scored in fast mode"],
+                    ["Disagreement", out.disagreement ? E(out.disagreement.score + "/100" + (out.disagreement.needs_review ? " (needs review)" : "")) : "not computed"],
                     ["Sent", out.email ? E(out.email.sent ? "yes, to " + out.email.sent_to + " (test inbox)" : "no, draft only") : "-"],
                     ["Warnings", list((out.warnings || []).map(li))],
                     ["Error", out.error ? E(out.error.code + ": " + out.error.message) : "none"]];
