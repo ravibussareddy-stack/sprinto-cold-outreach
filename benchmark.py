@@ -39,7 +39,7 @@ CASES = [
      "expect_decision": {"DORMANT"}, "expect_http": 200, "right_action": "no email",
      "note": "First written as QUALIFIED; corrected after the run showed its security page claims ISO 27001:2022. "
              "The earlier QUALIFIED result had the same bug as PostHog. Dormant before contact lookup, so no Hunter credit is spent."},
-    {"name": "Too little evidence to write (Qandle: no security page, score 20)",
+    {"name": "Acquired, little evidence (Qandle: now part of MYND, no security page)",
      "body": {"domain": "qandle.com", "contact": STAND_IN, "send": False},
      "expect_decision": {"MANUAL_REVIEW", "DISQUALIFIED"}, "expect_http": 200, "right_action": "no email"},
     {"name": "Poor fit: not B2B SaaS / public (Zomato)",
