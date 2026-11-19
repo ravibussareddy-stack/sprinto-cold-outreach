@@ -31,9 +31,9 @@ def send(subject: str, body: str, intended_name: str, intended_email: str,
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
         msg["References"] = in_reply_to
-    msg["X-Intended-Recipient"] = f"{intended_name} <{intended_email}>"
-    msg.set_content(f"{body}\n\n---\n[Pipeline test send. Intended recipient: "
-                    f"{intended_name} <{intended_email}>]")
+    who = f"{intended_name} <{intended_email}>" if intended_email else f"{intended_name} (email not given)"
+    msg["X-Intended-Recipient"] = who
+    msg.set_content(f"{body}\n\n---\n[Pipeline test send. Intended recipient: {who}]")
     if attachment:
         fname, data, maintype, subtype = attachment
         msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=fname)
