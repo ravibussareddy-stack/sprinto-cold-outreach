@@ -150,7 +150,7 @@ def result_for(rec: dict, case: dict, run_id, warnings: list[str]) -> dict:
             "pages_read": rec.get("pages_read", []),
             "certification": q.get("certification"),
             "firmographics": (q.get("firmographics") or {}) | ({"employees_hunter": rec["company_size_hunter"]}
-                                                                if rec.get("company_size_hunter") else {}),
+                                                                if (rec.get("company_size_hunter") or {}).get("headcount") else {}),
         },
         "contact": None if "first_name" not in poc else {
             "first_name": poc.get("first_name"), "last_name": poc.get("last_name"), "email": poc.get("email"),
