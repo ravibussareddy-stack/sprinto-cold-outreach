@@ -13,7 +13,7 @@ COL_W = (W - ACTOR_W - 4) / 6
 # actor, role, band tint, box fill, box border
 ACTORS = [
     ("Growth Lead", "(User, Sprinto)", "#eef0fe", "#e3e6fd", "#5b5bd6"),
-    ("Scheduler", "(GitHub cron)", "#f1f3f6", "#e6e9ee", "#5b6777"),
+    ("Cron scheduler", "(cron-job.org)", "#f1f3f6", "#e6e9ee", "#5b6777"),
     ("Dashboard / API", "(Vercel)", "#eef5fe", "#dfeafd", "#3b73d9"),
     ("News crawler", "(5 RSS feeds)", "#eefaf6", "#d6f3e9", "#22966f"),
     ("Web research", "(Scraper)", "#eefaf2", "#dcf5e4", "#3aa55c"),
@@ -34,7 +34,7 @@ GATE_ROW = 11
 STEPS = {
     "add":      (0, 0, ["Adds a contact or", "runs a test case"]),
     "rulings":  (0, 2, ["Feedback, rulings,", "portfolio (Questions,", "Offerings pages)"]),
-    "cron":     (1, 0, ["Every 5 min: replies;", "hourly: news feeds;", "daily: re-research"]),
+    "cron":     (1, 0, ["Every minute: replies;", "hourly: news; daily:", "re-research (+ backups)"]),
     "input":    (2, 1, ["Receives domain", "+ contact"]),
     "news":     (3, 1, ["Funding news from", "TechCrunch, Inc42 ...", "matched to companies"]),
     "research": (4, 2, ["Site, sitemap, security", "and press pages;", "digs deeper if unknown"]),
@@ -46,8 +46,8 @@ STEPS = {
     "checks":   (10, 5, ["15 draft checks,", "critic (not generic),", "fact check"]),
     "gate":     (11, 5, ["Reviews flagged", "drafts; Send"]),
     "send":     (12, 5, ["Sends to own inbox", "with the deck"]),
-    "reply":    (12, 0, ["Inbox checked every", "5 min: prospect replies", "(or stays silent)"]),
-    "read":     (13, 3, ["Reads the reply within", "5 min, decides; follow-up", "timers 3-3-2 days"]),
+    "reply":    (12, 0, ["Inbox checked every", "minute: prospect replies", "(or stays silent)"]),
+    "read":     (13, 3, ["Reads the reply within", "a minute, decides; follow-", "up timers 3-3-2 days"]),
     "followup": (13, 4, ["Follow-ups, meeting", "times, Calendly booking"]),
     "learn":    (13, 5, ["Learns from outcomes:", "lessons to the repo,", "rubric tunes itself"]),
     "book":     (14, 5, ["Books the agreed time;", "invite on your Google", "Calendar (.ics fallback)"]),
