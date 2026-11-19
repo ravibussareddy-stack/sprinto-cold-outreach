@@ -258,8 +258,9 @@ def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
                                                   f"(a compliance programme exists; Sprinto adds the core frameworks)")
     elif not has_soc2 and not has_iso:
         read = [pg["url"] for pg in pages if is_security_page(pg["url"])]
-        pts += gap["no_soc2_or_iso"]; why.append(f"+{gap['no_soc2_or_iso']} no SOC 2 / ISO 27001 claimed on "
-                                                  f"{read[0] if read else 'its security page'} (greenfield)")
+        where = "(you confirmed neither on the Questions page)" if questions.ANSWER_PAGE in read else \
+            f"claimed on {read[0] if read else 'its security page'}"
+        pts += gap["no_soc2_or_iso"]; why.append(f"+{gap['no_soc2_or_iso']} no SOC 2 / ISO 27001 {where} (greenfield)")
     elif not (has_soc2 and has_iso):
         pts += gap["holds_one"]; why.append(f"+{gap['holds_one']} holds {'SOC 2' if has_soc2 else 'ISO 27001'} only - expansion to "
                                             f"{'ISO 27001' if has_soc2 else 'SOC 2'} + continuous monitoring")

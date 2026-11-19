@@ -28,7 +28,7 @@ def test_without_an_answer_certification_stays_unknown(monkeypatch):
 def test_answer_neither_earns_the_greenfield_points(monkeypatch):
     res = run(monkeypatch, {"certs:acme.io": "none"})
     assert res["certification"]["status"] == "none_found"
-    assert any(r.startswith("+20 no SOC 2 / ISO 27001 claimed on answer://you/security") for r in res["score_reasons"]), res["score_reasons"]
+    assert any(r.startswith("+20 no SOC 2 / ISO 27001 (you confirmed neither") for r in res["score_reasons"]), res["score_reasons"]
 
 
 def test_answer_soc2_makes_it_dormant(monkeypatch):
