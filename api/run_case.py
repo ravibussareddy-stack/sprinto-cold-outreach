@@ -8,7 +8,9 @@ from http.server import BaseHTTPRequestHandler
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
-os.environ.setdefault("REPLY_MODE", "file")       # test cases: no follow-up conversations
+# Emails this endpoint sends become real conversations: replies are read from Gmail and answered by the
+# reply checker (cron), with follow-ups on the rubric's timers. Everything still goes only to SEND_TO.
+os.environ.setdefault("REPLY_MODE", "gmail")
 
 import case_api  # noqa: E402
 

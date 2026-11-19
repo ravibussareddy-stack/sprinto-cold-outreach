@@ -179,6 +179,9 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None, fa
         if config.REPLY_MODE == "gmail" and do_send and db.enabled():
             # Real replies: save the conversation and let check_replies.py continue it.
             thread_id, state, _ = meeting.start(ctx)
+            closed = db.supersede_threads(domain)
+            if closed:
+                log(f"  closed {closed} older open conversation(s) with {domain}")
             db.save_thread(thread_id, domain, draft.subject,
                            {"domain": domain, "contact_name": ctx.contact_name,
                             "contact_email": ctx.contact_email, "company": ctx.company,

@@ -223,6 +223,15 @@ def save_thread(thread_id: str, domain: str, subject: str, ctx: dict):
                   (thread_id, domain, subject, Json(ctx)))
 
 
+def supersede_threads(domain: str) -> int:
+    """A new cold email to a company closes its older open conversations, so one reply is never
+    answered twice (re-runs of the same company use the same kind of subject)."""
+    _init()
+    with _conn() as c:
+        return c.execute("UPDATE threads SET status='done', outcome='superseded', updated_at=now() "
+                         "WHERE domain=%s AND status='awaiting'", (domain,)).rowcount
+
+
 def awaiting_threads() -> list[dict]:
     _init()
     with _conn() as c:
