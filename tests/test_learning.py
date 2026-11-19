@@ -118,3 +118,8 @@ def test_sign_off_always_ends_with_the_exact_sender_lines():
     out = writer.fix_sign_off(body, "Ravi Bussareddy, Sprinto")
     assert out.endswith("Best regards,\nRavi Bussareddy\nSprinto")
     assert writer.fix_sign_off(out, "Ravi Bussareddy, Sprinto") == out          # idempotent
+
+
+def test_sign_off_adds_the_company_when_the_sender_name_lacks_it():
+    out = writer.fix_sign_off("Hi?\n\nBest regards,\nRavi", "Ravi Bussareddy")
+    assert out.endswith("Best regards,\nRavi Bussareddy\nSprinto")

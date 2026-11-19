@@ -194,7 +194,7 @@ def _fmt_day(iso_date: str) -> str:
 def _sign_off(sender_name: str) -> str:
     # "Ravi Bussareddy, Sprinto" -> name and company on separate lines, as in the cold email.
     # The sign-off phrase follows the feedback repo (e.g. "Best regards,"), default "Kind regards,".
-    return writer.preferred_sign_off(_guidance()) + "\n" + sender_name.replace(", ", "\n")
+    return writer.preferred_sign_off(_guidance()) + "\n" + "\n".join(writer.sender_lines(sender_name))
 
 
 def _propose_body(first: str, slots: list[str], sender_name: str, ack: str | None = None) -> str:

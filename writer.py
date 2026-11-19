@@ -209,7 +209,15 @@ def fix_sign_off(body: str, sender_name: str) -> str:
                 if SIGN_OFF_RE.match(lines[i].strip()) and len(lines[i].strip()) < 25), None)
     if idx is None or not sender_name:
         return body
-    return "\n".join(lines[:idx + 1] + [x.strip() for x in sender_name.split(",") if x.strip()])
+    return "\n".join(lines[:idx + 1] + sender_lines(sender_name))
+
+
+def sender_lines(sender_name: str) -> list[str]:
+    """"Ravi Bussareddy, Sprinto" -> ["Ravi Bussareddy", "Sprinto"]; the company is added if missing."""
+    who = [x.strip() for x in (sender_name or "").split(",") if x.strip()]
+    if not any("sprinto" in x.lower() for x in who):     # SENDER_NAME may be just the person's name
+        who.append("Sprinto")
+    return who
 
 
 def fix_subject(subject: str) -> str:
