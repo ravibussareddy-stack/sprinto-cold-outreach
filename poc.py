@@ -10,6 +10,7 @@ certification and feels the pain of security questionnaires:
   * 50-200 people -> CTO / VP Eng, unless a security/compliance lead exists
   * > 200 people  -> Head of Security / CISO / GRC / Compliance lead first
 """
+import datetime as dt
 import json
 import os
 import re
@@ -17,6 +18,7 @@ import re
 import requests
 
 import config
+import db
 from retry import PermanentError, with_retry
 
 OVERRIDES_FILE = os.path.join(os.path.dirname(__file__), "poc_overrides.json")
@@ -69,9 +71,24 @@ def find_poc(domain: str, employee_estimate: int | None) -> dict:
     if not config.HUNTER_API_KEY:
         return {"error": "no HUNTER_API_KEY and no entry in poc_overrides.json"}
 
+    # Hunter's free tier is 25 searches a month: reuse a cached result, and stop at the monthly cap.
+    cache_key = f"hunter-dm://{domain}"      # decision-maker search (department + seniority filters)
+    cached = db.get_cached_page(cache_key)
+    if cached is not None:
+        return _choose(cached.get("emails", []), employee_estimate, cached_result=True)
+    month = dt.date.today().strftime("%Y-%m")
+    usage = db.get_setting("hunter_usage") or {}
+    used = usage.get("count", 0) if usage.get("month") == month else 0
+    if used >= config.HUNTER_MONTHLY_LIMIT:
+        return {"error": f"Hunter monthly limit reached ({used} of {config.HUNTER_MONTHLY_LIMIT} searches this month)"}
+
     def _call():
+        # The free tier returns 10 people per search: ask for decision-makers only, or the 10 slots
+        # fill up with sales and support staff (seen on atlan.com).
         r = requests.get("https://api.hunter.io/v2/domain-search",
-                         params={"domain": domain, "api_key": config.HUNTER_API_KEY, "limit": 10},
+                         params={"domain": domain, "api_key": config.HUNTER_API_KEY, "limit": 10,
+                                 "department": "executive,it,management,operations,legal",
+                                 "seniority": "senior,executive"},
                          timeout=20)
         if r.status_code == 200:
             return r
@@ -86,8 +103,14 @@ def find_poc(domain: str, employee_estimate: int | None) -> dict:
         return {"error": str(e)}
     except requests.RequestException as e:
         return {"error": f"hunter unreachable after retries: {e}"}
+    db.put_setting("hunter_usage", {"month": month, "count": used + 1})
     people = r.json().get("data", {}).get("emails", [])
+    db.put_cached_page(cache_key, {"emails": people})
+    return _choose(people, employee_estimate)
 
+
+def _choose(people: list[dict], employee_estimate: int | None, cached_result: bool = False) -> dict:
+    """Pick the person who owns security / compliance outcomes at this company size."""
     ranked = []
     for p in people:
         if not (p.get("first_name") and p.get("value")):
@@ -107,7 +130,7 @@ def find_poc(domain: str, employee_estimate: int | None) -> dict:
         "first_name": best["first_name"], "last_name": best.get("last_name") or "",
         "email": best["value"], "title": best.get("position"),
         "linkedin": best.get("linkedin"), "confidence": best.get("confidence"),
-        "source": "hunter.io",
+        "source": "hunter.io" + (" (cached)" if cached_result else ""),
         "why": (f"Company size band {size_band}: chose '{best.get('position')}' as the person who owns "
                 f"security/compliance outcomes at this stage (ranked {len(ranked)} senior candidates "
                 f"out of {len(people)} contacts; Hunter confidence {best.get('confidence')}%)."),

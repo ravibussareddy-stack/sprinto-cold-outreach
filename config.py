@@ -29,6 +29,7 @@ NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL") or os.getenv("DATABASE_URL", 
 
 # --- Credentials -----------------------------------------------------------
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "")
+HUNTER_MONTHLY_LIMIT = int(os.getenv("HUNTER_MONTHLY_LIMIT", "25"))   # free tier: 25 searches a month
 GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS", "")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
 # Case rule: the "to:" address is hard-coded to YOUR OWN inbox.

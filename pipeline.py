@@ -36,7 +36,12 @@ def log(msg):
     print(msg, flush=True)
 
 
-def process(domain: str, do_send: bool, sender_name: str, contact: dict | None = None) -> dict:
+class _SkipScoring(Exception):
+    """Fast mode: skip the disagreement score."""
+
+
+def process(domain: str, do_send: bool, sender_name: str, contact: dict | None = None, fast: bool = False) -> dict:
+    """fast=True (test API default): no disagreement scoring, at most 2 extra page fetches, no polish retry."""
     """Run one company. Any unexpected error is recorded on the company and the
     batch carries on (degrade gracefully: log the reason, move on)."""
     t0 = time.time()
@@ -47,7 +52,7 @@ def process(domain: str, do_send: bool, sender_name: str, contact: dict | None =
         log("  PAUSED: " + budget.pause_message(b))
         return rec | {"status": "PAUSED", "error": budget.pause_message(b), "budget": b, "seconds": 0.0}
     try:
-        return _process(domain, do_send, sender_name, rec, t0, contact)
+        return _process(domain, do_send, sender_name, rec, t0, contact, fast)
     except Exception as e:
         log(f"  ERROR: {e}")
         rec.update(status="ERROR", error=f"{type(e).__name__}: {e}",
@@ -55,21 +60,24 @@ def process(domain: str, do_send: bool, sender_name: str, contact: dict | None =
         return rec
 
 
-def _process(domain, do_send, sender_name, rec, t0, contact=None):
+def _process(domain, do_send, sender_name, rec, t0, contact=None, fast=False):
     llm.context["domain"] = domain               # token use is recorded per company
+    llm.context["fast"] = fast
     tokens_before = (llm.usage_log["input_tokens"], llm.usage_log["output_tokens"])
     try:
-        return _process_inner(domain, do_send, sender_name, rec, t0, contact)
+        return _process_inner(domain, do_send, sender_name, rec, t0, contact, fast)
     finally:
+        llm.context["fast"] = False
         rec["usage"] = {"input_tokens": llm.usage_log["input_tokens"] - tokens_before[0],
                         "output_tokens": llm.usage_log["output_tokens"] - tokens_before[1]}
 
 
-def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
+def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None, fast=False):
+    rec["mode"] = "fast" if fast else "full"
 
     # Steps 1-3: scrape, extract, qualify (with loop)
     try:
-        q = qualify(domain, log)
+        q = qualify(domain, log, max_extra=2 if fast else None)
     except Exception as e:  # degrade gracefully, never kill the batch
         rec.update(status="ERROR", error=f"qualify: {e}")
         return rec
@@ -112,7 +120,7 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
     examples = feedback.exemplars(contact.get("title"))
     if guidance or examples:
         log(f"  using {len(guidance)} lesson(s) and {len(examples)} winning email(s) from the feedback repo")
-    draft, problems = writer.draft_email(profile, contact, pains, sender_name,
+    draft, problems = writer.draft_email(profile, contact, pains, sender_name, soft_retry=not fast,
                                          guidance=guidance, exemplars=examples)
     rec["email"] = draft.model_dump()
     rec["email_check_failures"] = problems
@@ -128,6 +136,8 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
 
     # Disagreement score (build 1: reported only; build 2 holds drafts above a threshold)
     try:
+        if fast:
+            raise _SkipScoring()
         structure_failures = quality["failed"] + [p for p in problems if p not in quality["failed"]]
         rec["disagreement"] = disagreement.assess(draft.body, profile.model_dump_json(), structure_failures)
         log(f"  disagreement: {rec['disagreement']['score']}/100 {rec['disagreement']['parts']}")
@@ -135,6 +145,9 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
         rec["needs_review"] = rec["disagreement"]["score"] > threshold
         if rec["needs_review"]:
             log(f"  -> above {threshold}: added to the review queue on the dashboard")
+    except _SkipScoring:
+        rec["disagreement"] = {"skipped": "fast mode: run with mode=full for the disagreement score"}
+        log("  disagreement: skipped (fast mode)")
     except Exception as e:
         rec["disagreement"] = {"error": f"{type(e).__name__}: {e}"}
         log(f"  disagreement: not computed ({e})")

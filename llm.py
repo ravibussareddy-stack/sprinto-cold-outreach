@@ -13,7 +13,7 @@ _key_index = 0         # current key; advances when a key runs out of quota
 usage_log = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
 # Per-call token reporting: set on_usage (e.g. db.record_usage) and context["domain"];
 # each call reports (domain, purpose = the output schema's name, model, tokens in, tokens out).
-context = {"domain": None}
+context = {"domain": None, "fast": False}   # fast: low thinking level (about 3x quicker per call)
 on_usage = None
 
 
@@ -66,6 +66,7 @@ def ask(schema, system: str, user: str, max_output_tokens: int = 8000, temperatu
             response_schema=schema,
             max_output_tokens=max_output_tokens,
             temperature=temperature,
+            **({"thinking_config": types.ThinkingConfig(thinking_level="low")} if context.get("fast") else {}),
         ),
     )
     usage_log["calls"] += 1

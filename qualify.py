@@ -175,7 +175,10 @@ def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
 
 
 # ---------------------------------------------------------------- the loop
-def qualify(domain: str, log) -> dict:
+def qualify(domain: str, log, max_extra: int | None = None) -> dict:
+    """max_extra caps the extra fetches below the rubric's limit (fast mode)."""
+    cap = rubric.get("evidence_loop", "max_extra_fetches") if max_extra is None else \
+        min(max_extra, rubric.get("evidence_loop", "max_extra_fetches"))
     url = domain if domain.startswith("http") else f"https://{domain}"
     home = scraper.fetch(url)
     trace = [{"fetch": url, "ok": home["ok"], "method": home["method"], "error": home["error"]}]
@@ -197,7 +200,7 @@ def qualify(domain: str, log) -> dict:
                     "certs_held": sorted(named_certs(profile, pages)),
                     "profile": profile, "pages": pages, "trace": trace}
         missing = missing_facts(profile, pages)
-        if not missing or extra >= rubric.get("evidence_loop", "max_extra_fetches"):
+        if not missing or extra >= cap:
             break
         # Fetch for the highest-value missing fact; stage first (most decisive).
         # Each question has its own fetch limit from the evidence map.
@@ -215,7 +218,7 @@ def qualify(domain: str, log) -> dict:
         tried.add(nxt); extra += 1
         pg = scraper.fetch(nxt)
         trace.append({"fetch": nxt, "for": q, "ok": pg["ok"], "method": pg["method"], "error": pg["error"]})
-        log(f"  loop {extra}/{rubric.get("evidence_loop", "max_extra_fetches")}: need {q} -> {nxt} ({'ok' if pg['ok'] else pg['error']})")
+        log(f"  loop {extra}/{cap}: need {q} -> {nxt} ({'ok' if pg['ok'] else pg['error']})")
         if pg["ok"]:
             pages.append(pg)
             profile = extract_profile(domain, pages)

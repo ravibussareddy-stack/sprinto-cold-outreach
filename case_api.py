@@ -7,7 +7,9 @@ Input (JSON). One case:
         "first_name": "Priya", "last_name": "Sharma",   # or "name": "Priya Sharma"
         "email": "priya@atlan.com", "title": "CTO"
       },
-      "send": true                                 # optional, default true: email the draft to SEND_TO
+      "send": true,                                # optional, default true: email the draft to SEND_TO
+      "mode": "fast"                               # optional: "fast" (default, ~30-60s: no disagreement score,
+                                                   # at most 2 extra page fetches) or "full" (everything)
     }
 Several cases: {"cases": [ {...}, {...} ]}  (up to MAX_CASES per request).
 Aliases accepted: "website" / "url" / "company_domain" for domain; "poc" for contact.
@@ -38,6 +40,7 @@ INPUT_FORMAT = {
         "contact": {"first_name": "Priya", "last_name": "Sharma", "email": "priya@atlan.com",
                     "title": "CTO", "note": "optional; 'name' may replace first/last"},
         "send": "true | false (optional, default true: emails the draft to the configured inbox)",
+        "mode": "fast | full (optional, default fast: skips the disagreement score and caps extra page fetches)",
     },
     "many_cases": {"cases": ["<case>", "<case>"], "max": MAX_CASES},
 }
@@ -94,7 +97,10 @@ def parse_case(raw) -> tuple[dict | None, dict | None]:
     send = raw.get("send", True)
     if not isinstance(send, bool):
         return None, _err("invalid_send", "send must be true or false", "send")
-    return {"domain": domain, "contact": contact, "send": send}, None
+    mode = raw.get("mode", "fast")
+    if mode not in ("fast", "full"):
+        return None, _err("invalid_mode", "mode must be fast or full", "mode")
+    return {"domain": domain, "contact": contact, "send": send, "mode": mode}, None
 
 
 def parse_request(body) -> tuple[list[dict] | None, dict | None]:
@@ -156,6 +162,7 @@ def result_for(rec: dict, case: dict, run_id, warnings: list[str]) -> dict:
             {k: rec["quality"][k] for k in ("passed", "total", "failed")},
         "disagreement": None if "score" not in d else {"score": d["score"], "parts": d.get("parts"),
                                                         "needs_review": bool(rec.get("needs_review"))},
+        "mode": rec.get("mode") or case.get("mode", "fast"),
         "run_id": run_id,
         "seconds": rec.get("seconds"),
         "warnings": warnings,
@@ -186,7 +193,8 @@ def run_cases(body) -> tuple[int, dict]:
             warnings.append("send requested but Gmail is not configured on this server; the draft was not sent")
         t0 = time.time()
         try:
-            rec = pipeline.process(case["domain"], do_send, config_sender_name(), contact=case["contact"])
+            rec = pipeline.process(case["domain"], do_send, config_sender_name(), contact=case["contact"],
+                                   fast=case.get("mode", "fast") == "fast")
         except Exception as e:                    # process() already catches; this is a last line of defence
             rec = {"domain": case["domain"], "status": "ERROR", "error": f"{type(e).__name__}: {e}"}
         rec.setdefault("seconds", round(time.time() - t0, 1))

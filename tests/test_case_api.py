@@ -2,6 +2,8 @@
 import case_api
 import pipeline
 
+CALLS = []
+
 
 def test_domain_normalisation():
     assert case_api.normalise_domain("https://www.Atlan.com/about?x=1") == "atlan.com"
@@ -35,7 +37,8 @@ def test_aliases_and_name_split():
 
 
 def _fake(status, **extra):
-    def run(domain, do_send, sender, contact=None):
+    def run(domain, do_send, sender, contact=None, fast=False):
+        CALLS.append(fast)
         rec = {"domain": domain, "status": status, "seconds": 1.0,
                "qualification": {"decision": extra.get("decision", "QUALIFIED"), "score": 60, "reason": "fit"}}
         if contact:
@@ -94,3 +97,17 @@ def test_unreachable_site_has_its_own_code(monkeypatch):
                                                   rec={"qualification": {"decision": "FAILED", "reason": "homepage unreachable"}}))
     status, out = case_api.run_cases({"domain": "nope-nope-nope.com", "send": False})
     assert status == 200 and out["error"]["code"] == "site_unreachable" and "unreachable" in out["error"]["message"]
+
+
+
+def test_mode_defaults_to_fast_and_can_be_full(monkeypatch):
+    monkeypatch.setattr(case_api.db, "save_run", lambda rec: None)
+    monkeypatch.setattr(pipeline, "process", _fake("DORMANT", decision="DORMANT"))
+    CALLS.clear()
+    status, out = case_api.run_cases({"domain": "plane.so", "send": False})
+    assert status == 200 and CALLS == [True] and out["mode"] == "fast"
+    CALLS.clear()
+    status, out = case_api.run_cases({"domain": "plane.so", "send": False, "mode": "full"})
+    assert CALLS == [False] and out["mode"] == "full"
+    status, out = case_api.run_cases({"domain": "plane.so", "mode": "turbo"})
+    assert status == 400 and out["error"]["code"] == "invalid_mode"
