@@ -151,7 +151,7 @@ dash.nav("emails");
       E(x.disagreement == null ? "-" : x.disagreement + "/100") + "</span></div>" +
       '<div class="muted small">structure ' + E(parts.structure != null ? parts.structure : (parts.rules || 0)) + " \u00b7 wrong info " +
       E(parts.wrong_info != null ? parts.wrong_info : (parts.claims || 0)) + " \u00b7 judge " + E(parts.judge || 0) +
-      (x.quality ? " \u00b7 quality " + E(x.quality) : "") + "</div>" +
+      (x.quality ? " \u00b7 draft checks " + E(x.quality) : "") + "</div>" +
       (x.wrong_info && x.wrong_info.length ? '<div class="small" style="margin-top:6px"><b>Unsupported:</b> ' + E(x.wrong_info.join("; ")) + "</div>" : "") +
       '<p style="margin:10px 0 4px"><b>' + E(x.subject || "") + '</b></p><pre class="body small">' + E(x.body || "") + "</pre>" +
       (x.run_id ? '<a class="small" href="draft.html?id=' + E(x.run_id) + '">open run ' + E(x.run_id) + "</a>" : "") + "</div>";

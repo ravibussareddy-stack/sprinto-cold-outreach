@@ -1,5 +1,29 @@
 # Sprinto - Cold Outreach, at Scale (MESA T2 · AI Case 2)
 
+## For evaluators: start here
+
+| | Link |
+|---|---|
+| Run a test case (form) | https://sprinto-cold-outreach-web.vercel.app/test.html |
+| Test API | `POST https://sprinto-cold-outreach-web.vercel.app/api/run_case` (`GET` returns the input format) |
+| Dashboard | https://sprinto-cold-outreach-web.vercel.app/ |
+| Repository | https://github.com/ravibussareddy-stack/sprinto-cold-outreach |
+| Demo video | _link added at submission_ |
+
+```bash
+curl -s -X POST https://sprinto-cold-outreach-web.vercel.app/api/run_case \
+  -H 'content-type: application/json' \
+  -d '{"domain": "atlan.com", "contact": {"first_name": "Priya", "last_name": "Sharma", "email": "priya@atlan.com", "title": "CTO"}, "send": false}'
+```
+
+**Active qualification policy (the one the deployed app uses):** a company that **itself** holds any named
+certification (SOC 2, ISO 27001, HIPAA, PCI DSS...; GDPR is a regulation and does not count) is **DORMANT** -
+no email, re-engaged only if a new certificate appears. Mentions about customers ("we help you get SOC 2") or
+vendors ("hosted on AWS, SOC 2 audited") never count. Certification status has three states - *confirmed*,
+*in progress*, *unknown* - and greenfield points are given only after a security or trust page has been read
+and shows no claim. The other policies on the **Filters & rubric** page (only SOC 2 + ISO 27001, or never) are
+configurable alternatives, not the submission default. Benchmark on fresh companies: [`BENCHMARK.md`](BENCHMARK.md).
+
 A repeatable 7-step pipeline. Give it a list of domains, and for each one it:
 
 1. **Scrapes** the site (single-fetch, robots.txt respected, cached, Jina Reader fallback for JS-only/blocked pages)
@@ -33,10 +57,10 @@ Gmail needs an **App Password** (Google Account → Security → 2-Step Verifica
 
 Sprinto sells automated SOC 2 / ISO 27001 / GDPR compliance to SaaS companies. Buyers convert when **(a)** they sell B2B SaaS, **(b)** they're at the stage where enterprise deals start requiring a security report (Series A–C, ~20–500 people), and **(c)** they don't yet have the certification, or have one and need a second framework.
 
-**Hard disqualifiers (short-circuit, stop early)**
-- Not B2B SaaS
-- Already holds **both** SOC 2 and ISO 27001 (no gap to sell into)
-- Public company or >1,000 employees (in-house GRC team or enterprise GRC tooling)
+**Short-circuits (stop early)**
+- Not B2B SaaS → DISQUALIFIED
+- Already holds **any** named certification itself → DORMANT (active policy; see above)
+- Public company or >1,000 employees → DISQUALIFIED (in-house GRC team or enterprise GRC tooling)
 
 **Score (0–100, computed in code so every point is explainable)**
 
@@ -53,8 +77,9 @@ Sprinto sells automated SOC 2 / ISO 27001 / GDPR compliance to SaaS companies. B
 | | Hiring security/compliance roles | 10 |
 | | Certification "in progress" | 10 |
 | | Recent trigger (funding, expansion, big win) | 5 |
-| Certification gap (max 20) | No SOC 2 / ISO claimed | 20 |
-| | Holds one of the two (expansion) | 10 |
+| Certification gap (max 20) | No SOC 2 / ISO claimed **on a security or trust page that was read** | 20 |
+| | Status unknown (no security/trust page found) or a compliance tool already in use (Vanta, Drata...) | 0, flagged |
+| | Holds one of the two (only reachable under the "SOC 2 + ISO 27001" alternative policy) | 10 |
 
 **≥50 and stage known → QUALIFIED.** 35–49, or stage still unknown after the loop → **QUALIFIED_FLAGGED** (lower rank, review before any real send). <35 → **DISQUALIFIED**. SaaS status unknown → **MANUAL_REVIEW**.
 
@@ -62,7 +87,7 @@ Sprinto sells automated SOC 2 / ISO 27001 / GDPR compliance to SaaS companies. B
 
 | Question | Sufficient when (checked in code) | Where it lives | Limit | If unanswered | Short-circuit |
 |---|---|---|---|---|---|
-| Already certified? | cert string found (incl. footer badges/alt text via regex) or trust page read | footer, /security, /trust | 1 | treat as not certified | both SOC 2 + ISO → stop |
+| Already certified? (fetched **first**) | the company's own claim found (each mention attributed to self / customers / vendor, with sentence and URL) or a security/trust page read | /security, /trust, trust.&lt;domain&gt;, footer badges | 1 | **unknown**: no greenfield points, flagged | any named cert → DORMANT |
 | B2B SaaS? | `is_b2b_saas` set and buyer named | hero, /about, /product | 1 | manual review | not SaaS → stop |
 | Right stage? | funding stage, ≥5 open roles, enterprise tier, or headcount | /careers (incl. Greenhouse/Lever/Ashby), /pricing, /customers | 2 | qualify flagged | Public/huge → stop |
 | **Worst case** | 4 fetches beyond the homepage | | | | |
@@ -171,7 +196,8 @@ Every qualification filter and point value lives in `lib/rubric_defaults.json`. 
 ```
 
 - `domain` is required (a URL also works; aliases `website`, `url`, `company_domain`). `contact` is optional (`name` may replace first/last; alias `poc`); without it the pipeline looks the contact up. `send` defaults to true. Several cases: `{"cases": [...]}` (up to 3).
-- Response: `status`, `decision`, `qualified`, `company` (fit score, reason, score reasons, flags, pages read), `contact`, `pain_points`, `email` (subject, body, addressed_to, hook, sent, sent_to, intended_recipient), `quality`, `disagreement`, `run_id`, `seconds`, `warnings`, `error`.
+- Response: `status`, `decision`, `qualified`, `company` (fit score, reason, score reasons, flags, pages read, `certification` = status, certificates held, security pages read, attributed evidence sentences with URLs, compliance tools in use), `contact`, `pain_points` (each with the researched evidence and its source URL), `email` (subject, body, addressed_to, hook, sent, sent_to, intended_recipient), `quality` (*draft checks*: structure and style only - facts are checked by the disagreement score in `mode: full`), `disagreement`, `run_id`, `seconds`, `warnings`, `error`.
+- Contact fields of the wrong type (e.g. a number for `first_name`) return **400** `invalid_contact` with the field path, e.g. `contact.first_name`.
 - Errors: invalid requests return **400** with `error.code` (`empty_body`, `invalid_json`, `missing_domain`, `invalid_domain`, `invalid_contact`, `invalid_send`, `too_many_cases`, ...) and nothing runs; wrong method **405**. Companies that cannot be processed still return **200** with a reason: `site_unreachable`, `no_contact_found`, `draft_failed_checks`, `pipeline_error`, or a `DISQUALIFIED` / `DORMANT` decision. The service never crashes on an input.
 - A run takes about 1-2 minutes (`maxDuration` 300s in `vercel.json`). Needs these Vercel env vars: `GEMINI_API_KEY1`(-3), `NEON_DATABASE_URL` (or `DATABASE_URL`), `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, `SEND_TO`, `SENDER_NAME`.
 

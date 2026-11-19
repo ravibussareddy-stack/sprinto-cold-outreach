@@ -154,10 +154,10 @@ module.exports = async (req, res) => {
     if (cur.conversations) highlights.push(`Engagement ${cur.engagement_rate == null ? "-" : pct(cur.engagement_rate)} across ${cur.conversations} conversation(s); ` +
       `${cur.booked} meeting(s) booked from ${cur.positive} positive repl${cur.positive === 1 ? "y" : "ies"}.`);
     if (cur.drafts) highlights.push(`${cur.drafts} draft(s): average disagreement ${cur.avg_disagreement == null ? "-" : Math.round(cur.avg_disagreement)}/100, ` +
-      `${cur.above_threshold} above ${threshold}` + (cur.avg_quality == null ? "." : `, ${pct(cur.avg_quality)} of quality checks passed.`));
+      `${cur.above_threshold} above ${threshold}` + (cur.avg_quality == null ? "." : `, ${pct(cur.avg_quality)} of draft checks passed.`));
     const certTop = Object.entries(certCounts).sort((a, b) => b[1] - a[1]);
     if (certTop.length) highlights.push(`Dormant companies most often hold ${certTop.slice(0, 3).map(([c, n]) => `${c} (${n})`).join(", ")}.`);
-    if (failedChecks.length) highlights.push(`Most-failed quality check: ${failedChecks[0].check_name} (${failedChecks[0].n} draft(s)).`);
+    if (failedChecks.length) highlights.push(`Most-failed draft check: ${failedChecks[0].check_name} (${failedChecks[0].n} draft(s)).`);
     if (cur.tokens) highlights.push(`Model cost about ₹${cur.est_cost_inr.toFixed(2)} (${cur.tokens.toLocaleString("en-IN")} tokens).`);
 
     let sendtimeInfo = null;

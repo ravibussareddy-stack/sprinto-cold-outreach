@@ -111,3 +111,13 @@ def test_mode_defaults_to_fast_and_can_be_full(monkeypatch):
     assert CALLS == [False] and out["mode"] == "full"
     status, out = case_api.run_cases({"domain": "plane.so", "mode": "turbo"})
     assert status == 400 and out["error"]["code"] == "invalid_mode"
+
+
+def test_contact_fields_of_the_wrong_type_are_400_not_500():
+    import case_api
+    for key, bad in [("first_name", 7), ("last_name", True), ("name", ["a"]), ("email", {"x": 1}), ("title", 3.5)]:
+        contact = {"first_name": "Priya", "email": "priya@acme.io"} | {key: bad}
+        cases, err = case_api.parse_request({"domain": "acme.io", "contact": contact})
+        assert cases is None and err["code"] == "invalid_contact" and err["field"] == f"contact.{key}", (key, err)
+    cases, err = case_api.parse_request({"domain": "acme.io", "contact": {"first_name": "Priya", "email": "priya@acme.io"}})
+    assert err is None and cases[0]["contact"]["first_name"] == "Priya"      # the next valid request still works

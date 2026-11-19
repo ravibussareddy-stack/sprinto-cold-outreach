@@ -69,6 +69,10 @@ def parse_contact(raw) -> tuple[dict | None, dict | None]:
         return None, None
     if not isinstance(raw, dict):
         return None, _err("invalid_contact", "contact must be an object", "contact")
+    for key in ("first_name", "last_name", "name", "email", "title"):     # type-check before any .strip()
+        if raw.get(key) is not None and not isinstance(raw[key], str):
+            return None, _err("invalid_contact", f"contact.{key} must be a string, got {type(raw[key]).__name__}",
+                              f"contact.{key}")
     first, last = (raw.get("first_name") or "").strip(), (raw.get("last_name") or "").strip()
     if not first and isinstance(raw.get("name"), str) and raw["name"].strip():
         parts = raw["name"].strip().split()
@@ -145,12 +149,14 @@ def result_for(rec: dict, case: dict, run_id, warnings: list[str]) -> dict:
             "score_reasons": q.get("score_reasons", []),
             "flags": q.get("flags", []),
             "pages_read": rec.get("pages_read", []),
+            "certification": q.get("certification"),
         },
         "contact": None if "first_name" not in poc else {
             "first_name": poc.get("first_name"), "last_name": poc.get("last_name"), "email": poc.get("email"),
             "title": poc.get("title"), "source": poc.get("source")},
         "pain_points": [{"title": p.get("title"), "why": p.get("why_this_person_feels_it"),
-                         "evidence": p.get("evidence_from_research"), "sprinto_angle": p.get("sprinto_angle")}
+                         "evidence": p.get("evidence_from_research"), "source_url": p.get("source_url"),
+                         "sprinto_angle": p.get("sprinto_angle")}
                         for p in (rec.get("pain_points") or {}).get("pain_points", [])],
         "email": None if not email else {
             "subject": email.get("subject"), "body": email.get("body"),
@@ -159,7 +165,9 @@ def result_for(rec: dict, case: dict, run_id, warnings: list[str]) -> dict:
             "sent": status == "SENT", "sent_to": config.SEND_TO if status == "SENT" else None,
             "intended_recipient": poc.get("email")},
         "quality": None if not rec.get("quality") else
-            {k: rec["quality"][k] for k in ("passed", "total", "failed")},
+            {k: rec["quality"][k] for k in ("passed", "total", "failed")} |
+            {"label": f"{rec['quality']['passed']}/{rec['quality']['total']} draft checks",
+             "note": "structure and style of the email only; facts are checked by the disagreement score (mode=full)"},
         "disagreement": None if "score" not in d else {"score": d["score"], "parts": d.get("parts"),
                                                         "needs_review": bool(rec.get("needs_review"))},
         "mode": rec.get("mode") or case.get("mode", "fast"),

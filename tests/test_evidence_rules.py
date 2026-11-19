@@ -48,6 +48,8 @@ def test_score_is_the_same_whether_or_not_model_copied_the_badge():
 
 def test_unanswered_certs_flags_the_company():
     stub_site(home_mentions=())
+    ok = scraper.fetch                              # no security or trust page exists on this site
+    qualify.scraper.fetch = lambda url: dict(ok(url), ok=False, error="404") if qualify.is_security_page(url) else ok(url)
     qualify.extract_profile = lambda d, pages: CompanyProfile(
         is_b2b_saas=True, buyer_type="CTOs", funding_stage="Series B", has_enterprise_tier=True,
         named_customers=["A", "B"], handles_sensitive_data=True)

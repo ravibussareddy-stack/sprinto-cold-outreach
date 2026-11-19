@@ -26,7 +26,16 @@ likely pain points this specific person feels about security compliance right
 now. Each must be grounded in a concrete fact from the profile (quote it in
 evidence_from_research). Prefer role-specific pains (a CTO loses engineering
 weeks to evidence collection; a CEO loses deals stuck in security review; a
-security lead drowns in questionnaires and spreadsheets). No generic pains."""
+security lead drowns in questionnaires and spreadsheets). No generic pains.
+
+Separate fact from hypothesis:
+- evidence_from_research: a fact the profile actually states, quoted closely, with
+  its source URL in source_url when the profile's evidence gives one.
+- why_this_person_feels_it: the sales hypothesis, worded as likely ("often",
+  "tends to", "likely"). Never state durations, effort or costs ("weeks of manual
+  work", "hours a week") unless the research says so.
+- If compliance_tool_used is set, they already run a compliance platform: the
+  pain is what that tool leaves undone, not a first audit."""
 
 EMAIL_EXAMPLES = """Example 1 (CTO, Series A fintech; hook: new enterprise plan)
 Subject: Ledgerly's first enterprise SOC 2 review
@@ -37,7 +46,7 @@ Hope you're doing well.
 
 Congratulations on launching Ledgerly's Enterprise plan last month. The first large customer usually asks for a SOC 2 report before the second meeting.
 
-For a team your size, that often means engineers spending weeks gathering evidence instead of shipping. Sprinto connects to your cloud and identity tools, collects that evidence automatically and gets companies audit-ready in weeks rather than months.
+For a team your size, that often means engineers gathering evidence instead of shipping. Sprinto connects to your cloud and identity tools, collects that evidence automatically and gets companies audit-ready in weeks rather than months.
 
 Would a 15-minute call next week be useful?
 
@@ -99,7 +108,9 @@ Rules:
   15-minute call next week be useful?", "Might it be worth a brief conversation?").
 - 75-125 words including the greeting. Plain text. No bullet lists, no emojis,
   no buzzwords ("synergy", "leverage", "revolutionise"), no fake familiarity.
-- Never invent facts, numbers or customer names not in the research.
+- Never invent facts, numbers or customer names not in the research. Never state
+  how long something takes them or how much effort it costs ("weeks of manual
+  work") unless the research says so; hedge or ask instead.
 - Describe Sprinto only with what the Sprinto description above says (e.g.
   "audit-ready in weeks rather than months"). No new numbers, time savings or
   claims such as "weeks to hours".

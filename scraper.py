@@ -60,10 +60,81 @@ def robots_allows(url: str) -> bool:
     return True if rp is None else rp.can_fetch(config.USER_AGENT, url)
 
 
+# Who a certification mention is about. A page can mention SOC 2 because the company holds it,
+# because it helps customers get it, or because a vendor (AWS, Stripe) holds it. Only the first
+# counts as a claim; the others are kept as evidence but never trigger the dormant rule.
+ABOUT_CUSTOMERS = re.compile(
+    r"help(s|ing)?\s+(you|your|customers|teams|companies|businesses|startups|organi[sz]ations)|"
+    r"\b(get|achieve|become|prepare for|automate|accelerate|simplify|streamline)\b[^.]{0,40}$|"
+    r"\byour\s+(soc|iso|audit|compliance)|for\s+your\b|customers?\s+(get|achieve|become)|"
+    r"customers who (have|need)|obligations themselves", re.I)
+ABOUT_VENDOR = re.compile(
+    r"\b(aws|amazon web services|azure|google cloud|gcp|stripe|vercel|heroku|cloudflare|sub-?processors?|"
+    r"our\s+(vendors?|providers?|hosting|infrastructure|data cent(er|re)s?)|hosted (on|with|by))\b", re.I)
+ABOUT_SELF = re.compile(
+    r"\b(we|we're|we are|we have|we've|our (company|platform|product|service|app|organi[sz]ation)|is|are|has|have|been)\b"
+    r"[^.]{0,60}\b(certified|compliant|audited|attested|attestation|achieved|completed|accredited)\b|"
+    r"type\s?(i|ii|1|2)\b[^.]{0,30}\b(report|certified|compliant|attestation|audit)|"
+    r"\b(certified|compliant|audited)\b|trust (center|centre|portal)|request (our|the|a) (soc|report|copy)", re.I)
+
+# Compliance automation platforms. A company already running one is a switch conversation, not greenfield.
+COMPLIANCE_TOOLS = ["Vanta", "Drata", "Secureframe", "Thoropass", "Scrut", "Sprinto", "Laika", "Tugboat Logic",
+                    "Hyperproof", "Strike Graph"]
+TOOL_CONTEXT = re.compile(r"powered by|trust (center|centre|portal)|we use|uses|using|with|monitored|"
+                          r"compliance|automat|continuous|invited to|policies|security training|onboarding", re.I)
+
+
+def _window(text: str, start: int, end: int, before: int = 140, after: int = 100) -> tuple[str, str, str]:
+    pre, post = text[max(0, start - before):start], text[end:end + after]
+    pre = re.split(r"[.!?\n]\s", pre)[-1]
+    post = re.split(r"[.!?\n]", post)[0]
+    return pre, text[start:end], post
+
+
+def classify_mention(pre: str, post: str, hit: str = "SOC 2") -> str:
+    """self | customers | vendor | unclear, from the words around one mention."""
+    around = f"{pre}{hit}{post}"
+    if ABOUT_CUSTOMERS.search(pre) or ABOUT_CUSTOMERS.search(around):
+        return "customers"
+    if ABOUT_VENDOR.search(around):
+        return "vendor"
+    if ABOUT_SELF.search(around):
+        return "self"
+    return "unclear"
+
+
 def detect_certifications(raw_text: str) -> dict:
-    found = [name for name, pat in CERT_PATTERNS.items() if re.search(pat, raw_text, re.I)]
-    in_progress = bool(re.search(IN_PROGRESS_PATTERN, raw_text, re.I))
-    return {"mentioned": found, "in_progress": in_progress}
+    """mentioned: every certification named anywhere (kept for the model as a hint).
+    self_claimed: those with at least one mention that reads as the company's own claim, or a
+    bare badge-style mention ("unclear") - the caller decides how far to trust "unclear".
+    evidence: up to 6 sentences with who each one is about. tools: compliance platforms in use."""
+    text = re.sub(r"\s+", " ", raw_text or "")
+    found, evidence, self_claimed, unclear = [], [], set(), set()
+    for name, pat in CERT_PATTERNS.items():
+        for m in list(re.finditer(pat, text, re.I))[:5]:
+            pre, hit, post = _window(text, m.start(), m.end())
+            who = "in_progress" if re.search(r"in progress|underway|pursuing|working towards|coming soon|pending|"
+                                             r"preparing for|on track", pre[-40:] + post[:60], re.I) \
+                else classify_mention(pre, post, hit)
+            if name not in found:
+                found.append(name)
+            if who == "self":
+                self_claimed.add(name)
+            elif who == "unclear":
+                unclear.add(name)
+            if len(evidence) < 6 and not any(e["cert"] == name and e["who"] == who for e in evidence):
+                evidence.append({"cert": name, "who": who, "sentence": f"{pre}{hit}{post}".strip()[:240]})
+    tools = []
+    for tool in COMPLIANCE_TOOLS:
+        for m in re.finditer(rf"\b{re.escape(tool)}\b", text):
+            pre, hit, post = _window(text, m.start(), m.end(), 80, 80)
+            ctx = pre + " " + post
+            if TOOL_CONTEXT.search(ctx) and not re.search(r"integrat|partner|marketplace|connect(s|or)", ctx, re.I):
+                tools.append({"tool": tool, "sentence": f"{pre}{hit}{post}".strip()[:240]})
+                break
+    in_progress = bool(re.search(IN_PROGRESS_PATTERN, text, re.I))
+    return {"mentioned": found, "self_claimed": sorted(self_claimed), "unclear": sorted(unclear - self_claimed),
+            "in_progress": in_progress, "evidence": evidence, "tools": tools}
 
 
 def clean_html(html: str) -> str:

@@ -4,7 +4,8 @@ The loop follows the L4 Evidence Map:
 
 | Question          | Sufficient when                                   | Where it lives            | Short-circuit            |
 |-------------------|---------------------------------------------------|---------------------------|--------------------------|
-| Already certified?| a cert string is found, or a trust page was read  | footer, /security, /trust | holds SOC 2 AND ISO -> stop |
+| Already certified?| the company's own claim is found, or a security / | /security, /trust,        | any named cert -> dormant |
+|                   | trust page was read (then "none found" is known)  | trust.<domain>, footer    | (rubric: dormant_rule)   |
 | B2B SaaS?         | is_b2b_saas set and buyer_type named              | hero, /product, /about    | not B2B SaaS -> stop     |
 | Right stage?      | funding stage, >=5 open roles, enterprise tier,   | /careers, /pricing,       | Public / huge -> stop    |
 |                   | or headcount                                      | /customers                |                          |
@@ -24,12 +25,12 @@ from schemas import CompanyProfile
 # for stage: it answers headcount, seniority and often funding in one request.
 PAGE_KEYWORDS = {
     "stage": ["careers", "jobs", "join-us", "work-with-us", "pricing", "plans", "customers", "case-studies"],
-    "certs": ["trust", "security", "compliance"],
+    "certs": ["trust", "security", "compliance", "soc-2", "soc2"],
     "saas":  ["about", "product", "platform", "company"],
 }
 GUESS_PATHS = {
     "stage": ["/careers", "/pricing", "/customers"],
-    "certs": ["/security", "/trust"],
+    "certs": ["/security", "/trust", "trust."],          # "trust." = the trust.<domain> subdomain
     "saas":  ["/about", "/product"],
 }
 ATS_HOSTS = ("greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "keka.com",
@@ -41,14 +42,59 @@ ENTERPRISE_FEATURES = re.compile(r"sso|saml|scim|audit log|sla|data residency|dp
 
 
 # ---------------------------------------------------------------- sufficiency
+def page_certs(pg: dict) -> dict:
+    """The page's certification scan. Pages cached before mentions were attributed are re-scanned
+    from their raw text; with no raw text, every mention counts (the old behaviour)."""
+    c = pg.get("certs") or {}
+    if "self_claimed" in c:
+        return c
+    if pg.get("raw_text"):
+        return scraper.detect_certifications(pg["raw_text"])
+    return {**c, "self_claimed": list(c.get("mentioned", [])), "unclear": [], "evidence": [], "tools": []}
+
+
+def is_security_page(url: str) -> bool:
+    u = urlparse(url)
+    return u.netloc.startswith("trust.") or any(k in u.path.lower() for k in ("trust", "security", "compliance", "soc"))
+
+
 def certs_held(p: CompanyProfile, pages: list[dict]) -> set[str]:
-    """Certifications the company claims: the model's list plus the regex scan of
-    raw HTML (footer badges, image alt text). Both count, so the score does not
-    depend on whether the model happened to copy a badge."""
+    """Certifications the company itself claims: the model's list plus regex mentions in raw HTML
+    that read as its own claim or as a bare badge (footer, alt text). Mentions about customers
+    ("we help you get SOC 2") or vendors ("hosted on AWS, SOC 2 audited") never count."""
     names = set(p.certifications_claimed)
     for pg in pages:
-        names |= set(pg["certs"]["mentioned"])
+        c = page_certs(pg)
+        names |= set(c["self_claimed"]) | set(c.get("unclear", []))
     return names
+
+
+def compliance_tools(p: CompanyProfile, pages: list[dict]) -> list[dict]:
+    tools = [t | {"url": pg["url"]} for pg in pages for t in page_certs(pg).get("tools", [])]
+    if p.compliance_tool_used and not any(t["tool"].lower() == p.compliance_tool_used.lower() for t in tools):
+        tools.append({"tool": p.compliance_tool_used, "sentence": "stated in the extracted research", "url": None})
+    return tools
+
+
+def cert_status(p: CompanyProfile, pages: list[dict]) -> str:
+    """confirmed: the company claims a certification. in_progress: says an audit is under way.
+    none_found: a security / trust page was read and claims none. unknown: no such page read -
+    absence of evidence, so it must not earn greenfield points."""
+    if certs_held(p, pages):
+        return "confirmed"
+    if p.certification_in_progress or any(page_certs(pg).get("in_progress") for pg in pages):
+        return "in_progress"
+    if any(is_security_page(pg["url"]) for pg in pages):
+        return "none_found"
+    return "unknown"
+
+
+def cert_evidence(p: CompanyProfile, pages: list[dict]) -> dict:
+    return {"status": cert_status(p, pages),
+            "held": sorted(named_certs(p, pages)),
+            "security_pages_read": [pg["url"] for pg in pages if is_security_page(pg["url"])],
+            "evidence": [e | {"url": pg["url"]} for pg in pages for e in page_certs(pg).get("evidence", [])][:8],
+            "compliance_tools": compliance_tools(p, pages)}
 
 
 def holds_cert(p: CompanyProfile, pages: list[dict], name: str) -> bool:
@@ -63,7 +109,7 @@ def missing_facts(p: CompanyProfile, pages: list[dict]) -> list[str]:
     stage:  funding stage named, >=5 open roles, or an enterprise tier on pricing.
             Headcount is a score signal only, not evidence for stage."""
     missing = []
-    if not certs_held(p, pages):
+    if cert_status(p, pages) == "unknown":
         missing.append("certs")
     if p.is_b2b_saas is None or (p.is_b2b_saas and not p.buyer_type):
         missing.append("saas")
@@ -110,12 +156,14 @@ def pick_next_url(question: str, homepage: dict, tried: set[str]) -> str | None:
             same_site = host.endswith(home_host) or (question == "stage" and any(a in host for a in ATS_HOSTS))
             if not same_site or u in tried:
                 continue
-            if kw in urlparse(u).path.lower() or kw in link["text"].lower() or (kw == "careers" and any(a in host for a in ATS_HOSTS)):
+            if kw in urlparse(u).path.lower() or kw in link["text"].lower() or (kw == "careers" and any(a in host for a in ATS_HOSTS)) \
+                    or (question == "certs" and host.startswith(kw)):
                 return u
     base = f"{urlparse(homepage['url']).scheme}://{urlparse(homepage['url']).netloc}"
     for path in GUESS_PATHS[question]:
-        if base + path not in tried:
-            return base + path
+        cand = f"{urlparse(homepage['url']).scheme}://trust.{home_host}" if path == "trust." else base + path
+        if cand not in tried:
+            return cand
     return None
 
 
@@ -164,10 +212,18 @@ def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
         cp += cpv["recent_trigger"]; why.append(f"+{cpv['recent_trigger']} recent trigger: {p.recent_triggers[0]}")
     cp = min(cp, cpv["cap"]); pts += cp
 
-    # Certification gap
+    # Certification gap. Greenfield points need evidence of absence (a security / trust page read
+    # with no claim), never just "nothing found on the pages we happened to read".
     has_soc2, has_iso = holds_cert(p, pages, "SOC 2"), holds_cert(p, pages, "ISO 27001")
-    if not has_soc2 and not has_iso:
-        pts += gap["no_soc2_or_iso"]; why.append(f"+{gap['no_soc2_or_iso']} no SOC 2 / ISO 27001 claimed (greenfield)")
+    status, tools = cert_status(p, pages), compliance_tools(p, pages)
+    if tools:
+        why.append(f"+0 certification gap: already uses {tools[0]['tool']} for compliance (a switch conversation, not greenfield)")
+    elif not has_soc2 and not has_iso and status == "unknown":
+        why.append("+0 certification gap: status unknown - no security or trust page found, so greenfield points are withheld")
+    elif not has_soc2 and not has_iso:
+        read = [pg["url"] for pg in pages if is_security_page(pg["url"])]
+        pts += gap["no_soc2_or_iso"]; why.append(f"+{gap['no_soc2_or_iso']} no SOC 2 / ISO 27001 claimed on "
+                                                  f"{read[0] if read else 'its security page'} (greenfield)")
     elif not (has_soc2 and has_iso):
         pts += gap["holds_one"]; why.append(f"+{gap['holds_one']} holds {'SOC 2' if has_soc2 else 'ISO 27001'} only - expansion to "
                                             f"{'ISO 27001' if has_soc2 else 'SOC 2'} + continuous monitoring")
@@ -198,14 +254,16 @@ def qualify(domain: str, log, max_extra: int | None = None) -> dict:
             decision, reason = stop
             return {"decision": decision, "reason": reason, "score": None, "score_reasons": [],
                     "certs_held": sorted(named_certs(profile, pages)),
+                    "certification": cert_evidence(profile, pages),
                     "profile": profile, "pages": pages, "trace": trace}
         missing = missing_facts(profile, pages)
         if not missing or extra >= cap:
             break
-        # Fetch for the highest-value missing fact; stage first (most decisive).
+        # Fetch for the highest-value missing fact: certification first (it can end the assessment
+        # and moves the score across the threshold), then stage, then SaaS.
         # Each question has its own fetch limit from the evidence map.
         nxt, q = None, None
-        for cand in ("stage", "certs", "saas"):
+        for cand in ("certs", "stage", "saas"):       # certs first: it can stop outreach outright
             if cand not in missing or per_question[cand] >= rubric.get("evidence_loop", cand):
                 continue
             nxt = pick_next_url(cand, home, tried)
@@ -226,8 +284,13 @@ def qualify(domain: str, log, max_extra: int | None = None) -> dict:
     still_missing = missing_facts(profile, pages)
     pts, reasons = score(profile, pages)
     flags = []
+    certification = cert_evidence(profile, pages)
+    if certification["compliance_tools"] and not profile.compliance_tool_used:
+        profile.compliance_tool_used = certification["compliance_tools"][0]["tool"]   # the writer sees it too
     if "certs" in still_missing:
-        flags.append("certification status unanswered: treated as not certified")
+        flags.append("certification status unknown: no security or trust page found; greenfield points withheld")
+    for t in certification["compliance_tools"][:1]:
+        flags.append(f"already uses {t['tool']} for compliance: pitch a switch, not a first audit")
     if "stage" in still_missing:
         flags.append("stage unanswered after the loop")
     # Evidence-map outcomes (Sprinto table, page 40):
@@ -248,5 +311,5 @@ def qualify(domain: str, log, max_extra: int | None = None) -> dict:
         decision = "DISQUALIFIED"
     return {"decision": decision, "score": pts, "score_reasons": reasons,
             "still_missing": still_missing, "flags": flags, "reason": f"score {pts}/100",
-            "certs_held": sorted(named_certs(profile, pages)),
+            "certs_held": sorted(named_certs(profile, pages)), "certification": certification,
             "profile": profile, "pages": pages, "trace": trace}

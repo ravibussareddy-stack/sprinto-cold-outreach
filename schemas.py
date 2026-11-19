@@ -28,6 +28,8 @@ class CompanyProfile(BaseModel):
     named_customers: list[str] = Field([], description="Customer logos/names mentioned, especially large or enterprise brands")
     certifications_claimed: list[str] = Field([], description="Certifications the company says IT holds (SOC 2, ISO 27001, HIPAA...). Exclude mentions about customers or partners.")
     certification_in_progress: Optional[bool] = None
+    compliance_tool_used: Optional[str] = Field(None, description="Compliance automation platform the company ITSELF uses "
+        "(e.g. a trust centre 'powered by Vanta', 'we use Drata'). null if not stated. Not tools it integrates with or sells.")
     geographic_markets: list[str] = []
     recent_triggers: list[str] = Field([], description="Recent events: funding round, new enterprise launch, expansion to US/EU, big customer win, new product")
     evidence: list[Evidence] = Field([], description="One quote per important field you filled")
@@ -37,6 +39,7 @@ class PainPoint(BaseModel):
     title: str
     why_this_person_feels_it: str
     evidence_from_research: str = Field(description="The specific fact from the company profile this pain point is grounded in")
+    source_url: Optional[str] = Field(None, description="Page the evidence came from, if the profile's evidence names one")
     sprinto_angle: str = Field(description="How Sprinto specifically relieves it")
 
 

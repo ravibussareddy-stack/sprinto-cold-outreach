@@ -18,7 +18,7 @@
         <div class="muted small" id="page-sub">Sprinto outreach</div>
       </div>
     </div>
-    <div class="actions"><span class="muted small">updated <span id="updated">-</span></span><button class="btn" id="refresh">Refresh</button></div>
+    <div class="actions"><a class="btn primary" href="test.html">Run a test case</a><span class="muted small">updated <span id="updated">-</span></span><button class="btn" id="refresh">Refresh</button></div>
   </header>
   <nav class="glass nav" id="nav"></nav>
   <div id="error" class="error"></div>
@@ -235,8 +235,11 @@
     var c = m.conversations || {}, t = m.tokens || {}, d = m.disagreement || {};
     var box = document.getElementById("tiles");
     box.innerHTML = "";
-    box.appendChild(tile("Engagement rate", m.engagement_rate, pctFmt, (c.replied || 0) + " of " + (c.started || 0) + " conversations got a reply", m.engagement_rate || 0, "#contacts"));
-    box.appendChild(tile("Booking rate", m.booking_rate, pctFmt, (c.booked || 0) + " meetings from " + (c.positive || 0) + " positive replies", m.booking_rate || 0, "#contacts"));
+    var ofFmt = function (a, b) { return function () { return (a || 0) + " of " + (b || 0); }; };
+    box.appendChild(tile("Replies", c.replied || 0, ofFmt(c.replied, c.started), "conversations got a reply (" + pctFmt(m.engagement_rate) +
+      "). Test conversations with our own inbox, not real prospects", m.engagement_rate || 0, "#contacts"));
+    box.appendChild(tile("Meetings booked", c.booked || 0, ofFmt(c.booked, c.positive), "positive replies became a meeting (" + pctFmt(m.booking_rate) +
+      "). Test conversations", m.booking_rate || 0, "#contacts"));
     var rt = tile("Needs review", d.review_queue || 0, intFmt, "drafts above " + (d.threshold || 20), null, "#review");
     if (d.review_queue) rt.classList.add("alert");
     box.appendChild(rt);
@@ -313,7 +316,7 @@
     var q = m.quality || {};
     var sent = (m.emails_by_kind || []).filter(function (k) { return k.kind !== "reply"; }).reduce(function (a, k) { return a + k.n; }, 0);
     document.getElementById("email-stats").innerHTML = stat(drafts.length, "drafts written") + stat(sent, "emails sent (logged)") +
-      stat(q.avg_quality == null ? "-" : Math.round(q.avg_quality * 100) + "%", "quality checks passed") +
+      stat(q.avg_quality == null ? "-" : Math.round(q.avg_quality * 100) + "%", "draft checks passed (structure and style)") +
       (m.emails_by_kind || []).filter(function (k) { return k.kind !== "cold"; }).map(function (k) { return stat(k.n, (KIND_NAMES[k.kind] || k.kind).toLowerCase()); }).join("");
     var byDomain = {}, order = [];
     drafts.forEach(function (r) { if (!byDomain[r.domain]) { byDomain[r.domain] = []; order.push(r.domain); } byDomain[r.domain].push(r); });

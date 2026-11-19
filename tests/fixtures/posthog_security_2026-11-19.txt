@@ -1,0 +1,4 @@
+# Excerpt of https://posthog.com/handbook/company/security fetched 2026-11-19 (regression fixture)
+ in order to meet the needs of our PostHog Cloud customers, making PostHog the ideal solution for customers who have GDPR, SOC 2, or CCPA obligations themselves. PostHog Cloud customers own the data they send to us for p
+RLs you visit SOC 2 Visit our Trust Center Use our Trust Center powered by SafeBase to self-serve reports, policies, and certifications. PostHog is certified as SOC 2 Type 2 compliant, following an external audit. Our latest security report is publicly available (covering controls as of May 31, 2026). Our reporting period runs from June 1st through
+ar. Policies We have a number of policies in place to support SOC 2 compliance. All team members have been invited to Drata to review these and to complete security training and background checks as part of onboarding. All of our policies are availab

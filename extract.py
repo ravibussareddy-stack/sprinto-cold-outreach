@@ -9,7 +9,8 @@ Rules:
 - Only use what the text supports. If a fact is not in the text, leave it null
   or empty. Never guess funding stage or headcount from vibes.
 - certifications_claimed = certifications the company itself holds. "Helping
-  customers become SOC 2 compliant" is NOT a claim that the company holds SOC 2.
+  customers become SOC 2 compliant" is NOT a claim that the company holds SOC 2,
+  and neither is a vendor's certificate ("hosted on AWS, which is SOC 2 audited").
 - For each important field you fill, add an evidence quote (verbatim, short)
   with the source URL it came from."""
 
@@ -18,7 +19,12 @@ def extract_profile(domain: str, pages: list[dict]) -> CompanyProfile:
     blocks = []
     for p in pages:
         blocks.append(f"=== SOURCE: {p['url']} ===\n{p['text']}")
-        if p["certs"]["mentioned"]:
+        if p["certs"].get("evidence"):
+            blocks.append(f"(Certification mentions found in raw HTML on {p['url']}, with who each is about: "
+                          + "; ".join(f"{e['cert']} [{e['who']}]: \"{e['sentence'][:160]}\"" for e in p["certs"]["evidence"])
+                          + (f"; compliance tool: {', '.join(t['tool'] for t in p['certs'].get('tools', []))}" if p["certs"].get("tools") else "")
+                          + ")")
+        elif p["certs"]["mentioned"]:
             blocks.append(f"(Regex scan of raw HTML incl. footer/badges on {p['url']} "
                           f"found mentions of: {', '.join(p['certs']['mentioned'])}"
                           f"{'; language suggests certification IN PROGRESS' if p['certs']['in_progress'] else ''})")
