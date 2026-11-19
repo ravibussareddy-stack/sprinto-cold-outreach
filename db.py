@@ -603,3 +603,12 @@ def stale_companies(days: int, limit: int) -> list[dict]:
 def log_crawl(summary: dict):
     with _conn() as c:
         c.execute("INSERT INTO crawl_log (summary) VALUES (%s)", (Json(json.loads(json.dumps(summary, default=str))),))
+
+
+@_safe
+def last_crawl_times() -> dict:
+    """When the feeds were last crawled and when companies were last re-researched."""
+    with _conn() as c:
+        f = c.execute("SELECT max(created_at) FROM crawl_log WHERE jsonb_typeof(summary->'feeds') = 'object'").fetchone()[0]
+        r = c.execute("SELECT max(created_at) FROM crawl_log WHERE jsonb_typeof(summary->'refreshed') = 'array'").fetchone()[0]
+        return {"feeds": f, "refresh": r}

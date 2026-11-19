@@ -12,20 +12,20 @@ COL_W = (W - ACTOR_W - 4) / 6
 
 # actor, role, band tint, box fill, box border
 ACTORS = [
-    ("Ravi", "Growth lead", "#eef0fe", "#e3e6fd", "#5b5bd6"),
-    ("Daily cron", "Vercel scheduler", "#f1f3f6", "#e6e9ee", "#5b6777"),
-    ("Dashboard / API", "Vercel", "#eef5fe", "#dfeafd", "#3b73d9"),
-    ("News crawler", "5 RSS feeds", "#eefaf6", "#d6f3e9", "#22966f"),
-    ("Web research", "Scraper", "#eefaf2", "#dcf5e4", "#3aa55c"),
-    ("Neon", "Memory", "#eef9f8", "#d8f2ef", "#2b9c90"),
-    ("Feedback repo", "Lessons", "#f2f8ec", "#e3f1d3", "#5e9a2c"),
-    ("Qualifier", "Code + Gemini", "#fffbe8", "#fff4c4", "#c99a12"),
-    ("Hunter", "Contact finder", "#fdf6ea", "#fbebcf", "#b7791f"),
-    ("Gemini", "Writer", "#fdf0f5", "#fbe3ec", "#c8457a"),
-    ("Quality checks", "Code + critic", "#f4f0fd", "#e9e2fc", "#7651c9"),
-    ("Review gate", "Ravi", "#fff8ec", "#fff8f0", "#e07b1f"),
-    ("Gmail", "Inbox", "#eef4fb", "#dde9f7", "#2f6db5"),
-    ("Reply handler", "LangGraph + Gemini", "#fbf0f8", "#f5e0f0", "#a3457f"),
+    ("Growth Lead", "(User, Sprinto)", "#eef0fe", "#e3e6fd", "#5b5bd6"),
+    ("Scheduler", "(every 5 minutes)", "#f1f3f6", "#e6e9ee", "#5b6777"),
+    ("Dashboard / API", "(Vercel)", "#eef5fe", "#dfeafd", "#3b73d9"),
+    ("News crawler", "(5 RSS feeds)", "#eefaf6", "#d6f3e9", "#22966f"),
+    ("Web research", "(Scraper)", "#eefaf2", "#dcf5e4", "#3aa55c"),
+    ("Neon", "(Memory)", "#eef9f8", "#d8f2ef", "#2b9c90"),
+    ("Feedback repo", "(Lessons)", "#f2f8ec", "#e3f1d3", "#5e9a2c"),
+    ("Qualifier", "(Code + Gemini)", "#fffbe8", "#fff4c4", "#c99a12"),
+    ("Hunter", "(Contact finder)", "#fdf6ea", "#fbebcf", "#b7791f"),
+    ("Gemini", "(LLM writer)", "#fdf0f5", "#fbe3ec", "#c8457a"),
+    ("Quality checks", "(Code + critic)", "#f4f0fd", "#e9e2fc", "#7651c9"),
+    ("Review gate", "(Growth Lead)", "#fff8ec", "#fff8f0", "#e07b1f"),
+    ("Gmail", "(Email service)", "#eef4fb", "#dde9f7", "#2f6db5"),
+    ("Reply handler", "(LangGraph + Gemini)", "#fbf0f8", "#f5e0f0", "#a3457f"),
 ]
 GATE_ROW = 11
 
@@ -33,7 +33,7 @@ GATE_ROW = 11
 STEPS = {
     "add":      (0, 0, ["Adds a contact or", "runs a test case"]),
     "rulings":  (0, 2, ["Feedback, rulings,", "portfolio (Questions,", "Offerings pages)"]),
-    "cron":     (1, 0, ["Every day: crawl,", "re-research stale", "companies, check replies"]),
+    "cron":     (1, 0, ["Every 5 min: replies;", "hourly: news feeds;", "daily: re-research"]),
     "input":    (2, 1, ["Receives domain", "+ contact"]),
     "news":     (3, 1, ["Funding news from", "TechCrunch, Inc42 ...", "matched to companies"]),
     "research": (4, 2, ["Site, sitemap, security", "and press pages;", "digs deeper if unknown"]),
@@ -45,13 +45,13 @@ STEPS = {
     "checks":   (10, 5, ["15 draft checks,", "critic (not generic),", "fact check"]),
     "gate":     (11, 5, ["Reviews flagged", "drafts; Send"]),
     "send":     (12, 5, ["Sends to own inbox", "with the deck"]),
-    "reply":    (12, 0, ["Prospect replies", "(or stays silent)"]),
-    "read":     (13, 3, ["Reads the reply, decides;", "timers 3-3-2 days"]),
+    "reply":    (12, 0, ["Inbox checked every", "5 min: prospect replies", "(or stays silent)"]),
+    "read":     (13, 3, ["Reads the reply within", "5 min, decides; follow-up", "timers 3-3-2 days"]),
     "followup": (13, 4, ["Follow-ups, meeting", "times, Calendly booking"]),
     "learn":    (13, 5, ["Learns from outcomes:", "lessons to the repo,", "rubric tunes itself"]),
 }
 # arrows: (from, to, gutter x offset, entry y offset, mode); mode "left" = same column, down the left gutter
-ARROWS = [("add", "input", 0, 0, ""), ("cron", "news", 0, 0, ""), ("input", "research", 2, -8, ""),
+ARROWS = [("cron", "reply", -2, 0, "left"), ("add", "input", 0, 0, ""), ("cron", "news", 0, 0, ""), ("input", "research", 2, -8, ""),
           ("rulings", "lessons", -6, 0, "left"),
           ("news", "qualify", -8, -14, ""), ("research", "qualify", -2, 0, ""), ("memory", "qualify", 4, 14, ""),
           ("qualify", "hunter", 0, 0, ""), ("hunter", "write", -4, -10, ""), ("lessons", "write", 4, 10, ""),

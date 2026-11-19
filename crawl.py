@@ -183,12 +183,30 @@ def refresh(limit: int = MAX_COMPANIES, deadline: float | None = None, log=print
     return done
 
 
-def run(limit: int = MAX_COMPANIES, time_budget: float = 200, trigger: str = "cron", log=print) -> dict:
-    """Feeds, matching, then re-research within the time budget. Logged in crawl_log."""
+FEEDS_EVERY_MIN = 60          # news feeds: at most hourly (cheap; continuous through the day)
+REFRESH_EVERY_HOURS = 24      # re-research: once a day (it uses the model budget)
+
+
+def due() -> dict:
+    """What is due now, given the last crawl: {"feeds": bool, "refresh": bool}."""
+    last = db.last_crawl_times() or {}
+    now = dt.datetime.now(dt.timezone.utc)
+    feeds_at, refresh_at = last.get("feeds"), last.get("refresh")
+    return {"feeds": not feeds_at or now - feeds_at >= dt.timedelta(minutes=FEEDS_EVERY_MIN),
+            "refresh": not refresh_at or now - refresh_at >= dt.timedelta(hours=REFRESH_EVERY_HOURS)}
+
+
+def run(limit: int = MAX_COMPANIES, time_budget: float = 200, trigger: str = "cron", log=print,
+        force: bool = False) -> dict:
+    """Feeds (if an hour has passed), matching, then re-research (if a day has passed), within the
+    time budget. force=True does both now ("Crawl now"). Logged in crawl_log."""
     start = time.time()
-    feeds = crawl_feeds(log)
-    news = match_companies(log)
-    refreshed = refresh(limit, deadline=start + time_budget, log=log)
+    when = {"feeds": True, "refresh": True} if force else due()
+    if not when["feeds"] and not when["refresh"]:
+        return {"trigger": trigger, "skipped": "nothing due: feeds are crawled hourly, re-research daily"}
+    feeds = crawl_feeds(log) if when["feeds"] else "not due"
+    news = match_companies(log) if when["feeds"] else []
+    refreshed = refresh(limit, deadline=start + time_budget, log=log) if when["refresh"] else "not due"
     summary = {"trigger": trigger, "feeds": feeds, "news_matched": news, "refreshed": refreshed,
                "seconds": round(time.time() - start, 1), "at": dt.datetime.now(dt.timezone.utc).isoformat()}
     db.log_crawl(summary)

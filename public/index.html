@@ -89,7 +89,10 @@
     </section>
     <section class="glass card section">
       <div class="stats" id="contact-stats"></div>
-      <div class="row-head"><h2>Everyone contacted</h2><input type="search" id="contact-search" placeholder="Search name, company, status"></div>
+      <div class="row-head"><h2>Everyone contacted</h2>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="small muted" id="cr-note">replies are checked every 5 minutes</span>
+          <button class="btn mini" id="check-replies" type="button">Check replies now</button>
+          <input type="search" id="contact-search" placeholder="Search name, company, status"></div></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Contact</th><th>Company</th><th>Role</th><th>Status</th><th>Follow-ups</th><th>Updated</th></tr></thead>
         <tbody id="contact-rows"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
@@ -367,6 +370,20 @@
       })
       .catch(function (e) { out.innerHTML = '<span class="bad">' + E(e.message) + "</span>"; })
       .then(function () { clearInterval(tick); btn.disabled = false; st.textContent = "Takes about 60-90 seconds. Every email goes to our own test inbox, with the offerings deck attached."; });
+  });
+
+  document.getElementById("check-replies").addEventListener("click", function () {
+    var b = this, note = document.getElementById("cr-note");
+    b.disabled = true; note.innerHTML = '<span class="spinner"></span>Reading the inbox…';
+    fetch("/api/cron_check_replies?replies=1").then(function (r) { return r.json(); }).then(function (r) {
+      b.disabled = false;
+      if (!r.ok) { note.textContent = "Check failed: " + ((r.error && r.error.message) || "unknown error"); return; }
+      var th = r.threads || [];
+      var moved = th.filter(function (t) { return !/no new reply/.test(t.result || ""); });
+      note.textContent = th.length ? (moved.length ? moved.length + " conversation(s) moved on: " + moved.map(function (t) { return t.domain; }).join(", ")
+        : "Checked " + th.length + " open conversation(s): no new replies.") : "No open conversations to check.";
+      load();
+    }).catch(function (e) { b.disabled = false; note.textContent = "Check failed: " + e.message; });
   });
 
   // ---------- emails: one card per company ----------

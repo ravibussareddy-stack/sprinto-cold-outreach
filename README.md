@@ -269,7 +269,7 @@ flags ("judgement call waiting for you: ..."), on the Questions page (badge in t
   company page.
 - **Funding is looked for where it is published**: when the stage is unknown, the same parallel round also reads the
   site's funding announcement (from its sitemap) or its press / news / about page.
-- **Daily crawl** (`crawl.py`, run by the daily Vercel cron after the reply check, or **Crawl now** on the overview):
+- **Continuous crawl** (`crawl.py`, run on every scheduler call after the reply check - news feeds at most hourly, re-research once a day - or **Crawl now** on the overview):
   reputable startup and tech news feeds (`lib/sources.json`: TechCrunch, Inc42, YourStory, EU-Startups, Sifted - public
   RSS, robots.txt checked each time) go into `news_items`; funding headlines are parsed into company, round and amount
   and matched to tracked companies (exact name of a funding headline, or the domain in the article). A matched article
@@ -278,6 +278,14 @@ flags ("judgement call waiting for you: ..."), on the Questions page (badge in t
   budgets, and what changed (decision, score, certificates, funding, headcount) is logged and shown ("Fresh data" on
   the overview, "In the news, and re-research" on the company page, and in the highlights). Search engines, LinkedIn
   and Crunchbase pages are not crawled: their terms do not allow it.
+
+## Timing: replies within minutes
+
+`GET /api/cron_check_replies?from=scheduler` is called every 5 minutes by an external scheduler (cron-job.org; Vercel's
+free plan allows only a daily cron, and GitHub's scheduled workflows fire a few times a day at best). Every call
+checks the inbox and answers replies; news feeds are crawled at most hourly and stale companies re-researched once a
+day, so the frequent calls cost almost nothing. The daily Vercel cron (04:00 UTC) and the GitHub schedule stay as
+backups. **Check replies now** on the Contacts page runs a reply check on demand.
 
 ## Follow-up timers, send window, budget, company view
 

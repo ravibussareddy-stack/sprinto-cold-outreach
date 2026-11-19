@@ -37,11 +37,19 @@ class handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ok": True, **result})
             except Exception as e:
                 return self._send(500, {"ok": False, "error": {"code": "internal_error", "message": f"{type(e).__name__}: {e}"}})
+        if "replies=1" in (self.path or ""):       # "Check replies now" on the dashboard: replies only
+            out = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(out):
+                    summary = check_replies.main(trigger="dashboard")
+                return self._send(200, {"ok": True, **(summary or {})})
+            except Exception as e:
+                return self._send(500, {"ok": False, "error": {"code": "internal_error", "message": f"{type(e).__name__}: {e}"}})
         if "crawl=1" in (self.path or ""):         # "Crawl now" on the dashboard: feeds + 1 company re-researched
             out = io.StringIO()
             try:
                 with contextlib.redirect_stdout(out):
-                    result = crawl.run(limit=1, time_budget=150, trigger="dashboard")
+                    result = crawl.run(limit=1, time_budget=150, trigger="dashboard", force=True)
                 return self._send(200, {"ok": True, **result})
             except Exception as e:
                 return self._send(500, {"ok": False, "error": {"code": "internal_error", "message": f"{type(e).__name__}: {e}"}})
@@ -51,11 +59,12 @@ class handler(BaseHTTPRequestHandler):
         out = io.StringIO()
         try:
             started = time.time()
+            trigger = "scheduler" if "from=scheduler" in (self.path or "") else "vercel-cron"
             with contextlib.redirect_stdout(out):
-                summary = check_replies.main(trigger="vercel-cron")
+                summary = check_replies.main(trigger=trigger)
                 try:                               # then keep company data fresh, in the time that is left
                     left = 270 - (time.time() - started)
-                    crawled = crawl.run(time_budget=max(0, left - 60), trigger="vercel-cron") if left > 90 else {"skipped": "no time left"}
+                    crawled = crawl.run(time_budget=max(0, left - 60), trigger=trigger) if left > 90 else {"skipped": "no time left"}
                 except Exception as e:
                     crawled = {"error": f"{type(e).__name__}: {e}"}
             self._send(200, {"ok": True, **(summary or {}), "crawl": crawled, "log": out.getvalue().splitlines()[-60:]})
