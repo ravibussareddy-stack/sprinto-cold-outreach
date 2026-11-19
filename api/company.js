@@ -49,6 +49,7 @@ module.exports = async (req, res) => {
     res.status(200).json({
       domain, company: p.company_name || domain, decision: q.decision, fit_score: q.score, reason: q.reason,
       score_reasons: q.score_reasons || [], flags: q.flags || [], pages_read: latestRec.pages_read || [],
+      certification: q.certification || null,
       facts: { what_they_do: p.one_line_description, funding_stage: p.funding_stage, employees: p.employee_estimate,
                named_customers: p.named_customers || [], certifications: p.certifications_claimed || [],
                industries: p.target_industries || [] },

@@ -53,9 +53,9 @@
     ["", [["overview", "Overview", "index.html#overview"]]],
     ["Outreach", [["pipeline", "Pipeline", "index.html#pipeline"], ["contacts", "Contacts", "index.html#contacts"],
                   ["emails", "Emails", "index.html#emails"]]],
-    ["Quality", [["review", "Review", "index.html#review"], ["learning", "Feedback & learning", "index.html#learning"]]],
-    ["Setup", [["costs", "Costs", "index.html#costs"], ["rubric", "Filters & rubric", "settings.html"],
-               ["test", "Run a test case", "test.html"], ["how", "How it works", "how.html"]]],
+    ["Quality", [["review", "Review", "index.html#review"], ["learning", "Learning", "index.html#learning"]]],
+    ["Setup", [["costs", "Costs", "index.html#costs"], ["rubric", "Rubric", "settings.html"],
+               ["test", "Test case", "test.html"], ["how", "How it works", "how.html"]]],
   ];
   var badges = {};
   function nav(active) {

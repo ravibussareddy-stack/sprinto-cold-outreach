@@ -92,6 +92,14 @@ dash.nav("pipeline");
     document.getElementById("content").innerHTML =
       '<div class="grid-2">' +
         '<section class="glass card"><h2>Why it is here</h2><p><b>' + E(c.reason || "-") + "</b></p>" +
+          (c.certification ? (function (ct) {
+            var ev = (ct.evidence || []).filter(function (e) { return e.who === "self" || e.who === "in_progress"; }).slice(0, 2);
+            return '<div class="small" style="margin:8px 0"><b>Certification:</b> ' + E(ct.status.replace("_", " ")) +
+              (ct.held && ct.held.length ? " (" + E(ct.held.join(", ")) + ")" : "") +
+              ((ct.compliance_tools || []).length ? " &middot; already uses " + E(ct.compliance_tools.map(function (t) { return t.tool; }).join(", ")) : "") +
+              ev.map(function (e) { return '<div class="muted">\u201c' + E(e.sentence) + '\u201d' + (e.url ? ' <a href="' + E(e.url) + '" target="_blank" rel="noopener">source</a>' : "") + "</div>"; }).join("") +
+              ((ct.security_pages_read || []).length ? "" : '<div class="muted">No security or trust page was found.</div>') + "</div>";
+          })(c.certification) : "") +
           "<details><summary class='small'>Score reasons (" + c.score_reasons.length + ")</summary><ul class='small'>" +
           c.score_reasons.map(function (r) { return "<li>" + E(r) + "</li>"; }).join("") + "</ul></details>" +
           (c.flags.length ? "<details><summary class='small'>Flags (" + c.flags.length + ")</summary><ul class='small'>" +
