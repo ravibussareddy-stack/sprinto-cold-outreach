@@ -59,7 +59,9 @@ class handler(BaseHTTPRequestHandler):
         out = io.StringIO()
         try:
             started = time.time()
-            trigger = "scheduler" if "from=scheduler" in (self.path or "") else "vercel-cron"
+            from urllib.parse import parse_qs, urlparse
+            caller = (parse_qs(urlparse(self.path or "").query).get("from") or [""])[0]
+            trigger = caller if caller in ("github", "scheduler") else "vercel-cron"
             with contextlib.redirect_stdout(out):
                 summary = check_replies.main(trigger=trigger)
                 try:                               # then keep company data fresh, in the time that is left

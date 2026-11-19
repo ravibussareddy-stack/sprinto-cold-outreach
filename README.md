@@ -281,11 +281,13 @@ flags ("judgement call waiting for you: ..."), on the Questions page (badge in t
 
 ## Timing: replies within minutes
 
-`GET /api/cron_check_replies?from=scheduler` is called every 5 minutes by an external scheduler (cron-job.org; Vercel's
-free plan allows only a daily cron, and GitHub's scheduled workflows fire a few times a day at best). Every call
-checks the inbox and answers replies; news feeds are crawled at most hourly and stale companies re-researched once a
-day, so the frequent calls cost almost nothing. The daily Vercel cron (04:00 UTC) and the GitHub schedule stay as
-backups. **Check replies now** on the Contacts page runs a reply check on demand.
+The scheduler is GitHub cron (`.github/workflows/check-replies.yml`, every 5 minutes): each run calls
+`GET /api/cron_check_replies?from=github`, which checks the inbox and answers replies (times, the Calendly booking and
+its invite, follow-ups on the 3-3-2 day timers); news feeds are crawled at most hourly and stale companies re-researched
+once a day, so the frequent calls cost almost nothing. GitHub runs schedules on a best-effort basis, so some runs start
+late or are skipped; the daily Vercel cron (04:00 UTC) is the guaranteed backstop, and any external scheduler (e.g.
+cron-job.org) can call `?from=scheduler` for exact 5-minute timing. **Check replies now** on the Contacts page runs a
+reply check on demand.
 
 ## Follow-up timers, send window, budget, company view
 

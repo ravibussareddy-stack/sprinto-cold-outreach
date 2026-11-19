@@ -1,51 +1,36 @@
 name: Check replies
 
-# Reads replies in your Gmail inbox and continues each waiting conversation:
-# propose times, send the calendar invite, or hand off. All emails still go
-# only to YOUR OWN inbox (SEND_TO).
+# The scheduler: every 5 minutes it calls the live reply checker on Vercel, which reads replies in
+# Gmail and answers them (times, Calendly booking, follow-ups on the 3-3-2 day timers), crawls the
+# news feeds at most hourly and re-researches stale companies once a day. All emails still go only
+# to YOUR OWN inbox (SEND_TO).
+#
+# GitHub runs schedules on a best-effort basis: some runs start late or are skipped under load.
+# The daily Vercel cron (04:00 UTC) is the guaranteed backstop; "Run workflow" checks at once.
 on:
   schedule:
-    # Every 30 minutes, off the hour: GitHub delays or drops scheduled runs at :00 and :30
-    # under load. Runs can still start late; use "Run workflow" for an immediate check.
-    - cron: "17,47 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: outreach            # never overlaps an outreach run
+  group: check-replies
   cancel-in-progress: false
 
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      GEMINI_API_KEY1: ${{ secrets.GEMINI_API_KEY1 }}
-      GEMINI_API_KEY2: ${{ secrets.GEMINI_API_KEY2 }}
-      GEMINI_API_KEY3: ${{ secrets.GEMINI_API_KEY3 }}
-      NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL || secrets.DATABASE_URL }}
-      GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
-      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-      SEND_TO: ${{ secrets.SEND_TO }}
-      CALENDLY_TOKEN: ${{ secrets.CALENDLY_TOKEN }}
-      CALENDLY_BOOKING: "1"
-      SENDER_NAME: ${{ vars.SENDER_NAME || 'Growth Team, Sprinto' }}
-      SLOT_TIMEZONE: Asia/Kolkata
-      REPLY_MODE: gmail
+    timeout-minutes: 6
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Check replies
-        run: python check_replies.py
+      - name: Call the reply checker
+        env:
+          URL: ${{ vars.CHECK_URL || 'https://sprinto-cold-outreach-web.vercel.app/api/cron_check_replies?from=github' }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -n "$CRON_SECRET" ]; then AUTH="Authorization: Bearer $CRON_SECRET"; else AUTH="X-Caller: github"; fi
+          code=$(curl -s -o out.json -w "%{http_code}" --max-time 290 -H "$AUTH" "$URL")
+          echo "HTTP $code"
+          python3 -c "import json; r=json.load(open('out.json')); print('threads:', json.dumps(r.get('threads', []))[:1500]); print('crawl:', json.dumps(r.get('crawl'), default=str)[:600])" || cat out.json
+          test "$code" = "200"

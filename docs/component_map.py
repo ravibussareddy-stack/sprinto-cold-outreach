@@ -13,7 +13,7 @@ COL_W = (W - ACTOR_W - 4) / 6
 # actor, role, band tint, box fill, box border
 ACTORS = [
     ("Growth Lead", "(User, Sprinto)", "#eef0fe", "#e3e6fd", "#5b5bd6"),
-    ("Scheduler", "(every 5 minutes)", "#f1f3f6", "#e6e9ee", "#5b6777"),
+    ("Scheduler", "(GitHub cron)", "#f1f3f6", "#e6e9ee", "#5b6777"),
     ("Dashboard / API", "(Vercel)", "#eef5fe", "#dfeafd", "#3b73d9"),
     ("News crawler", "(5 RSS feeds)", "#eefaf6", "#d6f3e9", "#22966f"),
     ("Web research", "(Scraper)", "#eefaf2", "#dcf5e4", "#3aa55c"),
@@ -26,6 +26,7 @@ ACTORS = [
     ("Review gate", "(Growth Lead)", "#fff8ec", "#fff8f0", "#e07b1f"),
     ("Gmail", "(Email service)", "#eef4fb", "#dde9f7", "#2f6db5"),
     ("Reply handler", "(LangGraph + Gemini)", "#fbf0f8", "#f5e0f0", "#a3457f"),
+    ("Calendly", "(Booking)", "#eef6fb", "#dcecf7", "#2a7fb8"),
 ]
 GATE_ROW = 11
 
@@ -49,6 +50,7 @@ STEPS = {
     "read":     (13, 3, ["Reads the reply within", "5 min, decides; follow-up", "timers 3-3-2 days"]),
     "followup": (13, 4, ["Follow-ups, meeting", "times, Calendly booking"]),
     "learn":    (13, 5, ["Learns from outcomes:", "lessons to the repo,", "rubric tunes itself"]),
+    "book":     (14, 5, ["Books the agreed time;", "invite on your Google", "Calendar (.ics fallback)"]),
 }
 # arrows: (from, to, gutter x offset, entry y offset, mode); mode "left" = same column, down the left gutter
 ARROWS = [("cron", "reply", -2, 0, "left"), ("add", "input", 0, 0, ""), ("cron", "news", 0, 0, ""), ("input", "research", 2, -8, ""),
@@ -56,8 +58,8 @@ ARROWS = [("cron", "reply", -2, 0, "left"), ("add", "input", 0, 0, ""), ("cron",
           ("news", "qualify", -8, -14, ""), ("research", "qualify", -2, 0, ""), ("memory", "qualify", 4, 14, ""),
           ("qualify", "hunter", 0, 0, ""), ("hunter", "write", -4, -10, ""), ("lessons", "write", 4, 10, ""),
           ("write", "checks", 0, 0, ""), ("checks", "gate", 0, 0, ""), ("gate", "send", 0, 0, ""),
-          ("reply", "read", 0, 0, ""), ("read", "followup", 0, 0, ""), ("followup", "send", -4, 0, ""),
-          ("followup", "learn", 4, 0, "")]
+          ("reply", "read", 0, 0, ""), ("read", "followup", 0, 0, ""), ("followup", "send", -2, 0, ""),
+          ("followup", "learn", 4, -8, ""), ("followup", "book", -10, 0, "")]
 
 H = HEAD_H + ROW_H * len(ACTORS) + 4
 
