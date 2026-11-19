@@ -1,8 +1,14 @@
 // Shared helpers for the dashboard pages (no login: anyone with the link can view).
 (function () {
   async function api(path, options) {
-    const res = await fetch(path, options);
-    if (!res.ok) throw new Error("Request failed (" + res.status + ")");
+    let res;
+    try { res = await fetch(path, options); }
+    catch (e) { throw new Error("Could not reach the server - check your connection and try again"); }
+    if (!res.ok) {
+      let msg = "";
+      try { const j = await res.json(); msg = (j.error && (j.error.message || j.error)) || ""; } catch (e) {}
+      throw new Error((msg ? String(msg) : "Request failed") + " (" + res.status + ")");
+    }
     return res.json();
   }
 

@@ -236,6 +236,24 @@ def score(p: CompanyProfile, pages: list[dict]) -> tuple[int, list[str]]:
     return pts, why
 
 
+def explain_fetch_error(code: str | None) -> str:
+    """Scraper error code -> a sentence a person can act on (the code stays in brackets)."""
+    c = code or ""
+    if c.startswith("request_failed"):
+        text = "The website could not be reached (the domain may not exist or the server did not answer)"
+    elif c.startswith("http_4"):
+        text = "The website refused or could not find the page"
+    elif c.startswith("http_5"):
+        text = "The website returned a server error"
+    elif c == "disallowed_by_robots_txt":
+        text = "The website's robots.txt does not allow automated reading"
+    elif c == "no_usable_text":
+        text = "The homepage loaded but had too little readable text"
+    else:
+        text = "The homepage could not be used"
+    return f"{text} [{c or 'unknown'}]."
+
+
 # ---------------------------------------------------------------- the loop
 def qualify(domain: str, log, max_extra: int | None = None) -> dict:
     """max_extra caps the extra fetches below the rubric's limit (fast mode)."""
@@ -245,7 +263,7 @@ def qualify(domain: str, log, max_extra: int | None = None) -> dict:
     home = scraper.fetch(url)
     trace = [{"fetch": url, "ok": home["ok"], "method": home["method"], "error": home["error"]}]
     if not home["ok"]:
-        return {"decision": "FAILED", "reason": f"homepage unusable: {home['error']}", "trace": trace,
+        return {"decision": "FAILED", "reason": explain_fetch_error(home["error"]), "trace": trace,
                 "profile": None, "pages": []}
 
     pages, tried = [home], {home["url"], url}

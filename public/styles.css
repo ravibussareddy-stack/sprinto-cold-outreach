@@ -213,8 +213,10 @@ pre.body { white-space: pre-wrap; font-family: inherit; margin: 0; line-height: 
 .banner { padding: 12px 16px; border-radius: 14px; border: 1px solid var(--warn); color: var(--warn); background: var(--glass-strong); }
 
 /* navigation bar shared by every page */
-.nav { position: sticky; top: 10px; z-index: 10; display: flex; gap: 4px; padding: 6px; margin-top: 14px;
-       overflow-x: auto; scrollbar-width: none; border-radius: 16px; }
+.nav { position: sticky; top: 10px; z-index: 10; display: flex; flex-wrap: wrap; row-gap: 4px; gap: 4px; padding: 6px; margin-top: 14px;
+       border-radius: 16px; }
+/* phones: one scrollable row instead of several wrapped ones */
+@media (max-width: 700px) { .nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } }
 .nav::-webkit-scrollbar { display: none; }
 .nav a { white-space: nowrap; padding: 8px 14px; border-radius: 12px; font-size: 14px; color: var(--blue-900);
          text-decoration: none; transition: background .2s ease, color .2s ease, box-shadow .2s ease; display: inline-flex; align-items: center; gap: 6px; }

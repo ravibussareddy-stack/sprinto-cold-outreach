@@ -9,8 +9,13 @@
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<main style="max-width:900px">
-  <nav class="glass nav" id="nav" style="margin-top:0"></nav>
+<main style="max-width:1000px">
+  <header class="glass top">
+    <div class="brand"><div class="logo">S</div>
+      <div><h1 id="page-title">Draft email</h1><div class="muted small" id="page-sub">One drafted email, how it scored, and why it says what it says</div></div></div>
+    <div class="actions" id="head-actions"></div>
+  </header>
+  <nav class="glass nav" id="nav"></nav>
   <div id="error" class="error"></div>
   <div id="content"></div>
   <section class="glass card section" id="feedback" hidden>
@@ -40,7 +45,8 @@ dash.nav("emails");
   var CHECK_NAMES = { greeting: "Time-of-day greeting", wellbeing_line: "“Hope you're doing well”",
     hook_names_company: "Hook names the company", one_question: "Exactly one question",
     question_before_sign_off: "Question just before sign-off", sign_off: "Sign-off with sender name",
-    length: "Length 75-125 words", uk_spelling: "UK spelling", no_placeholders_or_banned: "No placeholders or banned phrases" };
+    length: "Length 75-125 words", uk_spelling: "UK spelling", no_placeholders_or_banned: "No placeholders or banned phrases",
+    subject_capitalised: "Subject starts with a capital", subject_names_company: "Subject names the company" };
 
   function list(items) {
     if (!items || !items.length) return '<p class="muted small">None</p>';
@@ -53,55 +59,85 @@ dash.nav("emails");
   }
 
   var id = new URLSearchParams(location.search).get("id");
+  if (!id) {
+    document.getElementById("content").innerHTML = '<section class="glass card section"><h2>No draft chosen</h2>' +
+      '<p class="muted">Open a draft from <a href="index.html#emails">Emails</a> or <a href="index.html#review">Review</a>.</p></section>';
+    return;
+  }
   Promise.all([dash.api("/api/runs?id=" + encodeURIComponent(id)), dash.api("/api/review")]).then(function (both) {
     var r = both[0], queue = both[1];
     var inQueue = (queue.items || []).some(function (x) { return String(x.id) === String(id); });
     var rec = r.record || {}, q = rec.qualification || {}, email = rec.email || {}, d = rec.disagreement || {}, qual = rec.quality;
-    var parts = d.parts || {};
+    var parts = d.parts || {}, poc = rec.poc || {};
     var hasScore = typeof d.score === "number";
     var structure = parts.structure != null ? parts.structure : parts.rules;      // older drafts used "rules"
     var wrong = parts.wrong_info != null ? parts.wrong_info : parts.claims;
-    document.title = (r.domain || "Draft") + " - draft";
+    var company = (rec.profile && rec.profile.company_name) || r.domain;
+    document.title = company + " - draft";
+    document.getElementById("page-title").textContent = "Draft for " + company;
+    document.getElementById("page-sub").innerHTML = E(dash.when(r.created_at)) + " &middot; run " + E(r.id) +
+      (poc.first_name ? " &middot; to " + E(poc.first_name + " " + (poc.last_name || "")) + (poc.title ? ", " + E(poc.title) : "") : "");
+    document.getElementById("head-actions").innerHTML = dash.statusPills(rec.status) +
+      ' <a class="btn" href="company.html?domain=' + encodeURIComponent(r.domain) + '">Company view</a>';
+
+    if (!rec.email) {
+      document.getElementById("content").innerHTML = '<section class="glass card section"><h2>No email for this run</h2><p class="muted">' +
+        E(q.reason || "The company was not qualified, so nothing was written.") + '</p><p><a href="company.html?domain=' +
+        encodeURIComponent(r.domain) + '">See why in the company view</a></p></section>';
+      return;
+    }
 
     var checksHtml = qual && qual.checks ? '<div class="checks">' + qual.checks.map(function (c) {
       return '<div class="check ' + (c.ok ? "ok" : "bad") + '"><span class="dot">' + (c.ok ? "&#10003;" : "!") + "</span><div><b>" +
-        E(CHECK_NAMES[c.check] || c.check) + "</b>" + (c.detail ? '<div class="muted small">' + E(c.detail) + "</div>" : "") + "</div></div>";
-    }).join("") + "</div>" : '<p class="muted small">Not recorded for this draft (quality checks were added later).</p>';
+        E(CHECK_NAMES[c.check] || c.check.replace(/_/g, " ")) + "</b>" + (c.detail ? '<div class="muted small">' + E(c.detail) + "</div>" : "") + "</div></div>";
+    }).join("") + "</div>" : '<p class="muted small">Not recorded for this draft (draft checks were added later).</p>';
+    var sent = (rec.status || "").indexOf("SENT") === 0;
+    var pains = ((rec.pain_points || {}).pain_points || []).map(function (p) {
+      return "<li><b>" + E(p.title) + '</b><div class="small"><span class="muted">Evidence:</span> ' + E(p.evidence_from_research || "-") +
+        (p.source_url ? ' <a href="' + E(p.source_url) + '" target="_blank" rel="noopener">source</a>' : "") +
+        '</div><div class="small"><span class="muted">Hypothesis:</span> ' + E(p.why_this_person_feels_it || "-") + "</div></li>";
+    }).join("");
 
     document.getElementById("content").innerHTML =
-      '<header class="glass top section"><div><h1>' + E(r.domain) + '</h1><div class="muted small">' +
-        E(dash.when(r.created_at)) + " &middot; " + E(r.decision || "-") + " &middot; fit " + E(q.score == null ? "-" : q.score) +
-        " &middot; contact " + E(rec.poc && rec.poc.email ? rec.poc.email : "none") + "</div></div>" +
-        '<span class="pill strong">' + E((rec.status || "-").split(" (")[0]) + "</span></header>" +
       (inQueue ? '<div class="banner section" id="review-banner">Needs review: disagreement ' + E(d.score) + " is above " +
-        E(queue.threshold) + '. <button class="btn" data-action="kept">Kept</button> <button class="btn" data-action="rewritten">Rewritten</button></div>' : "") +
+        E(queue.threshold) + '. <button class="btn" data-action="kept">Kept as is</button> <button class="btn" data-action="rewritten">I rewrote it</button></div>' : "") +
+
+      '<section class="glass card section"><div class="row-head"><h2 style="margin:0">' + E(email.subject || "(no subject)") + "</h2>" +
+        '<span class="muted small">' + (sent ? "Sent to the test inbox" : "Draft, not sent") + "</span></div>" +
+        '<pre class="body">' + E(email.body || "") + "</pre>" +
+        '<div class="muted small">Intended recipient: ' + E(poc.email || "-") + (poc.source ? " (" + E(poc.source) + ")" : "") +
+        ". Every send goes to our own inbox, never the prospect.</div></section>" +
 
       '<div class="grid-2">' +
         '<section class="glass lift card"><h2>Disagreement score</h2>' +
           (hasScore ? '<div class="big">' + d.score + '<span class="muted small"> / 100</span></div>' +
-            part("Structure", structure, 25) + part("Wrong info", wrong, 45) + part("Sceptical judge", parts.judge, 30)
-            : '<p class="muted">Not computed' + (d.error ? ": " + E(d.error) : "") + "</p>") +
-          '<p class="muted small">Build 1: reported only. Nothing is held back.</p></section>' +
-        '<section class="glass lift card"><h2>Quality checks' + (qual ? " &middot; " + qual.passed + "/" + qual.total + " passed" : "") + "</h2>" +
+            part("Structure", structure, 25) + part("Wrong info", wrong, 45) + part("Sceptical judge", parts.judge, 30) +
+            '<p class="muted small">Lower is better. Above ' + E(queue.threshold) + " a draft goes to the Review queue.</p>"
+            : '<p class="muted">Not scored' + (d.skipped ? " (fast mode)" : d.error ? ": " + E(d.error) : "") +
+              '. <a href="#feedback">Redraft below</a> to score it.</p>') + "</section>" +
+        '<section class="glass lift card"><h2>Draft checks' + (qual ? " &middot; " + qual.passed + "/" + qual.total : "") + "</h2>" +
+          '<p class="muted small" style="margin-top:-6px">Structure and style only. Facts are checked by the disagreement score.</p>' +
           checksHtml + "</section>" +
       "</div>" +
 
-      '<section class="glass card section"><h2>Draft email</h2><p><b>' + E(email.subject || "(no draft)") + "</b></p>" +
-        '<pre class="body">' + E(email.body || "") + "</pre></section>" +
-
       '<div class="grid-2">' +
-        '<section class="glass card"><h2>Wrong or unsupported info</h2>' +
-          '<div class="small"><b>About the company</b></div>' + list(d.wrong_about_company || d.claims_unsupported) +
-          '<div class="small"><b>About Sprinto</b></div>' + list(d.wrong_about_sprinto) +
-          '<div class="small"><b>Judge</b></div><p class="small">' + E(d.judge_reason || "-") + "</p></section>" +
         '<section class="glass card"><h2>Why this email</h2>' +
           '<div class="small"><b>Hook</b></div><p class="small">' + E(email.hook_used || "-") + "</p>" +
           '<div class="small"><b>Reasoning</b></div><p class="small">' + E(email.reasoning || "-") + "</p>" +
-          '<div class="small"><b>Lessons used from the feedback repo</b></div><p class="small">' +
-            E((rec.guidance_used || []).length ? rec.guidance_used.map(function (g) { return "#" + g.id + " (" + g.scope + ", " + g.score + ")"; }).join(", ") : "none") +
+          '<div class="small"><b>Pain points it is built on</b></div>' + (pains ? '<ul class="tight">' + pains + "</ul>" : '<p class="muted small">-</p>') +
+          '<div class="small" style="margin-top:8px"><b>Feedback used</b></div><p class="small">' +
+            E((rec.guidance_used || []).length ? rec.guidance_used.map(function (g) { return "#" + g.id + " (" + g.scope + ")"; }).join(", ") : "none") +
           "</p></section>" +
+        '<section class="glass card"><h2>Wrong or unsupported info</h2>' +
+          (hasScore ? '<div class="small"><b>About the company</b></div>' + list(d.wrong_about_company || d.claims_unsupported) +
+          '<div class="small"><b>About Sprinto</b></div>' + list(d.wrong_about_sprinto) +
+          '<div class="small"><b>Sceptical judge</b></div><p class="small">' + E(d.judge_reason || "-") + "</p>"
+          : '<p class="muted small">Checked only when the draft is scored.</p>') + "</section>" +
       "</div>";
-  }).catch(function (e) { document.getElementById("error").textContent = e.message; });
+  }).catch(function (e) {
+    document.getElementById("content").innerHTML = '<section class="glass card section"><h2>Draft not found</h2><p class="muted">' +
+      E(e.message) + '. Open one from <a href="index.html#emails">Emails</a>.</p></section>';
+  });
 
   document.getElementById("content").addEventListener("click", function (ev) {
     var b = ev.target.closest("#review-banner button");
@@ -121,6 +157,7 @@ dash.nav("emails");
   var note = document.getElementById("fb-note");
   function say(t, cls) { note.textContent = t; note.className = "note small " + (cls || ""); }
 
+  if (!id) return;
   dash.api("/api/runs?id=" + encodeURIComponent(id)).then(function (r) {
     var rec = r.record || {};
     if (!rec.email) return;
@@ -128,7 +165,7 @@ dash.nav("emails");
     var title = (rec.poc && rec.poc.title) || "";
     for (var i = 0; i < ROLE.length; i++) if (ROLE[i][0].test(title)) { document.getElementById("fb-scope").value = ROLE[i][1]; break; }
     if (location.hash === "#feedback") document.getElementById("feedback").scrollIntoView({ behavior: "smooth" });
-  });
+  }).catch(function () {});
 
   function saveFeedback() {
     var text = document.getElementById("fb-text").value.trim();

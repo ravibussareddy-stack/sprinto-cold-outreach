@@ -46,6 +46,13 @@ dash.nav("pipeline");
   function pill(t, c) { return '<span class="pill ' + (c || "") + '">' + E(t) + "</span>"; }
   function list(items) { return items && items.length ? E(items.join(", ")) : '<span class="muted">-</span>'; }
 
+  function emptyState(title, text) {
+    document.getElementById("content").innerHTML = '<section class="glass card section"><h2>' + E(title) + '</h2><p class="muted">' + text + "</p></section>";
+  }
+  if (!domain) {
+    emptyState("No company chosen", 'Pick one on the <a href="index.html#pipeline">Pipeline</a> page.');
+    return;
+  }
   dash.api("/api/company?domain=" + encodeURIComponent(domain)).then(function (c) {
     document.title = c.company + " - company";
     document.getElementById("title").textContent = c.company;
@@ -104,7 +111,10 @@ dash.nav("pipeline");
         '<div class="timeline">' + timeline + "</div></section>" +
       '<section class="glass card section"><h2>Draft versions</h2><div class="table-wrap"><table><thead><tr><th>When</th><th>Subject</th><th>Disagreement</th><th>Quality</th><th>Status</th></tr></thead><tbody>' +
         drafts + "</tbody></table></div></section>";
-  }).catch(function (e) { document.getElementById("error").textContent = e.message; });
+  }).catch(function (e) {
+    emptyState(/404/.test(e.message) ? "Not researched yet" : "Could not load this company",
+      E(domain) + (/404/.test(e.message) ? ' has no runs yet. <a href="test.html">Run it as a test case</a>.' : ": " + E(e.message)));
+  });
 })();
 </script>
 </body>
