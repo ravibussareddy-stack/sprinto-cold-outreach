@@ -82,7 +82,11 @@ def check_thread(t: dict, now: dt.datetime, window: dict) -> str:
         touched = True
     elif not found:
         due = t["last_outbound_at"] + dt.timedelta(days=days)
-        return f"no new reply; next step on {due:%a %d %b %H:%M} UTC" + (f" (follow-up {n + 1})" if n < config.MAX_FOLLOWUPS else " (close)")
+        if n < config.MAX_FOLLOWUPS:
+            go = sendtime.next_open(due, window)
+            return (f"no new reply; follow-up {n + 1} due {due:%a %d %b} after {days:g} days of silence, "
+                    f"sent {go:%a %d %b %H:%M} {window['timezone']} (first slot in the send window)")
+        return f"no new reply; conversation closes {due:%a %d %b %H:%M} UTC"
     if state is None:
         return "no new reply"
     db.update_thread(t["thread_id"], "awaiting" if waiting else "done", state.outcome or "awaiting_reply",

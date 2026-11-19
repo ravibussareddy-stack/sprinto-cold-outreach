@@ -71,3 +71,14 @@ def test_other_subject_or_older_mail_is_skipped():
 
 def test_empty_reply_after_stripping_is_skipped():
     assert parse_reply(raw("> only quoted text"), SUBJECT, START, set()) is None
+
+
+def test_search_term_avoids_apostrophes_gmail_cannot_search():
+    import inbox
+    assert inbox._search_subject("Hanko's ISO 27001 progress and technical controls") == "ISO 27001 progress and technical controls"
+    assert "'" not in inbox._search_subject("Atlan’s Mastercard and Nasdaq security reviews")
+
+
+def test_curly_and_straight_apostrophes_match():
+    import inbox
+    assert inbox._norm_subject("Re: Atlan’s security reviews").endswith(inbox._norm_subject("Atlan's security reviews"))

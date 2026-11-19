@@ -73,7 +73,7 @@ def parse_reply(raw: bytes, subject: str, since: dt.datetime, exclude_ids: set[s
     mid = (msg.get("Message-ID") or "").strip()
     if not mid or mid in exclude_ids:
         return None
-    if subject.lower() not in _decode(msg.get("Subject")).lower():
+    if _norm_subject(subject) not in _norm_subject(_decode(msg.get("Subject"))):
         return None
     try:
         when = parsedate_to_datetime(msg.get("Date"))
@@ -89,10 +89,23 @@ def parse_reply(raw: bytes, subject: str, since: dt.datetime, exclude_ids: set[s
     return {"id": mid, "date": when, "from": _decode(msg.get("From")), "text": text}
 
 
+def _norm_subject(s: str) -> str:
+    return re.sub(r"\s+", " ", (s or "").replace("\u2019", "'").replace("\u2018", "'")).strip().lower()
+
+
 def _search_subject(subject: str) -> str:
-    # IMAP SUBJECT search is a substring match; keep it ASCII and quote-free.
-    s = re.sub(r'[^\x20-\x7e]|"', " ", subject).strip()
-    return s[:80]
+    """The longest punctuation-free run of words in the subject. Gmail's IMAP SUBJECT search
+    matches nothing when the term contains an apostrophe ("Hanko's ..."), so we search on a clean
+    run and check the full subject in code (parse_reply)."""
+    runs = []
+    for r in re.split(r"[^A-Za-z0-9 ]+", subject):
+        words = r.split()
+        while words and len(words[0]) == 1:        # "Hanko's X" splits into "Hanko" and "s X": drop the stray "s"
+            words.pop(0)
+        if words:
+            runs.append(" ".join(words))
+    best = max(runs, key=len) if runs else ""
+    return best[:80]
 
 
 def find_replies(subject: str, since: dt.datetime, exclude_ids: set[str]) -> list[dict]:
@@ -105,7 +118,11 @@ def find_replies(subject: str, since: dt.datetime, exclude_ids: set[str]) -> lis
             m.login(config.GMAIL_ADDRESS, config.GMAIL_APP_PASSWORD)
             m.select("INBOX", readonly=True)
             day = (since - dt.timedelta(days=1)).strftime("%d-%b-%Y")
-            typ, data = m.uid("SEARCH", None, "SINCE", day, "SUBJECT", f'"{_search_subject(subject)}"')
+            term = _search_subject(subject)
+            if len(term) >= 6:
+                typ, data = m.uid("SEARCH", None, "SINCE", day, "SUBJECT", f'"{term}"')
+            else:                                   # nothing distinctive to search on: check every recent message
+                typ, data = m.uid("SEARCH", None, "SINCE", day)
             if typ != "OK" or not data or not data[0]:
                 return []
             raws = []

@@ -90,6 +90,17 @@ def in_window(now: dt.datetime, window: dict) -> bool:
     return DAY_NAMES[local.weekday()] in window["days"] and window["start_hour"] <= local.hour < window["end_hour"]
 
 
+def next_open(after: dt.datetime, window: dict) -> dt.datetime:
+    """The first moment at or after `after` that falls inside the send window."""
+    tz = ZoneInfo(window["timezone"])
+    t = after.astimezone(tz)
+    for _ in range(24 * 8):
+        if in_window(t, window):
+            return t
+        t = (t + dt.timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    return after.astimezone(tz)
+
+
 def describe(window: dict) -> str:
     days = ", ".join(d.title() for d in window["days"])
     src = {"observed": f"learnt from {window['n']} sends", "research": "research default", "fixed": "fixed in the rubric"}[window["source"]]
