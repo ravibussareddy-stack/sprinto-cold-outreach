@@ -32,6 +32,20 @@ class handler(BaseHTTPRequestHandler):
         self._send(204, {})
 
     def do_GET(self):
+        # GET /api/run_case?deck=1 returns the mock offerings deck (PDF) for the current portfolio.
+        if "deck=1" in (self.path.split("?", 1)[1] if "?" in self.path else ""):
+            try:
+                import deck
+                data = deck.for_portfolio()
+            except Exception as e:
+                return self._send(500, {"error": {"code": "deck_failed", "message": f"{type(e).__name__}: {e}"}})
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Disposition", 'inline; filename="Sprinto-offerings-deck.pdf"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         self._send(200, {"service": "Sprinto cold outreach - run a test case", "input_format": case_api.INPUT_FORMAT})
 
     def do_POST(self):

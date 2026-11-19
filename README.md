@@ -242,6 +242,20 @@ model call that can only keep the decision or move it to dormant / disqualified 
 most 5 new situations wait at once. Nothing ever waits on a question: open ones show the default in the company's
 flags ("judgement call waiting for you: ..."), on the Questions page (badge in the nav) and as the first to-do.
 
+## Discovery emails, the offerings deck and adding contacts by hand
+
+- **No certification information anywhere** (even after the sitemap and trust pages): instead of holding the company
+  back, it gets a **discovery email** that asks whether SOC 2 or ISO 27001 is on their roadmap - it never says or
+  implies they lack it (decision `QUALIFIED_FLAGGED`, reason says "discovery email").
+- **Offerings deck** (`deck.py`): every cold email that is sent carries a short PDF built from your live portfolio
+  (core frameworks plus the ones you accepted or added on the Offerings page), "prepared for" the company. It is a
+  **mock deck for this case study** and says so on every slide; it only states what `writer.SPRINTO_CONTEXT` says,
+  the same description the fact check accepts. View it: `GET /api/run_case?deck=1` (button on the Offerings page).
+- **Add a contact** (Contacts page): first name and company website (email and title optional - every send goes to
+  our own inbox). It runs the whole pipeline with `send: true` and `manual: true`; replies and follow-ups are then
+  handled like any other conversation. A contact whose company is dormant or not a fit is still listed, as
+  **Not contacted**, with the reason.
+
 ## Follow-up timers, send window, budget, company view
 
 - **Follow-up timers** (rubric `followups`): follow-up 1 after 3 days of silence, follow-up 2 three days later, follow-up 3 two days after that, then closed after 3 more days (non-respondent, or handed to you if they had shown interest). Applies to no reply to the cold email *and* to silence after they replied and we proposed times. A reply from them starts the count again. Editable on the Filters & rubric page.

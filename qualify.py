@@ -434,7 +434,7 @@ def qualify(domain: str, log) -> dict:
     if certification["compliance_tools"] and not profile.compliance_tool_used:
         profile.compliance_tool_used = certification["compliance_tools"][0]["tool"]   # the writer sees it too
     if "certs" in still_missing:
-        flags.append("certification status unknown: no security or trust page found, even after checking the sitemap; greenfield points withheld")
+        flags.append("certification unknown (no security or trust page, even after the sitemap): discovery email that asks, never assumes")
     if profile.expansion_frameworks:
         flags.append(f"expansion prospect: already certified; pitch {profile.expansion_frameworks[0].split(' (')[0]}")
     for t in certification["compliance_tools"][:1]:
@@ -448,8 +448,14 @@ def qualify(domain: str, log) -> dict:
     #   all answered and score >= QUALIFY -> qualified
     #   score below REVIEW_SCORE          -> disqualified
     reason = f"score {pts}/100"
+    profile.certification_status = certification["status"]          # the writer frames the email by it
     if profile.is_b2b_saas is None:
         decision = "MANUAL_REVIEW"
+    elif certification["status"] == "unknown":
+        # No certification information anywhere, even after the deeper research: just ask them.
+        decision = "QUALIFIED_FLAGGED"
+        reason = (f"score {pts}/100; no certification information found anywhere, so a discovery email asks "
+                  f"whether SOC 2 or ISO 27001 is on their roadmap")
     elif pts < rubric.get("decision", "review_score"):
         # Too little evidence of fit to write. With questions still open a person should look;
         # with everything answered it is a clear no.

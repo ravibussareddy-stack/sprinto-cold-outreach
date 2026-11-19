@@ -37,7 +37,9 @@ Separate fact from hypothesis:
 - If compliance_tool_used is set, they already run a compliance platform: the
   pain is what that tool leaves undone, not a first audit.
 - If expansion_frameworks is set, they ALREADY hold SOC 2 / ISO 27001: pain point #1
-  is the new framework named there (why they now need it), never a first audit."""
+  is the new framework named there (why they now need it), never a first audit.
+- If certification_status is "unknown", nobody knows whether they hold SOC 2 or ISO 27001:
+  frame pain point #1 as what enterprise buyers will ask for, never as "you lack it"."""
 
 EMAIL_EXAMPLES = """Example 1 (CTO, Series A fintech; hook: new enterprise plan)
 Subject: Ledgerly's first enterprise SOC 2 review
@@ -110,6 +112,12 @@ Rules:
   15-minute call next week be useful?", "Might it be worth a brief conversation?").
 - 75-125 words including the greeting. Plain text. No bullet lists, no emojis,
   no buzzwords ("synergy", "leverage", "revolutionise"), no fake familiarity.
+- If certification_status is "unknown" (no certification information found), this is a
+  discovery email: never say or imply they lack SOC 2 / ISO 27001. Make the single question
+  ask whether it is on their roadmap, e.g. "If SOC 2 or ISO 27001 is on your roadmap this
+  year, would a 15-minute call be useful?"
+- If the research says an offerings deck is attached, you may mention it once, briefly
+  (e.g. "I've attached a short overview of what we cover"). Never describe what is in it.
 - If the research lists expansion_frameworks, the company is already certified: the
   angle is that new framework (built on the controls they already run), never a first audit.
 - Never invent facts, numbers or customer names not in the research. Never state
@@ -276,12 +284,14 @@ def _guidance_block(guidance: list[dict] | None, exemplars: list[dict] | None) -
 
 def draft_email(profile: CompanyProfile, poc: dict, pains: PainPoints, sender_name: str,
                 max_attempts: int = 2, guidance: list[dict] | None = None,
-                exemplars: list[dict] | None = None, soft_retry: bool = True) -> tuple[EmailDraft, list[str]]:
+                exemplars: list[dict] | None = None, soft_retry: bool = True,
+                deck_attached: bool = False) -> tuple[EmailDraft, list[str]]:
     """soft_retry=False: retry only when a hard check fails, not to polish soft ones."""
     hello = greeting(poc["first_name"])
     base = (f"Recipient: {poc['first_name']} {poc.get('last_name','')}, {poc.get('title')} at "
             f"{profile.company_name}\nSender name: {sender_name}\n"
-            f"Greeting line to open with: {hello}\n\n"
+            f"Greeting line to open with: {hello}\n"
+            f"Offerings deck attached: {'yes (a short PDF overview of what Sprinto covers)' if deck_attached else 'no'}\n\n"
             f"Pain points (use #1 as the main angle):\n{json.dumps(pains.model_dump(), indent=1)}\n\n"
             f"Research:\n{profile.model_dump_json(indent=1)}" + _guidance_block(guidance, exemplars))
     system = EMAIL_SYSTEM + _portfolio_note() + instructions_block(guidance)

@@ -98,3 +98,22 @@ def test_a_standard_version_is_not_a_report_date():
     assert questions.old_report(ev) is None
     ev = [{"cert": "SOC 2", "who": "self", "sentence": "Download our 2021 SOC 2 report", "url": "u"}]
     assert questions.old_report(ev)
+
+
+
+def test_unknown_certification_gets_a_discovery_email_not_a_hold(monkeypatch):
+    questions._cache = {}
+    monkeypatch.setattr(qualify.scraper, "fetch", lambda u: {"url": u.rstrip("/"), "ok": u.rstrip("/") == "https://acme.io", "error": None,
+        "method": "request", "text": "x " * 100, "raw_text": "", "certs": scraper.detect_certifications(""), "links": []})
+    monkeypatch.setattr(qualify, "extract_profile", lambda d, pages: CompanyProfile(is_b2b_saas=True, buyer_type="Teams"))
+    res = qualify.qualify("acme.io", lambda m: None)
+    assert res["certification"]["status"] == "unknown"
+    assert res["decision"] == "QUALIFIED_FLAGGED" and "discovery email" in res["reason"], (res["decision"], res["reason"])
+    assert res["profile"].certification_status == "unknown"
+
+
+def test_the_deck_is_a_valid_pdf_with_the_portfolio():
+    import deck
+    pdf = deck.build(["SOC 2", "ISO 27001"], [{"name": "ISO/IEC 42001", "who": "AI products", "pitch": "AI governance"}], "Acme")
+    assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF")
+    assert b"ISO/IEC 42001" in pdf and b"not an official Sprinto document" in pdf and b"Prepared for Acme" in pdf

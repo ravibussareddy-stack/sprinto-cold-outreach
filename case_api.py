@@ -79,8 +79,8 @@ def parse_contact(raw) -> tuple[dict | None, dict | None]:
     email = (raw.get("email") or "").strip()
     if not first:
         return None, _err("invalid_contact", "contact needs a first_name (or name)", "contact.first_name")
-    if not EMAIL_RE.match(email):
-        return None, _err("invalid_contact", "contact needs a valid email", "contact.email")
+    if email and not EMAIL_RE.match(email):              # optional (every send goes to our own inbox), but valid if given
+        return None, _err("invalid_contact", "contact.email is not a valid email", "contact.email")
     return {"first_name": first, "last_name": last, "email": email,
             "title": (raw.get("title") or "").strip() or None}, None
 
@@ -100,7 +100,10 @@ def parse_case(raw) -> tuple[dict | None, dict | None]:
     send = raw.get("send", True)
     if not isinstance(send, bool):
         return None, _err("invalid_send", "send must be true or false", "send")
-    return {"domain": domain, "contact": contact, "send": send}, None
+    manual = raw.get("manual", False)
+    if not isinstance(manual, bool):
+        return None, _err("invalid_body", "manual must be true or false", "manual")
+    return {"domain": domain, "contact": contact, "send": send, "manual": manual}, None
 
 
 def parse_request(body) -> tuple[list[dict] | None, dict | None]:
@@ -200,8 +203,15 @@ def run_cases(body) -> tuple[int, dict]:
         except Exception as e:                    # process() already catches; this is a last line of defence
             rec = {"domain": case["domain"], "status": "ERROR", "error": f"{type(e).__name__}: {e}"}
         rec.setdefault("seconds", round(time.time() - t0, 1))
-        rec["source"] = "api"
+        rec["source"] = "manual contact" if case.get("manual") else "api"
         run_id = db.save_run(rec)
+        if case.get("manual") and case["contact"] and not (rec.get("status") or "").startswith("SENT"):
+            # A contact you added is listed even when no email went out, with the reason.
+            c = case["contact"]
+            company = (rec.get("profile") or {}).get("company_name") or case["domain"]
+            db.upsert_contact(case["domain"], company, f"{c['first_name']} {c.get('last_name') or ''}".strip(),
+                              c.get("email") or "", c.get("title"), "not_contacted",
+                              (rec.get("qualification") or {}).get("decision") or (rec.get("status") or "").split(" ")[0])
         results.append(result_for(rec, case, run_id, warnings))
     body_out = results[0] if len(results) == 1 and "cases" not in body else {"results": results}
     return 200, body_out

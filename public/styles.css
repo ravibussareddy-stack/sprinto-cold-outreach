@@ -296,3 +296,6 @@ ul.tight { margin: 0; padding-left: 18px; } ul.tight li { margin: 2px 0; }
 .fw { padding: 12px 14px; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--glass-border); margin-top: 10px; display: grid; gap: 4px; }
 .fw:hover { border-color: var(--blue-500); }
 .pill .x { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 0 0 4px; }
+/* success / error messages */
+.note.ok, span.ok, .small.ok { color: var(--blue-700); font-weight: 500; }
+.note.bad, span.bad, .small.bad { color: var(--warn); font-weight: 500; }

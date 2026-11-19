@@ -67,6 +67,21 @@
 
   <!-- ===== Contacts ===== -->
   <div class="page" data-page="contacts">
+    <section class="glass card section" id="add-contact">
+      <div class="row-head"><h2>Add a contact</h2><span class="muted small">researched, qualified and emailed automatically; replies and follow-ups too</span></div>
+      <form id="ac-form" class="form" autocomplete="off">
+        <div><label for="ac-first">First name *</label><input id="ac-first" type="text" maxlength="60" placeholder="Priya"></div>
+        <div><label for="ac-last">Last name</label><input id="ac-last" type="text" maxlength="60" placeholder="Sharma"></div>
+        <div><label for="ac-site">Company website *</label><input id="ac-site" type="text" maxlength="200" placeholder="acme.io or https://acme.io"></div>
+        <div><label for="ac-email">Email</label><input id="ac-email" type="email" maxlength="120" placeholder="optional"></div>
+        <div><label for="ac-title">Title</label><input id="ac-title" type="text" maxlength="80" placeholder="optional, e.g. CTO"></div>
+      </form>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+        <button class="btn primary" id="ac-go">Add and engage</button>
+        <span class="small muted" id="ac-state">Takes about 60-90 seconds. Every email goes to our own test inbox, with the offerings deck attached.</span>
+      </div>
+      <div id="ac-result" class="small" style="margin-top:10px"></div>
+    </section>
     <section class="glass card section">
       <div class="stats" id="contact-stats"></div>
       <div class="row-head"><h2>Everyone contacted</h2><input type="search" id="contact-search" placeholder="Search name, company, status"></div>
@@ -181,7 +196,7 @@
     "Qualified - no contact": "soft", "Cold lead": "soft", "Non-respondent": "soft", "Needs you": "warn",
     "Dormant": "soft", "Disqualified": "soft", "Manual review": "warn", "Error": "warn", "Site unreachable": "warn" };
   var STATUS_LABEL = { meeting_booked: "Meeting booked", engaged: "Engaged", contacted: "Contacted",
-    cold_lead: "Cold lead", non_respondent: "Non-respondent", escalated: "Needs you" };
+    cold_lead: "Cold lead", non_respondent: "Non-respondent", escalated: "Needs you", not_contacted: "Not contacted" };
   var state = { pipeline: [], stage: "All", contacts: [], disView: "all" };
   try { state.disView = sessionStorage.getItem("disView") || "all"; } catch (e) {}
 
@@ -312,11 +327,42 @@
     var rows = state.contacts.filter(function (x) { return !q || [x.contact_name, x.company, x.domain, x.status, x.title].join(" ").toLowerCase().indexOf(q) >= 0; });
     document.getElementById("contact-rows").innerHTML = rows.length ? rows.map(function (x) {
       var label = STATUS_LABEL[x.status] || x.status;
-      return "<tr><td><b>" + E(x.contact_name || "-") + '</b><div class="muted small">' + E(x.contact_email) + '</div></td><td><a href="company.html?domain=' + encodeURIComponent(x.domain) + '">' + E(x.company || x.domain) + "</a>" +
-        "</td><td class='small'>" + E(x.title || "-") + "</td><td>" + pill(label, STAGE_PILL[label]) + "</td><td>" + E(x.followups_sent) +
+      return "<tr><td><b>" + E(x.contact_name || "-") + '</b><div class="muted small">' + E(x.contact_email || "email not given") + '</div></td><td><a href="company.html?domain=' + encodeURIComponent(x.domain) + '">' + E(x.company || x.domain) + "</a>" +
+        "</td><td class='small'>" + E(x.title || "-") + "</td><td>" + pill(label, STAGE_PILL[label] || "soft") +
+        (x.status === "not_contacted" && x.last_outcome ? '<div class="muted small">' + E(String(x.last_outcome).replace(/_/g, " ").toLowerCase()) + "</div>" : "") + "</td><td>" + E(x.followups_sent) +
         " / 3</td><td class='muted small'>" + E(dash.when(x.updated_at)) + "</td></tr>";
     }).join("") : '<tr><td colspan="6" class="empty">' + (state.contacts.length ? "No match." : "No contacts yet.") + "</td></tr>";
   }
+
+  // ---------- add a contact: the whole pipeline, then replies and follow-ups ----------
+  var WHY_NOT = { DORMANT: "already certified (SOC 2 or ISO 27001), so no email", DISQUALIFIED: "not a fit, so no email",
+    MANUAL_REVIEW: "needs a manual check first, so no email", FAILED: "the website could not be reached", PAUSED: "the monthly budget is used up" };
+  document.getElementById("ac-go").addEventListener("click", function () {
+    var v = function (id) { return document.getElementById(id).value.trim(); };
+    var out = document.getElementById("ac-result"), st = document.getElementById("ac-state"), btn = this;
+    if (!v("ac-first") || !v("ac-site")) { out.innerHTML = '<span class="bad">First name and company website are needed.</span>'; return; }
+    var body = { domain: v("ac-site"), send: true, manual: true,
+                 contact: { first_name: v("ac-first"), last_name: v("ac-last"), email: v("ac-email"), title: v("ac-title") } };
+    btn.disabled = true; out.innerHTML = "";
+    var t0 = Date.now(), tick = setInterval(function () { st.innerHTML = '<span class="spinner"></span>Researching and writing… ' + Math.round((Date.now() - t0) / 1000) + "s"; }, 1000);
+    fetch("/api/run_case", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { return { code: r.status, j: j }; }); })
+      .then(function (x) {
+        var r = x.j;
+        if (x.code !== 200) { out.innerHTML = '<span class="bad">' + E((r.error && r.error.message) || "Request failed") + "</span>"; return; }
+        var co = r.company || {}, name = co.name || r.domain, sent = r.email && r.email.sent;
+        var link = '<a href="company.html?domain=' + encodeURIComponent(r.domain) + '">' + E(name) + "</a>";
+        out.innerHTML = sent
+          ? '<span class="ok"><b>Emailed.</b></span> ' + link + " (" + E(String(r.decision).replace(/_/g, " ").toLowerCase()) + ", fit " + E(co.fit_score) + "/100). " +
+            "Subject: <i>" + E(r.email.subject) + '</i>. <a href="draft.html?id=' + E(r.run_id) + '">Open the draft</a>. Replies and follow-ups are now handled automatically.'
+          : "<b>Added, not emailed:</b> " + link + " - " + E(WHY_NOT[r.decision] || (r.error && r.error.message) || r.status) +
+            (co.reason ? '. <span class="muted">' + E(co.reason) + "</span>" : "") + ".";
+        if (sent || r.decision) document.getElementById("ac-form").reset();
+        load();
+      })
+      .catch(function (e) { out.innerHTML = '<span class="bad">' + E(e.message) + "</span>"; })
+      .then(function () { clearInterval(tick); btn.disabled = false; st.textContent = "Takes about 60-90 seconds. Every email goes to our own test inbox, with the offerings deck attached."; });
+  });
 
   // ---------- emails: one card per company ----------
   function renderEmails(m, runs) {
@@ -507,6 +553,7 @@
     navStep("questions", "Questions", "Judgement calls the rules don't settle (\u2018SOC 2 Type I only: certified or not?\u2019). Asked once; your answer becomes a ruling for every company. Facts are researched, never asked."),
     { el: "#todo-card", title: "What needs you", text: "Upcoming meetings, drafts to review and anything stuck. Empty means nothing is waiting." },
     navStep("pipeline", "Pipeline", "Every company researched, where it stands and why. Click one for the full story: evidence, contact, emails and next step."),
+    navStep("contacts", "Contacts", "Everyone emailed and where each conversation stands. Add a contact by hand here: name and company website, and it is researched and emailed automatically."),
     navStep("emails", "Emails", "Every email written. Open a draft to see its checks, its disagreement score, and to give feedback and redraft it."),
     navStep("review", "Review", "Drafts whose disagreement score is above the threshold wait here for you to keep or rewrite."),
     navStep("learning", "Learning", "The feedback repo the writer follows. Add a lesson, or turn one off if it was a mistake."),

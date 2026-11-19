@@ -41,6 +41,7 @@ class CompanyProfile(BaseModel):
         "(e.g. a trust centre 'powered by Vanta', 'we use Drata'). null if not stated. Not tools it integrates with or sells.")
     geographic_markets: list[str] = []
     expansion_frameworks: list[str] = Field([], description="Leave empty: filled in by code, not from the website.")
+    certification_status: Optional[str] = Field(None, description="Leave empty: filled in by code, not from the website.")
     unusual_finding: Optional[UnusualFinding] = Field(None, description=(
         "Almost always null. Only when the site shows something a sales researcher would genuinely not know how to "
         "INTERPRET for qualifying a compliance-software prospect, and no ordinary rule covers it (e.g. certified only "

@@ -23,6 +23,7 @@ import llm
 import disagreement
 import feedback
 import meeting
+import deck
 import poc as poc_mod
 import questions
 import replies
@@ -119,7 +120,7 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
     examples = feedback.exemplars(contact.get("title"))
     if guidance or examples:
         log(f"  using {len(guidance)} lesson(s) and {len(examples)} winning email(s) from the feedback repo")
-    draft, problems = writer.draft_email(profile, contact, pains, sender_name,
+    draft, problems = writer.draft_email(profile, contact, pains, sender_name, deck_attached=True,
                                          guidance=guidance, exemplars=examples)
     rec["email"] = draft.model_dump()
     rec["email_check_failures"] = problems
@@ -151,8 +152,15 @@ def _process_inner(domain, do_send, sender_name, rec, t0, given_contact=None):
         rec["status"] = "DRAFT_FAILED_CHECKS"
         log(f"  not sending - failed checks: {problems}")
     elif do_send:
+        try:                                           # the mock offerings deck, built from your live portfolio
+            pdf = deck.for_portfolio(profile.company_name or domain)
+            attach = (f"Sprinto-offerings-{(profile.company_name or domain).replace(' ', '-')}.pdf", pdf, "application", "pdf")
+        except Exception as e:
+            log(f"  deck not attached: {e}")
+            attach = None
         to = sender.send(draft.subject, draft.body,
-                         f"{contact['first_name']} {contact['last_name']}", contact["email"])
+                         f"{contact['first_name']} {contact['last_name']}", contact["email"], attachment=attach)
+        rec["deck_attached"] = bool(attach)
         rec["status"] = "SENT"
         log(f"  sent to {to}")
     else:
