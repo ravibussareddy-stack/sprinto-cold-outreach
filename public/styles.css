@@ -222,7 +222,7 @@ pre.body { white-space: pre-wrap; font-family: inherit; margin: 0; line-height: 
        border-radius: 16px; }
 /* phones: one scrollable row instead of several wrapped ones */
 .nav::-webkit-scrollbar { display: none; }
-.nav a { flex: none; white-space: nowrap; padding: 8px 11px; border-radius: 12px; font-size: 14px; color: var(--blue-900);
+.nav a { flex: none; white-space: nowrap; padding: 8px 10px; border-radius: 12px; font-size: 14px; color: var(--blue-900);
          text-decoration: none; transition: background .2s ease, color .2s ease, box-shadow .2s ease; display: inline-flex; align-items: center; gap: 6px; }
 .nav a:hover { background: var(--row-hover); box-shadow: inset 0 0 0 1px rgba(59,130,246,.25); text-decoration: none; }
 .nav a.on { background: var(--blue-700); color: #fff; box-shadow: 0 6px 16px rgba(29,78,216,.3); }
