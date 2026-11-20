@@ -59,6 +59,7 @@
   ];
   var badges = {};
   var askedCount = false;
+  var navShow = function () {};
   function nav(active) {
     var el = document.getElementById("nav");
     if (!el) return;
@@ -83,6 +84,7 @@
       if (left < el.scrollLeft) el.scrollLeft = left;
       else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = right - el.clientWidth;
     }
+    navShow = showActive;
     showActive();
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(showActive);   // widths change once the font loads
     if (!el.dataset.keep) {
@@ -97,9 +99,10 @@
     var a = document.querySelector('#nav a[data-key="' + key + '"]');
     if (!a) return;
     var b = a.querySelector(".badge");
-    if (!n) { if (b) b.remove(); return; }
+    if (!n) { if (b) { b.remove(); navShow(); } return; }
     if (!b) { b = document.createElement("span"); b.className = "badge"; a.appendChild(b); }
     b.textContent = n;
+    navShow();                                         // the badge widens the bar: keep the open tab in view
   }
 
   // "SENT | no_reply (flagged: thin evidence, ...)" -> short pills: Sent, No reply, Flagged
