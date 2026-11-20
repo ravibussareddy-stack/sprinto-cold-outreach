@@ -72,6 +72,19 @@
         return '<a href="' + n[2] + '" class="' + (n[0] === active ? "on" : "") + '" data-key="' + n[0] + '">' + esc(n[1]) + badge + "</a>";
       }).join("");
     }).join("");
+    // keep the bar where it was: a page at the far end must not snap the bar back to the start
+    var saved = null;
+    try { saved = sessionStorage.getItem("navScroll"); } catch (e) {}
+    var on = el.querySelector("a.on");
+    if (saved != null) el.scrollLeft = Number(saved);
+    if (on && (on.offsetLeft < el.scrollLeft || on.offsetLeft + on.offsetWidth > el.scrollLeft + el.clientWidth))
+      el.scrollLeft = on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
+    if (!el.dataset.keep) {
+      el.dataset.keep = "1";
+      var keep = function () { try { sessionStorage.setItem("navScroll", String(el.scrollLeft)); } catch (e) {} };
+      el.addEventListener("scroll", keep, { passive: true });
+      el.addEventListener("click", keep);
+    }
   }
   function navBadge(key, n) {
     badges[key] = n || 0;

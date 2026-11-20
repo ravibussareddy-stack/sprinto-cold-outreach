@@ -40,6 +40,8 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+/* same content width on every page: the scrollbar's space is always reserved, so short and long pages line up */
+html { overflow-y: scroll; scrollbar-gutter: stable; }
 body {
   min-height: 100vh;
   color: var(--ink);
@@ -122,9 +124,12 @@ h2 { font-size: 15px; margin: 0 0 14px; color: var(--blue-900); letter-spacing: 
 .btn:hover { background: var(--blue-700); color: #fff; border-color: var(--blue-700); box-shadow: 0 6px 16px rgba(29, 78, 216, 0.3); }
 
 /* ---- KPI tiles ---- */
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 18px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); grid-auto-rows: 1fr; gap: 14px; margin-top: 18px; }
 @media (min-width: 900px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
-.tile { padding: 16px 18px; cursor: default; }
+.tile { padding: 16px 18px; cursor: default; display: flex; flex-direction: column; min-height: 150px; box-sizing: border-box; }
+.tile .bar { margin-top: auto; }
+.tile .sub + .bar { margin-top: auto; }
+.tile .sub { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; padding-bottom: 10px; }
 .tile .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .tile .value { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; color: var(--blue-900); }
 .tile .sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
@@ -213,12 +218,11 @@ pre.body { white-space: pre-wrap; font-family: inherit; margin: 0; line-height: 
 .banner { padding: 12px 16px; border-radius: 14px; border: 1px solid var(--warn); color: var(--warn); background: var(--glass-strong); }
 
 /* navigation bar shared by every page */
-.nav { position: sticky; top: 10px; z-index: 10; display: flex; flex-wrap: wrap; row-gap: 4px; gap: 4px; padding: 6px; margin-top: 14px;
+.nav { position: sticky; top: 10px; z-index: 10; display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 2px; padding: 6px; margin-top: 14px;
        border-radius: 16px; }
 /* phones: one scrollable row instead of several wrapped ones */
-@media (max-width: 700px) { .nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; } }
 .nav::-webkit-scrollbar { display: none; }
-.nav a { white-space: nowrap; padding: 8px 12px; border-radius: 12px; font-size: 14px; color: var(--blue-900);
+.nav a { flex: none; white-space: nowrap; padding: 8px 11px; border-radius: 12px; font-size: 14px; color: var(--blue-900);
          text-decoration: none; transition: background .2s ease, color .2s ease, box-shadow .2s ease; display: inline-flex; align-items: center; gap: 6px; }
 .nav a:hover { background: var(--row-hover); box-shadow: inset 0 0 0 1px rgba(59,130,246,.25); text-decoration: none; }
 .nav a.on { background: var(--blue-700); color: #fff; box-shadow: 0 6px 16px rgba(29,78,216,.3); }
@@ -239,10 +243,10 @@ pre.body { white-space: pre-wrap; font-family: inherit; margin: 0; line-height: 
 
 /* grouped nav */
 .nav .group { align-self: center; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
-              padding: 0 4px 0 14px; white-space: nowrap; border-left: 1px solid rgba(59,130,246,.18); margin-left: 6px; }
+              padding: 0 2px 0 10px; white-space: nowrap; border-left: 1px solid rgba(59,130,246,.18); margin-left: 4px; flex: none; }
 /* small stat strip at the top of a page */
-.stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
-.stat { padding: 10px 14px; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--glass-border); min-width: 120px;
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.stat { padding: 10px 14px; border-radius: 14px; background: var(--glass-strong); border: 1px solid var(--glass-border); min-height: 64px; box-sizing: border-box;
         transition: all .2s ease; }
 .stat:hover { border-color: var(--blue-500); box-shadow: 0 6px 16px rgba(59,130,246,.18); }
 .stat b { display: block; font-size: 20px; color: var(--blue-900); }
