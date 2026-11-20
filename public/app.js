@@ -77,8 +77,14 @@
     try { saved = sessionStorage.getItem("navScroll"); } catch (e) {}
     var on = el.querySelector("a.on");
     if (saved != null) el.scrollLeft = Number(saved);
-    if (on && (on.offsetLeft < el.scrollLeft || on.offsetLeft + on.offsetWidth > el.scrollLeft + el.clientWidth))
-      el.scrollLeft = on.offsetLeft - (el.clientWidth - on.offsetWidth) / 2;
+    function showActive() {                             // the open page's tab is always fully visible
+      if (!on) return;
+      var left = on.offsetLeft - 6, right = on.offsetLeft + on.offsetWidth + 6;
+      if (left < el.scrollLeft) el.scrollLeft = left;
+      else if (right > el.scrollLeft + el.clientWidth) el.scrollLeft = right - el.clientWidth;
+    }
+    showActive();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(showActive);   // widths change once the font loads
     if (!el.dataset.keep) {
       el.dataset.keep = "1";
       var keep = function () { try { sessionStorage.setItem("navScroll", String(el.scrollLeft)); } catch (e) {} };
